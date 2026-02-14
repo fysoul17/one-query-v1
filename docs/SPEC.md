@@ -127,7 +127,7 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
 │  └── config.json      # runtime config                           │
 └──────────────────────────────────────────────────────────────────┘
 
-Dashboard (Next.js 15, separate service in docker-compose)
+Dashboard (Next.js 16, separate service in docker-compose)
   └── Connects to Runtime API at http://runtime:3001
 ```
 
@@ -143,7 +143,7 @@ SELF-HOSTED (docker-compose up)
   │  ┌─────────────────┐  ┌───────────────────────┐  │
   │  │  runtime:3001   │  │  dashboard:3000       │  │
   │  │                  │  │                       │  │
-  │  │  Agent Manager   │  │  Next.js 15           │  │
+  │  │  Agent Manager   │  │  Next.js 16           │  │
   │  │  Conductor       │←─│  (standalone output)  │  │
   │  │  Memory System   │  │                       │  │
   │  │  Cron Manager    │  │  connects to          │  │
@@ -202,12 +202,15 @@ CLOUD MODE (managed service, like n8n Cloud)
 | -------------------- | -------------------------------------------------- | ---------------------------------------- |
 | Runtime              | Bun (latest)                                       | Fast, native TypeScript, built-in SQLite |
 | Language             | TypeScript 5+                                      | Type safety                              |
-| Monorepo             | Bun workspaces + Turborepo                         | Build orchestration                      |
+| Monorepo             | Bun workspaces + Turborepo v2                      | Build orchestration                      |
+| Package Naming       | `@autonomy/*`                                      | Monorepo workspace packages              |
 | AI Backend           | claude -p (default)                                | Pluggable: codex, gemini, etc.           |
 | Vector DB            | LanceDB (embedded)                                 | 4MB idle, fast ANN, native TS SDK        |
 | Vector DB (optional) | Qdrant                                             | For large-scale production               |
 | Structured DB        | bun:sqlite                                         | Embedded, zero config                    |
-| Dashboard            | Next.js latest (App Router) + Tailwind + shadcn/ui | RSC, standalone output                   |
+| Dashboard            | Next.js 16 (App Router) + Tailwind + shadcn/ui    | RSC, standalone output                   |
+| Linter               | Biome 2.3+                                         | Rust-based, 10-100x faster than ESLint   |
+| Test Runner          | bun:test (built-in)                                | Zero config, Jest-compatible             |
 | Container            | Docker + docker-compose                            | One-click deploy                         |
 | Channels             | grammY, discord.js, @slack/bolt                    | Telegram, Discord, Slack                 |
 | Cloud (optional)     | Fly.io Machines API                                | Container orchestration                  |
@@ -221,17 +224,22 @@ CLOUD MODE (managed service, like n8n Cloud)
 template/
 │
 ├── packages/
-│   ├── server/                  # Bun.serve — API, WebSocket, Webhooks
-│   ├── conductor/               # Mother AI — system-level orchestrator
-│   ├── agent-manager/           # CLI AI process lifecycle + A2A
+│   ├── shared/                  # @autonomy/shared — Types, utils, constants
+│   │   ├── src/
+│   │   │   ├── types/           # 10 type files (base, agent, conductor, a2a, memory, cron, config, websocket, api, channel)
+│   │   │   ├── constants/       # defaults.ts, capabilities.ts
+│   │   │   └── utils/           # Shared utility functions
+│   │   └── __tests__/           # Smoke tests (27 tests, 104 assertions)
+│   ├── server/                  # @autonomy/server — Bun.serve (API, WebSocket, Webhooks)
+│   ├── conductor/               # @autonomy/conductor — Mother AI orchestrator
+│   ├── agent-manager/           # @autonomy/agent-manager — CLI AI process lifecycle + A2A
 │   │   └── backends/            # Pluggable CLI backends (claude, codex, etc.)
-│   ├── memory/                  # Persistent memory system
+│   ├── memory/                  # @autonomy/memory — Persistent memory system
 │   │   ├── rag/                 # Naive, Graph, Agentic RAG strategies
 │   │   └── providers/           # LanceDB (default), Qdrant (optional)
-│   ├── cron-manager/            # Autonomous scheduling
-│   └── shared/                  # Types, utils, constants
+│   └── cron-manager/            # @autonomy/cron-manager — Autonomous scheduling
 │
-├── dashboard/                   # Next.js 15 (built-in UI)
+├── dashboard/                   # @autonomy/dashboard — Next.js 16 (built-in UI)
 │   └── app/
 │       ├── agents/              # RPG-style agent creation/management
 │       ├── memory/              # Memory browser + ingest
@@ -250,9 +258,6 @@ template/
 │   ├── Dockerfile.dashboard
 │   └── docker-compose.yaml
 │
-├── agents/                      # Default agent definitions
-│   └── default.md
-│
 ├── data/                        # Default /data volume contents
 │   ├── agents/registry.json
 │   ├── memory/
@@ -260,11 +265,31 @@ template/
 │   ├── crons.json
 │   └── config.json
 │
-├── package.json                 # Workspace root
-├── turbo.json
-├── tsconfig.base.json
-└── .env.example
+├── package.json                 # Workspace root (Bun workspaces)
+├── turbo.json                   # Turborepo v2 task pipeline
+├── tsconfig.base.json           # Shared TS config (ESM, strict, noEmit)
+├── biome.json                   # Linter + formatter config
+├── .env.example
+└── .github/workflows/ci.yml     # CI: lint → typecheck → test
 ```
+
+### 4.1 Package Dependency Graph
+
+```
+@autonomy/shared           → (no deps)
+@autonomy/agent-manager    → shared
+@autonomy/memory           → shared
+@autonomy/conductor        → shared, agent-manager, memory
+@autonomy/cron-manager     → shared
+@autonomy/server           → shared, conductor, agent-manager, memory, cron-manager
+@autonomy/dashboard        → shared
+```
+
+### 4.2 Build Strategy
+
+- **Runtime packages**: No tsc compilation. Bun runs TypeScript directly. `tsc --noEmit` for type-checking only.
+- **Dashboard**: `next build` with `output: 'standalone'` for Docker.
+- **"Build passes"** = `bun install` + `turbo typecheck` (7/7) + `turbo test` (27 pass) + `biome check` (0 errors).
 
 ---
 
@@ -452,7 +477,7 @@ Dashboard UI에서:
 
 ## 8. Dashboard (Built-in UI)
 
-Next.js 15, App Router, standalone output. Separate service in docker-compose.
+Next.js 16, App Router, standalone output. Separate service in docker-compose.
 
 ```
 Dashboard Pages:
@@ -637,16 +662,16 @@ How products customize this template:
 
 Implement in this sequence. Each step depends on the previous.
 
-| Step | Package           | What                                                                     | Test                                    |
-| ---- | ----------------- | ------------------------------------------------------------------------ | --------------------------------------- |
-| 1    | Scaffold          | Bun workspace, Turborepo, shared types                                   | Build passes                            |
-| 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend                      | Spawn agent, send message, get response |
-| 3    | memory            | bun:sqlite schema, LanceDB integration, short/long-term, naive RAG       | Store, search, retrieve                 |
-| 4    | conductor         | Router, Conductor class, agent CRUD with ownership                       | Route messages, multi-agent delegation  |
-| 5    | agent-manager/a2a | delegate_to_agent tool, capability detection, relay fallback             | Agent A delegates to Agent B            |
-| 6    | server            | REST API, WebSocket, webhook receivers, Bun.serve entry                  | Full message flow via WS                |
-| 7    | cron-manager      | File watcher, workflow executor                                          | Create cron, verify execution           |
-| 8    | dashboard         | Next.js 15, agent management, memory browser, chat, monitoring, settings | UI functional                           |
-| 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose, default data   | `docker-compose up`, full flow          |
-| 10   | memory (advanced) | Graph RAG, Agentic RAG, file ingest (PDF/CSV/TXT), Qdrant provider       | Can parallel with 8-9                   |
-| 11   | control-plane     | ContainerProvider + Fly.io, Auth (Supabase), Billing (Stripe), Portal    | Optional, cloud mode                    |
+| Step | Package           | What                                                                     | Test                                    | Status |
+| ---- | ----------------- | ------------------------------------------------------------------------ | --------------------------------------- | ------ |
+| 1    | Scaffold          | Bun workspace, Turborepo, shared types, Biome, CI                        | Build passes (27 tests, 104 assertions) | ✅ Done |
+| 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend                      | Spawn agent, send message, get response |        |
+| 3    | memory            | bun:sqlite schema, LanceDB integration, short/long-term, naive RAG       | Store, search, retrieve                 |        |
+| 4    | conductor         | Router, Conductor class, agent CRUD with ownership                       | Route messages, multi-agent delegation  |        |
+| 5    | agent-manager/a2a | delegate_to_agent tool, capability detection, relay fallback             | Agent A delegates to Agent B            |        |
+| 6    | server            | REST API, WebSocket, webhook receivers, Bun.serve entry                  | Full message flow via WS                |        |
+| 7    | cron-manager      | File watcher, workflow executor                                          | Create cron, verify execution           |        |
+| 8    | dashboard         | Next.js 16, agent management, memory browser, chat, monitoring, settings | UI functional                           |        |
+| 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose, default data   | `docker-compose up`, full flow          |        |
+| 10   | memory (advanced) | Graph RAG, Agentic RAG, file ingest (PDF/CSV/TXT), Qdrant provider       | Can parallel with 8-9                   |        |
+| 11   | control-plane     | ContainerProvider + Fly.io, Auth (Supabase), Billing (Stripe), Portal    | Optional, cloud mode                    |        |

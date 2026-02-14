@@ -1,0 +1,23 @@
+{
+  "name": "@autonomy/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "clean": "rm -rf node_modules .turbo"
+  },
+  "dependencies": {
+    "@autonomy/shared": "workspace:*",
+    "@autonomy/conductor": "workspace:*",
+    "@autonomy/agent-manager": "workspace:*",
+    "@autonomy/memory": "workspace:*",
+    "@autonomy/cron-manager": "workspace:*"
+  }
+}

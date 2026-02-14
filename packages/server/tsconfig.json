@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@autonomy/shared": ["../shared/src/index.ts"],
+      "@autonomy/shared/*": ["../shared/src/*"],
+      "@autonomy/conductor": ["../conductor/src/index.ts"],
+      "@autonomy/conductor/*": ["../conductor/src/*"],
+      "@autonomy/agent-manager": ["../agent-manager/src/index.ts"],
+      "@autonomy/agent-manager/*": ["../agent-manager/src/*"],
+      "@autonomy/memory": ["../memory/src/index.ts"],
+      "@autonomy/memory/*": ["../memory/src/*"],
+      "@autonomy/cron-manager": ["../cron-manager/src/index.ts"],
+      "@autonomy/cron-manager/*": ["../cron-manager/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "__tests__"]
+}
