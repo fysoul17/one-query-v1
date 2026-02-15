@@ -30,6 +30,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
   const onAgentStatusRef = useRef(onAgentStatus);
   onAgentStatusRef.current = onAgentStatus;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup/scheduleReconnect only use refs — no stale closure risk
   const connect = useCallback(() => {
     const current = wsRef.current;
     if (current?.readyState === WebSocket.OPEN || current?.readyState === WebSocket.CONNECTING) {
@@ -169,6 +170,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
     wsRef.current.send(JSON.stringify(wsMsg));
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: cleanup only uses refs — stable across renders
   useEffect(() => {
     connect();
     return () => {

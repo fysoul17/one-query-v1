@@ -30,6 +30,7 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
 
   // Auto-scroll to bottom on new messages
   const messageCount = messages.length;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on message count change
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
