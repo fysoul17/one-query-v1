@@ -31,7 +31,13 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
   onAgentStatusRef.current = onAgentStatus;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const current = wsRef.current;
+    if (current?.readyState === WebSocket.OPEN || current?.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    // Clean up any lingering ping interval from previous connection
+    cleanup();
 
     try {
       const ws = new WebSocket(url);

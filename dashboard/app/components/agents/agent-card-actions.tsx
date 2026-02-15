@@ -27,14 +27,16 @@ export function AgentCardActions({ agent }: { agent: AgentRuntimeInfo }) {
   const router = useRouter();
   const [showDelete, setShowDelete] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleRestart() {
     setLoading(true);
+    setError('');
     try {
       await restartAgent(agent.id);
       router.refresh();
     } catch (err) {
-      console.error('Failed to restart agent:', err);
+      setError(err instanceof Error ? err.message : 'Failed to restart');
     } finally {
       setLoading(false);
     }
@@ -42,11 +44,12 @@ export function AgentCardActions({ agent }: { agent: AgentRuntimeInfo }) {
 
   async function handleDelete() {
     setLoading(true);
+    setError('');
     try {
       await deleteAgent(agent.id);
       router.refresh();
     } catch (err) {
-      console.error('Failed to delete agent:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete');
     } finally {
       setLoading(false);
       setShowDelete(false);
@@ -55,6 +58,11 @@ export function AgentCardActions({ agent }: { agent: AgentRuntimeInfo }) {
 
   return (
     <>
+      {error && (
+        <p className="absolute -bottom-5 left-0 right-0 text-[10px] text-neon-red truncate">
+          {error}
+        </p>
+      )}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">

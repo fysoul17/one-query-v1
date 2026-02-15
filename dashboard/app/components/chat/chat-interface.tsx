@@ -36,9 +36,12 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
     }
   }, [messageCount]);
 
-  function handleSend(content: string) {
-    sendMessage(content, targetAgent);
-  }
+  const handleSend = useCallback(
+    (content: string) => {
+      sendMessage(content, targetAgent);
+    },
+    [sendMessage, targetAgent],
+  );
 
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col">
@@ -51,7 +54,9 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
               <p className="text-lg font-medium text-muted-foreground">
-                {targetAgent ? `Chat with agent` : 'Chat with Conductor'}
+                {targetAgent
+                  ? `Chat with ${agents.find((a) => a.id === targetAgent)?.name ?? 'agent'}`
+                  : 'Chat with Conductor'}
               </p>
               <p className="text-sm text-muted-foreground/60">Send a message to get started.</p>
             </div>
