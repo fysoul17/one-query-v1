@@ -1,4 +1,9 @@
-import type { AgentId, AgentRuntimeInfo, ConductorDecision, MemorySearchResult } from '@autonomy/shared';
+import type {
+  AgentId,
+  AgentRuntimeInfo,
+  ConductorDecision,
+  MemorySearchResult,
+} from '@autonomy/shared';
 
 export interface IncomingMessage {
   content: string;

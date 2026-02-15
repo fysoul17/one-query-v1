@@ -71,7 +71,10 @@ export const defaultRouter: RouterFn = async (
   }
 
   // Fallback: first available agent
-  const fallback = available[0]!;
+  const fallback = available[0];
+  if (!fallback) {
+    return { agentIds: [], reason: 'No available agents to route to' };
+  }
   return {
     agentIds: [fallback.id],
     reason: `Fallback routing to first available agent "${fallback.name}"`,

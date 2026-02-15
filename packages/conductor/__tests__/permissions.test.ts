@@ -148,7 +148,12 @@ describe('PermissionChecker', () => {
   describe('custom rules', () => {
     test('accepts custom rules instead of defaults', () => {
       const custom = new PermissionChecker([
-        { target: ConductorTarget.OWN_AGENT, action: ConductorAction.CREATE, allowed: false, requiresApproval: false },
+        {
+          target: ConductorTarget.OWN_AGENT,
+          action: ConductorAction.CREATE,
+          allowed: false,
+          requiresApproval: false,
+        },
       ]);
       const result = custom.check(ConductorTarget.OWN_AGENT, ConductorAction.CREATE);
       expect(result.allowed).toBe(false);

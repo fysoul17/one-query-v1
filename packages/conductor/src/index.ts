@@ -1,5 +1,6 @@
 // @autonomy/conductor — Mother AI system-level orchestrator
 
+export { ActivityLog } from './activity-log.ts';
 export { Conductor } from './conductor.ts';
 export {
   ApprovalRequiredError,
@@ -9,7 +10,6 @@ export {
   PermissionDeniedError,
   RoutingError,
 } from './errors.ts';
-export { ActivityLog } from './activity-log.ts';
 export { PermissionChecker } from './permissions.ts';
 export { defaultRouter, RouterManager } from './router.ts';
 export type {

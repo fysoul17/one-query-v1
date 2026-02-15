@@ -1,16 +1,16 @@
 import type { AgentPool } from '@autonomy/agent-manager';
 import type { Memory } from '@autonomy/memory';
 import {
+  type ActivityEntry,
   ActivityType,
-  AgentOwner,
-  ConductorAction,
-  MemoryType,
   type AgentDefinition,
   type AgentId,
+  AgentOwner,
   type AgentRuntimeInfo,
-  type ActivityEntry,
+  ConductorAction,
   type ConductorDecision,
   type MemorySearchResult,
+  MemoryType,
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
@@ -136,7 +136,11 @@ export class Conductor {
   async sendToAgent(agentId: AgentId, message: string): Promise<string> {
     this.ensureInitialized();
     const result = await this.pool.sendMessage(agentId, message);
-    this.activityLog.record(ActivityType.DELEGATION, `Direct message to agent "${agentId}"`, agentId);
+    this.activityLog.record(
+      ActivityType.DELEGATION,
+      `Direct message to agent "${agentId}"`,
+      agentId,
+    );
     return result;
   }
 
@@ -185,7 +189,7 @@ export class Conductor {
     }
 
     if (routingResult.agentIds.length === 1) {
-      const agentId = routingResult.agentIds[0]!;
+      const agentId = routingResult.agentIds[0] as string;
       const result = await this.delegateToAgent(agentId, message, memoryContext);
       decisions.push({
         timestamp: new Date().toISOString(),
@@ -227,7 +231,7 @@ export class Conductor {
     memoryContext: MemorySearchResult | null,
     decisions: ConductorDecision[],
   ): Promise<string> {
-    const create = routingResult.createAgent!;
+    const create = routingResult.createAgent as NonNullable<RoutingResult['createAgent']>;
     const newAgentId = nanoid();
     const definition: AgentDefinition = {
       id: newAgentId,
@@ -245,7 +249,11 @@ export class Conductor {
     };
 
     await this.pool.create(definition);
-    this.activityLog.record(ActivityType.AGENT_CREATED, `Created agent "${definition.name}"`, newAgentId);
+    this.activityLog.record(
+      ActivityType.AGENT_CREATED,
+      `Created agent "${definition.name}"`,
+      newAgentId,
+    );
     decisions.push({
       timestamp: new Date().toISOString(),
       action: 'create_agent',
@@ -265,7 +273,7 @@ export class Conductor {
 
   private async storeConversation(
     message: IncomingMessage,
-    responseContent: string,
+    _responseContent: string,
     decisions: ConductorDecision[],
   ): Promise<void> {
     try {
@@ -324,19 +332,28 @@ export class Conductor {
         const result = await this.pool.sendMessage(step.agentId, taskWithContext);
         results.push({ agentId: step.agentId, result, success: true });
         accumulatedContext += `\n[${step.agentId}]: ${result}`;
-        this.activityLog.record(ActivityType.DELEGATION, `Pipeline step to "${step.agentId}" succeeded`, step.agentId);
+        this.activityLog.record(
+          ActivityType.DELEGATION,
+          `Pipeline step to "${step.agentId}" succeeded`,
+          step.agentId,
+        );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         results.push({ agentId: step.agentId, result: '', success: false, error: errorMsg });
-        this.activityLog.record(ActivityType.ERROR, `Pipeline step to "${step.agentId}" failed: ${errorMsg}`, step.agentId);
+        this.activityLog.record(
+          ActivityType.ERROR,
+          `Pipeline step to "${step.agentId}" failed: ${errorMsg}`,
+          step.agentId,
+        );
         // Continue on failure — partial results > total failure
       }
     }
 
     const successResults = results.filter((r) => r.success);
-    const finalResult = successResults.length > 0
-      ? successResults.map((r) => r.result).join('\n\n')
-      : 'All pipeline steps failed';
+    const finalResult =
+      successResults.length > 0
+        ? successResults.map((r) => r.result).join('\n\n')
+        : 'All pipeline steps failed';
 
     return {
       steps: results,

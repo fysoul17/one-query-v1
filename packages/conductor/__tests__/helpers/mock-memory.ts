@@ -1,9 +1,19 @@
-import type { MemoryEntry, MemorySearchParams, MemorySearchResult, MemoryStats, MemoryType } from '@autonomy/shared';
+import type {
+  MemoryEntry,
+  MemorySearchParams,
+  MemorySearchResult,
+  MemoryStats,
+  MemoryType,
+} from '@autonomy/shared';
 import { RAGStrategy } from '@autonomy/shared';
 
 export class MockMemory {
   private entries = new Map<string, MemoryEntry>();
-  private _searchResults: MemorySearchResult = { entries: [], totalCount: 0, strategy: RAGStrategy.NAIVE };
+  private _searchResults: MemorySearchResult = {
+    entries: [],
+    totalCount: 0,
+    strategy: RAGStrategy.NAIVE,
+  };
   private _shouldThrow = false;
   initialized = false;
   storeCalls: Array<{ content: string; type: MemoryType }> = [];
@@ -21,7 +31,9 @@ export class MockMemory {
     this._shouldThrow = shouldThrow;
   }
 
-  async store(entry: Omit<MemoryEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string }): Promise<MemoryEntry> {
+  async store(
+    entry: Omit<MemoryEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
+  ): Promise<MemoryEntry> {
     if (this._shouldThrow) throw new Error('Mock memory store error');
     const full: MemoryEntry = {
       id: entry.id ?? `mem-${this.entries.size + 1}`,

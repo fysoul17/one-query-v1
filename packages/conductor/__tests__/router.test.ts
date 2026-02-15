@@ -76,7 +76,12 @@ describe('defaultRouter', () => {
 
   test('excludes stopped/error agents from scoring', async () => {
     const agents = [
-      makeAgentRuntime({ id: 'a1', name: 'Data Analyzer', role: 'data', status: AgentStatus.STOPPED }),
+      makeAgentRuntime({
+        id: 'a1',
+        name: 'Data Analyzer',
+        role: 'data',
+        status: AgentStatus.STOPPED,
+      }),
       makeAgentRuntime({ id: 'a2', name: 'General Helper', role: 'helper' }),
     ];
     const message = makeMessage({ content: 'analyze data' });

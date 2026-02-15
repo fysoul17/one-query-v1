@@ -1,19 +1,32 @@
-import { describe, expect, test, beforeEach, mock } from 'bun:test';
-import { AgentOwner, AgentStatus } from '@autonomy/shared';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import type { AgentPool } from '@autonomy/agent-manager';
+import type { Memory } from '@autonomy/memory';
+import {
+  type AgentDefinition,
+  AgentOwner,
+  type AgentRuntimeInfo,
+  AgentStatus,
+} from '@autonomy/shared';
 import { Conductor } from '../src/conductor.ts';
-import { ApprovalRequiredError, ConductorNotInitializedError, DelegationError, PermissionDeniedError } from '../src/errors.ts';
-import type { IncomingMessage, RouterFn } from '../src/types.ts';
+import {
+  ApprovalRequiredError,
+  ConductorNotInitializedError,
+  PermissionDeniedError,
+} from '../src/errors.ts';
+import type { RouterFn } from '../src/types.ts';
 import { makeAgent, makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
 
 // Minimal mock pool that tracks create/remove/sendMessage calls
 function createMockPool() {
-  const agents = new Map<string, { definition: any; runtime: any }>();
+  const agents = new Map<string, { definition: AgentDefinition; runtime: AgentRuntimeInfo }>();
   let sendResponse = 'Mock agent response';
 
   return {
-    setSendResponse(r: string) { sendResponse = r; },
-    create: mock(async (definition: any) => {
+    setSendResponse(r: string) {
+      sendResponse = r;
+    },
+    create: mock(async (definition: AgentDefinition) => {
       const runtime = {
         id: definition.id,
         name: definition.name,
@@ -36,9 +49,13 @@ function createMockPool() {
       return { definition: entry.definition, toRuntimeInfo: () => entry.runtime };
     }),
     list: mock(() => [...agents.values()].map((a) => a.runtime)),
-    remove: mock(async (id: string) => { agents.delete(id); }),
+    remove: mock(async (id: string) => {
+      agents.delete(id);
+    }),
     sendMessage: mock(async (_id: string, _msg: string) => sendResponse),
-    shutdown: mock(async () => { agents.clear(); }),
+    shutdown: mock(async () => {
+      agents.clear();
+    }),
     _agents: agents,
   };
 }
@@ -51,7 +68,7 @@ describe('Conductor', () => {
   beforeEach(() => {
     pool = createMockPool();
     memory = new MockMemory();
-    conductor = new Conductor(pool as any, memory as any);
+    conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
   });
 
   describe('initialization', () => {
@@ -152,10 +169,7 @@ describe('Conductor', () => {
 
     test('continues when memory store fails', async () => {
       // First search succeeds, then make store fail
-      const originalStore = memory.store.bind(memory);
-      let storeCallCount = 0;
-      memory.store = async (...args: any[]) => {
-        storeCallCount++;
+      memory.store = async () => {
         throw new Error('Store failed');
       };
 
@@ -201,7 +215,7 @@ describe('Conductor', () => {
 
     test('executes pipeline with multiple agents', async () => {
       // Create a custom router that returns multiple agents
-      conductor.setRouter(async (msg, agents) => ({
+      conductor.setRouter(async (_msg, agents) => ({
         agentIds: agents.map((a) => a.id),
         reason: 'Multi-agent pipeline',
       }));
@@ -255,7 +269,7 @@ describe('Conductor', () => {
     });
 
     test('throws if not initialized', async () => {
-      const c = new Conductor(pool as any, memory as any);
+      const c = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
       try {
         await c.createAgent({ name: 'X', role: 'x', systemPrompt: 'x' });
         expect(true).toBe(false);

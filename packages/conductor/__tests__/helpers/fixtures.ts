@@ -1,4 +1,9 @@
-import { AgentOwner, AgentStatus, type AgentDefinition, type AgentRuntimeInfo } from '@autonomy/shared';
+import {
+  type AgentDefinition,
+  AgentOwner,
+  type AgentRuntimeInfo,
+  AgentStatus,
+} from '@autonomy/shared';
 import type { IncomingMessage } from '../../src/types.ts';
 
 let counter = 0;
