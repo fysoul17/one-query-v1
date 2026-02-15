@@ -1,5 +1,10 @@
 import type { Memory } from '@autonomy/memory';
-import { MemoryType, type MemoryIngestRequest, type MemorySearchParams, type MemoryType as MemoryTypeValue } from '@autonomy/shared';
+import {
+  type MemoryIngestRequest,
+  type MemorySearchParams,
+  MemoryType,
+  type MemoryType as MemoryTypeValue,
+} from '@autonomy/shared';
 import { BadRequestError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 
@@ -10,11 +15,10 @@ export function createMemoryRoutes(memory: Memory) {
       const query = url.searchParams.get('query');
       if (!query) throw new BadRequestError('query parameter is required');
 
+      const limitParam = url.searchParams.get('limit');
       const params: MemorySearchParams = {
         query,
-        limit: url.searchParams.has('limit')
-          ? parseInt(url.searchParams.get('limit')!, 10)
-          : undefined,
+        limit: limitParam !== null ? parseInt(limitParam, 10) : undefined,
         type: url.searchParams.get('type') as MemoryTypeValue | undefined,
         agentId: url.searchParams.get('agentId') ?? undefined,
       };

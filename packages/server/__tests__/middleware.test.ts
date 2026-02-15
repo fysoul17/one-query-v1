@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { ServerError } from '../src/errors.ts';
 import {
   corsHeaders,
   errorResponse,
@@ -6,7 +7,6 @@ import {
   jsonResponse,
   parseJsonBody,
 } from '../src/middleware.ts';
-import { ServerError } from '../src/errors.ts';
 
 describe('corsHeaders', () => {
   test('returns default CORS headers with wildcard origin', () => {

@@ -1,7 +1,6 @@
 import { errorResponse } from '../middleware.ts';
 
-const STUB_RESPONSE = () =>
-  errorResponse('Cron manager not implemented yet', 501);
+const STUB_RESPONSE = () => errorResponse('Cron manager not implemented yet', 501);
 
 export function createCronRoutes() {
   return {

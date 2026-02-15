@@ -1,4 +1,10 @@
-import { AgentOwner, AgentStatus, type AgentDefinition, type AgentId, type AgentRuntimeInfo } from '@autonomy/shared';
+import {
+  type AgentDefinition,
+  type AgentId,
+  AgentOwner,
+  type AgentRuntimeInfo,
+  AgentStatus,
+} from '@autonomy/shared';
 
 export class MockAgentProcess {
   readonly id: string;
@@ -16,7 +22,9 @@ export class MockAgentProcess {
     this.definition = definition;
   }
 
-  get status() { return this._status; }
+  get status() {
+    return this._status;
+  }
 
   async start(): Promise<void> {
     this.startCalls++;

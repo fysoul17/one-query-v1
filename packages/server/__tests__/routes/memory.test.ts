@@ -1,22 +1,37 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Memory } from '@autonomy/memory';
 import { RAGStrategy } from '@autonomy/shared';
 import { BadRequestError } from '../../src/errors.ts';
 import { createMemoryRoutes } from '../../src/routes/memory.ts';
 
-class MockMemory {
-  storeCalls: any[] = [];
-  searchCalls: any[] = [];
+interface MockStoreInput {
+  content: string;
+  type: string;
+  metadata: Record<string, unknown>;
+}
 
-  async search(params: any) {
+class MockMemory {
+  storeCalls: MockStoreInput[] = [];
+  searchCalls: Array<Record<string, unknown>> = [];
+
+  async search(params: Record<string, unknown>) {
     this.searchCalls.push(params);
     return {
-      entries: [{ id: '1', content: 'test result', type: 'long-term', metadata: {}, createdAt: new Date().toISOString() }],
+      entries: [
+        {
+          id: '1',
+          content: 'test result',
+          type: 'long-term',
+          metadata: {},
+          createdAt: new Date().toISOString(),
+        },
+      ],
       totalCount: 1,
       strategy: RAGStrategy.NAIVE,
     };
   }
 
-  async store(entry: any) {
+  async store(entry: MockStoreInput) {
     this.storeCalls.push(entry);
     return {
       id: 'mem-1',
@@ -38,7 +53,7 @@ describe('Memory routes', () => {
 
   beforeEach(() => {
     memory = new MockMemory();
-    routes = createMemoryRoutes(memory as any);
+    routes = createMemoryRoutes(memory as unknown as Memory);
   });
 
   describe('GET /api/memory/search', () => {
@@ -53,7 +68,9 @@ describe('Memory routes', () => {
     });
 
     test('passes limit and type params', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test&limit=10&type=long-term&agentId=a1');
+      const req = new Request(
+        'http://localhost/api/memory/search?query=test&limit=10&type=long-term&agentId=a1',
+      );
       await routes.search(req);
 
       expect(memory.searchCalls[0].limit).toBe(10);

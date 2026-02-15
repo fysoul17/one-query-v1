@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
+import type { EnvironmentConfig } from '@autonomy/shared';
 import { DEFAULTS } from '@autonomy/shared';
 import { createConfigRoutes } from '../../src/routes/config.ts';
-import type { EnvironmentConfig } from '@autonomy/shared';
 
 function makeConfig(overrides?: Partial<EnvironmentConfig>): EnvironmentConfig {
   return {

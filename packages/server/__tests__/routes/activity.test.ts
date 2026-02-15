@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import type { Conductor } from '@autonomy/conductor';
 import { ActivityType } from '@autonomy/shared';
-import { MockConductor } from '../helpers/mock-conductor.ts';
 import { createActivityRoute } from '../../src/routes/activity.ts';
+import { MockConductor } from '../helpers/mock-conductor.ts';
 
 describe('GET /api/activity', () => {
   test('returns activity entries', async () => {
@@ -9,7 +10,7 @@ describe('GET /api/activity', () => {
     conductor.addActivity({ type: ActivityType.MESSAGE, details: 'test message' });
     conductor.addActivity({ type: ActivityType.DELEGATION, details: 'delegated to agent' });
 
-    const handler = createActivityRoute(conductor as any);
+    const handler = createActivityRoute(conductor as unknown as Conductor);
     const req = new Request('http://localhost/api/activity');
     const res = await handler(req);
     const body = await res.json();
@@ -24,7 +25,7 @@ describe('GET /api/activity', () => {
       conductor.addActivity({ details: `entry-${i}` });
     }
 
-    const handler = createActivityRoute(conductor as any);
+    const handler = createActivityRoute(conductor as unknown as Conductor);
     const req = new Request('http://localhost/api/activity?limit=3');
     const res = await handler(req);
     const body = await res.json();
@@ -34,7 +35,7 @@ describe('GET /api/activity', () => {
 
   test('defaults to limit 50', async () => {
     const conductor = new MockConductor();
-    const handler = createActivityRoute(conductor as any);
+    const handler = createActivityRoute(conductor as unknown as Conductor);
     const req = new Request('http://localhost/api/activity');
     const res = await handler(req);
     const body = await res.json();

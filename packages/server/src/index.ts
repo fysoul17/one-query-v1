@@ -4,19 +4,18 @@ import { AgentPool, getBackend } from '@autonomy/agent-manager';
 import { Conductor } from '@autonomy/conductor';
 import { Memory } from '@autonomy/memory';
 import { parseEnvConfig } from './config.ts';
+import { Router } from './router.ts';
 import { createActivityRoute } from './routes/activity.ts';
 import { createAgentRoutes } from './routes/agents.ts';
 import { createConfigRoutes } from './routes/config.ts';
 import { createCronRoutes } from './routes/crons.ts';
 import { createHealthRoute } from './routes/health.ts';
 import { createMemoryRoutes } from './routes/memory.ts';
-import { Router } from './router.ts';
 import { createWebSocketHandler, type WSData } from './websocket.ts';
 
+export { parseEnvConfig } from './config.ts';
 // --- Exports for library use ---
 export { BadRequestError, InternalError, NotFoundError, ServerError } from './errors.ts';
-export { parseEnvConfig } from './config.ts';
-export { Router, type RouteHandler, type RouteParams } from './router.ts';
 export {
   corsHeaders,
   errorResponse,
@@ -24,13 +23,14 @@ export {
   jsonResponse,
   parseJsonBody,
 } from './middleware.ts';
-export { createWebSocketHandler, type WSData } from './websocket.ts';
-export { createHealthRoute } from './routes/health.ts';
-export { createAgentRoutes } from './routes/agents.ts';
-export { createMemoryRoutes } from './routes/memory.ts';
-export { createCronRoutes } from './routes/crons.ts';
+export { type RouteHandler, type RouteParams, Router } from './router.ts';
 export { createActivityRoute } from './routes/activity.ts';
+export { createAgentRoutes } from './routes/agents.ts';
 export { createConfigRoutes } from './routes/config.ts';
+export { createCronRoutes } from './routes/crons.ts';
+export { createHealthRoute } from './routes/health.ts';
+export { createMemoryRoutes } from './routes/memory.ts';
+export { createWebSocketHandler, type WSData } from './websocket.ts';
 
 // --- Bootstrap (only when run directly) ---
 
@@ -145,8 +145,7 @@ async function main() {
 }
 
 // Only run main when this is the entry point
-const isMainModule =
-  typeof Bun !== 'undefined' && Bun.main === import.meta.path;
+const isMainModule = typeof Bun !== 'undefined' && Bun.main === import.meta.path;
 
 if (isMainModule) {
   main().catch((error) => {

@@ -1,7 +1,9 @@
-import { describe, expect, test, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
+import type { Conductor } from '@autonomy/conductor';
 import { WSClientMessageType, WSServerMessageType } from '@autonomy/shared';
+import type { ServerWebSocket } from 'bun';
+import { createWebSocketHandler, type WSData } from '../src/websocket.ts';
 import { MockConductor } from './helpers/mock-conductor.ts';
-import { createWebSocketHandler } from '../src/websocket.ts';
 
 // Mock ServerWebSocket for unit testing
 class MockWebSocket {
@@ -21,14 +23,18 @@ class MockWebSocket {
     this.closed = true;
   }
 
-  lastMessage(): any {
+  lastMessage(): Record<string, unknown> | null {
     const last = this.sent[this.sent.length - 1];
-    return last ? JSON.parse(last) : null;
+    return last ? (JSON.parse(last) as Record<string, unknown>) : null;
   }
 
-  allMessages(): any[] {
-    return this.sent.map((s) => JSON.parse(s));
+  allMessages(): Array<Record<string, unknown>> {
+    return this.sent.map((s) => JSON.parse(s) as Record<string, unknown>);
   }
+}
+
+function asWS(ws: MockWebSocket): ServerWebSocket<WSData> {
+  return ws as unknown as ServerWebSocket<WSData>;
 }
 
 describe('WebSocket handler', () => {
@@ -38,34 +44,34 @@ describe('WebSocket handler', () => {
   beforeEach(() => {
     conductor = new MockConductor();
     conductor.initialized = true;
-    wsHandler = createWebSocketHandler(conductor as any);
+    wsHandler = createWebSocketHandler(conductor as unknown as Conductor);
   });
 
   test('tracks connected clients on open/close', () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
     expect(wsHandler.getClientCount()).toBe(1);
 
-    wsHandler.handler.close(ws as any);
+    wsHandler.handler.close(asWS(ws));
     expect(wsHandler.getClientCount()).toBe(0);
   });
 
   test('responds to ping with pong', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
-    await wsHandler.handler.message(ws as any, JSON.stringify({ type: WSClientMessageType.PING }));
+    await wsHandler.handler.message(asWS(ws), JSON.stringify({ type: WSClientMessageType.PING }));
 
     expect(ws.lastMessage().type).toBe(WSServerMessageType.PONG);
   });
 
   test('handles message type — sends chunk and complete', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
     conductor.responseContent = 'Hello from conductor';
 
     await wsHandler.handler.message(
-      ws as any,
+      asWS(ws),
       JSON.stringify({ type: WSClientMessageType.MESSAGE, content: 'Hi' }),
     );
 
@@ -78,9 +84,9 @@ describe('WebSocket handler', () => {
 
   test('sends error on invalid JSON', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
-    await wsHandler.handler.message(ws as any, 'not json');
+    await wsHandler.handler.message(asWS(ws), 'not json');
 
     expect(ws.lastMessage().type).toBe(WSServerMessageType.ERROR);
     expect(ws.lastMessage().message).toBe('Invalid JSON');
@@ -88,9 +94,9 @@ describe('WebSocket handler', () => {
 
   test('sends error on unknown message type', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
-    await wsHandler.handler.message(ws as any, JSON.stringify({ type: 'unknown' }));
+    await wsHandler.handler.message(asWS(ws), JSON.stringify({ type: 'unknown' }));
 
     expect(ws.lastMessage().type).toBe(WSServerMessageType.ERROR);
     expect(ws.lastMessage().message).toContain('Unknown message type');
@@ -98,11 +104,11 @@ describe('WebSocket handler', () => {
 
   test('sends error when conductor throws', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
     conductor.shouldThrow = true;
 
     await wsHandler.handler.message(
-      ws as any,
+      asWS(ws),
       JSON.stringify({ type: WSClientMessageType.MESSAGE, content: 'Hi' }),
     );
 
@@ -112,21 +118,21 @@ describe('WebSocket handler', () => {
 
   test('passes targetAgent from client message', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
     await wsHandler.handler.message(
-      ws as any,
+      asWS(ws),
       JSON.stringify({ type: WSClientMessageType.MESSAGE, content: 'Hi', targetAgent: 'agent-1' }),
     );
 
-    expect(conductor.handleMessageCalls[0]!.targetAgentId).toBe('agent-1');
+    expect(conductor.handleMessageCalls[0]?.targetAgentId).toBe('agent-1');
   });
 
   test('broadcast sends to all connected clients', () => {
     const ws1 = new MockWebSocket('ws-1');
     const ws2 = new MockWebSocket('ws-2');
-    wsHandler.handler.open(ws1 as any);
-    wsHandler.handler.open(ws2 as any);
+    wsHandler.handler.open(asWS(ws1));
+    wsHandler.handler.open(asWS(ws2));
 
     wsHandler.broadcast({ type: 'test', data: 'hello' });
 
@@ -136,7 +142,7 @@ describe('WebSocket handler', () => {
 
   test('broadcastAgentStatus sends agent_status to all clients', () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
     wsHandler.broadcastAgentStatus();
 
@@ -147,8 +153,8 @@ describe('WebSocket handler', () => {
   test('shutdown closes all clients', () => {
     const ws1 = new MockWebSocket('ws-1');
     const ws2 = new MockWebSocket('ws-2');
-    wsHandler.handler.open(ws1 as any);
-    wsHandler.handler.open(ws2 as any);
+    wsHandler.handler.open(asWS(ws1));
+    wsHandler.handler.open(asWS(ws2));
 
     wsHandler.shutdown();
 
@@ -159,10 +165,10 @@ describe('WebSocket handler', () => {
 
   test('rejects oversized messages', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
     const largeMessage = 'x'.repeat(100_000);
-    await wsHandler.handler.message(ws as any, largeMessage);
+    await wsHandler.handler.message(asWS(ws), largeMessage);
 
     expect(ws.lastMessage().type).toBe(WSServerMessageType.ERROR);
     expect(ws.lastMessage().message).toBe('Message too large');
@@ -173,14 +179,14 @@ describe('WebSocket handler', () => {
     const clients: MockWebSocket[] = [];
     for (let i = 0; i < 100; i++) {
       const ws = new MockWebSocket(`ws-${i}`);
-      wsHandler.handler.open(ws as any);
+      wsHandler.handler.open(asWS(ws));
       clients.push(ws);
     }
     expect(wsHandler.getClientCount()).toBe(100);
 
     // 101st client should be rejected
     const rejected = new MockWebSocket('ws-rejected');
-    wsHandler.handler.open(rejected as any);
+    wsHandler.handler.open(asWS(rejected));
 
     expect(rejected.lastMessage().type).toBe(WSServerMessageType.ERROR);
     expect(rejected.lastMessage().message).toBe('Too many connections');
@@ -193,10 +199,10 @@ describe('WebSocket handler', () => {
 
   test('handles message with empty content', async () => {
     const ws = new MockWebSocket();
-    wsHandler.handler.open(ws as any);
+    wsHandler.handler.open(asWS(ws));
 
     await wsHandler.handler.message(
-      ws as any,
+      asWS(ws),
       JSON.stringify({ type: WSClientMessageType.MESSAGE, content: '' }),
     );
 

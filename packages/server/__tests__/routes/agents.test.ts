@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import type { AgentPool } from '@autonomy/agent-manager';
+import type { Conductor } from '@autonomy/conductor';
 import { AgentOwner } from '@autonomy/shared';
 import { BadRequestError, NotFoundError } from '../../src/errors.ts';
-import { MockConductor } from '../helpers/mock-conductor.ts';
-import { makeDefinition, MockPool } from '../helpers/mock-pool.ts';
 import { createAgentRoutes } from '../../src/routes/agents.ts';
+import { MockConductor } from '../helpers/mock-conductor.ts';
+import { MockPool, makeDefinition } from '../helpers/mock-pool.ts';
 
 describe('Agent routes', () => {
   let conductor: MockConductor;
@@ -14,7 +16,7 @@ describe('Agent routes', () => {
     conductor = new MockConductor();
     conductor.initialized = true;
     pool = new MockPool();
-    routes = createAgentRoutes(conductor as any, pool as any);
+    routes = createAgentRoutes(conductor as unknown as Conductor, pool as unknown as AgentPool);
   });
 
   describe('GET /api/agents (list)', () => {
@@ -57,7 +59,7 @@ describe('Agent routes', () => {
 
       // Verify pool.create was called, not conductor.createAgent
       expect(pool.createCalls.length).toBe(1);
-      expect(pool.createCalls[0]!.owner).toBe(AgentOwner.USER);
+      expect(pool.createCalls[0]?.owner).toBe(AgentOwner.USER);
       expect(conductor.createAgentCalls.length).toBe(0);
     });
 

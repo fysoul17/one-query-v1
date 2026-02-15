@@ -1,10 +1,6 @@
 import type { AgentPool } from '@autonomy/agent-manager';
 import type { Conductor } from '@autonomy/conductor';
-import {
-  AgentOwner,
-  type AgentDefinition,
-  type CreateAgentRequest,
-} from '@autonomy/shared';
+import { type AgentDefinition, AgentOwner, type CreateAgentRequest } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { BadRequestError, NotFoundError } from '../errors.ts';
 import { errorResponse, jsonResponse, parseJsonBody } from '../middleware.ts';

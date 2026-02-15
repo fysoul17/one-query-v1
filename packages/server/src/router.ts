@@ -59,16 +59,14 @@ export class Router {
   }
 }
 
-function matchSegments(
-  pattern: string[],
-  path: string[],
-): RouteParams | null {
+function matchSegments(pattern: string[], path: string[]): RouteParams | null {
   if (pattern.length !== path.length) return null;
 
   const params: RouteParams = {};
   for (let i = 0; i < pattern.length; i++) {
-    const seg = pattern[i]!;
-    const val = path[i]!;
+    const seg = pattern[i];
+    const val = path[i];
+    if (seg === undefined || val === undefined) continue;
 
     if (seg.startsWith(':')) {
       params[seg.slice(1)] = val;

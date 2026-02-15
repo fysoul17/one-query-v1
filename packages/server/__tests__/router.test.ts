@@ -61,7 +61,9 @@ describe('Router', () => {
 
   test('handles OPTIONS preflight', async () => {
     const router = new Router();
-    const res = await router.handle(new Request('http://localhost/anything', { method: 'OPTIONS' }));
+    const res = await router.handle(
+      new Request('http://localhost/anything', { method: 'OPTIONS' }),
+    );
     expect(res.status).toBe(204);
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('*');
   });
@@ -95,9 +97,7 @@ describe('Router', () => {
     const router = new Router();
     router.put('/api/config', () => new Response('updated'));
 
-    const res = await router.handle(
-      new Request('http://localhost/api/config', { method: 'PUT' }),
-    );
+    const res = await router.handle(new Request('http://localhost/api/config', { method: 'PUT' }));
     expect(await res.text()).toBe('updated');
   });
 

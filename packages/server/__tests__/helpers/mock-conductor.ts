@@ -1,6 +1,6 @@
-import type { ActivityEntry, AgentId, AgentRuntimeInfo, ConductorDecision } from '@autonomy/shared';
-import { ActivityType, AgentOwner, AgentStatus } from '@autonomy/shared';
 import type { ConductorResponse, IncomingMessage, RouterFn } from '@autonomy/conductor';
+import type { ActivityEntry, AgentId, AgentRuntimeInfo } from '@autonomy/shared';
+import { ActivityType, AgentOwner, AgentStatus } from '@autonomy/shared';
 
 let counter = 0;
 

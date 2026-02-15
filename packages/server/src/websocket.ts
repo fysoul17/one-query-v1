@@ -17,6 +17,57 @@ export interface WSData {
   id: string;
 }
 
+function sendWSError(ws: ServerWebSocket<WSData>, message: string): void {
+  const err: WSServerError = { type: WSServerMessageType.ERROR, message };
+  ws.send(JSON.stringify(err));
+}
+
+async function handleConductorMessage(
+  ws: ServerWebSocket<WSData>,
+  conductor: Conductor,
+  parsed: WSClientMessage,
+): Promise<void> {
+  const incoming: IncomingMessage = {
+    content: parsed.content ?? '',
+    senderId: 'dashboard',
+    senderName: 'Dashboard User',
+    targetAgentId: parsed.targetAgent,
+  };
+
+  try {
+    const response = await conductor.handleMessage(incoming);
+    const chunk: WSServerChunk = {
+      type: WSServerMessageType.CHUNK,
+      content: response.content,
+      agentId: response.agentId ?? 'conductor',
+    };
+    ws.send(JSON.stringify(chunk));
+
+    const complete: WSServerComplete = { type: WSServerMessageType.COMPLETE };
+    ws.send(JSON.stringify(complete));
+  } catch (error) {
+    sendWSError(ws, error instanceof Error ? error.message : String(error));
+  }
+}
+
+function handleParsedMessage(
+  ws: ServerWebSocket<WSData>,
+  conductor: Conductor,
+  parsed: WSClientMessage,
+): Promise<void> | void {
+  if (parsed.type === WSClientMessageType.PING) {
+    const pong: WSServerPong = { type: WSServerMessageType.PONG };
+    ws.send(JSON.stringify(pong));
+    return;
+  }
+
+  if (parsed.type === WSClientMessageType.MESSAGE) {
+    return handleConductorMessage(ws, conductor, parsed);
+  }
+
+  sendWSError(ws, `Unknown message type: ${(parsed as { type?: string }).type}`);
+}
+
 export function createWebSocketHandler(conductor: Conductor) {
   const clients = new Set<ServerWebSocket<WSData>>();
   let statusInterval: ReturnType<typeof setInterval> | null = null;
@@ -56,11 +107,7 @@ export function createWebSocketHandler(conductor: Conductor) {
   const handler = {
     open(ws: ServerWebSocket<WSData>): void {
       if (clients.size >= MAX_WS_CLIENTS) {
-        const err: WSServerError = {
-          type: WSServerMessageType.ERROR,
-          message: 'Too many connections',
-        };
-        ws.send(JSON.stringify(err));
+        sendWSError(ws, 'Too many connections');
         ws.close();
         return;
       }
@@ -74,11 +121,7 @@ export function createWebSocketHandler(conductor: Conductor) {
       const text = typeof raw === 'string' ? raw : raw.toString();
 
       if (text.length > MAX_WS_MESSAGE_SIZE) {
-        const err: WSServerError = {
-          type: WSServerMessageType.ERROR,
-          message: 'Message too large',
-        };
-        ws.send(JSON.stringify(err));
+        sendWSError(ws, 'Message too large');
         return;
       }
 
@@ -86,57 +129,11 @@ export function createWebSocketHandler(conductor: Conductor) {
       try {
         parsed = JSON.parse(text) as WSClientMessage;
       } catch {
-        const err: WSServerError = {
-          type: WSServerMessageType.ERROR,
-          message: 'Invalid JSON',
-        };
-        ws.send(JSON.stringify(err));
+        sendWSError(ws, 'Invalid JSON');
         return;
       }
 
-      if (parsed.type === WSClientMessageType.PING) {
-        const pong: WSServerPong = { type: WSServerMessageType.PONG };
-        ws.send(JSON.stringify(pong));
-        return;
-      }
-
-      if (parsed.type === WSClientMessageType.MESSAGE) {
-        const incoming: IncomingMessage = {
-          content: parsed.content ?? '',
-          senderId: 'dashboard',
-          senderName: 'Dashboard User',
-          targetAgentId: parsed.targetAgent,
-        };
-
-        try {
-          const response = await conductor.handleMessage(incoming);
-
-          const chunk: WSServerChunk = {
-            type: WSServerMessageType.CHUNK,
-            content: response.content,
-            agentId: response.agentId ?? 'conductor',
-          };
-          ws.send(JSON.stringify(chunk));
-
-          const complete: WSServerComplete = {
-            type: WSServerMessageType.COMPLETE,
-          };
-          ws.send(JSON.stringify(complete));
-        } catch (error) {
-          const errMsg: WSServerError = {
-            type: WSServerMessageType.ERROR,
-            message: error instanceof Error ? error.message : String(error),
-          };
-          ws.send(JSON.stringify(errMsg));
-        }
-        return;
-      }
-
-      const err: WSServerError = {
-        type: WSServerMessageType.ERROR,
-        message: `Unknown message type: ${(parsed as { type?: string }).type}`,
-      };
-      ws.send(JSON.stringify(err));
+      await handleParsedMessage(ws, conductor, parsed);
     },
 
     close(ws: ServerWebSocket<WSData>): void {

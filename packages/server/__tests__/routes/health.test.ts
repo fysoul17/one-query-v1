@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { MockConductor } from '../helpers/mock-conductor.ts';
+import type { Conductor } from '@autonomy/conductor';
+import type { Memory } from '@autonomy/memory';
 import { createHealthRoute } from '../../src/routes/health.ts';
+import { MockConductor } from '../helpers/mock-conductor.ts';
 
 // Use a duck-typed mock for Memory
 function createMockMemory(shouldThrow = false) {
@@ -19,7 +21,11 @@ describe('GET /health', () => {
     const memory = createMockMemory();
     const startTime = Date.now() - 5000;
 
-    const handler = createHealthRoute(conductor as any, memory as any, startTime);
+    const handler = createHealthRoute(
+      conductor as unknown as Conductor,
+      memory as unknown as Memory,
+      startTime,
+    );
     const res = await handler();
     const body = await res.json();
 
@@ -37,7 +43,11 @@ describe('GET /health', () => {
     const memory = createMockMemory(true);
     const startTime = Date.now();
 
-    const handler = createHealthRoute(conductor as any, memory as any, startTime);
+    const handler = createHealthRoute(
+      conductor as unknown as Conductor,
+      memory as unknown as Memory,
+      startTime,
+    );
     const res = await handler();
     const body = await res.json();
 
