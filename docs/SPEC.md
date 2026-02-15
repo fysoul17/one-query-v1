@@ -639,7 +639,7 @@ How products customize this template:
 
 ## 14. Build Order
 
-Implement in this sequence. Each step depends on the previous.
+Implement in this sequence. Steps 1-4 complete. Steps 5-6 reordered to prioritize end-to-end demo (server + dashboard) before A2A and cron.
 
 | Step | Package           | What                                                                     | Test                                    |
 | ---- | ----------------- | ------------------------------------------------------------------------ | --------------------------------------- |
@@ -647,10 +647,10 @@ Implement in this sequence. Each step depends on the previous.
 | 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend                      | Spawn agent, send message, get response |
 | 3    | memory            | bun:sqlite schema, LanceDB integration, short/long-term, naive RAG       | Store, search, retrieve                 |
 | 4    | conductor         | Router, Conductor class, agent CRUD with ownership                       | Route messages, multi-agent delegation  |
-| 5    | agent-manager/a2a | delegate_to_agent tool, capability detection, relay fallback             | Agent A delegates to Agent B            |
-| 6    | server            | REST API, WebSocket, webhook receivers, Bun.serve entry                  | Full message flow via WS                |
-| 7    | cron-manager      | File watcher, workflow executor                                          | Create cron, verify execution           |
-| 8    | dashboard         | Next.js 15, agent management, memory browser, chat, monitoring, settings | UI functional                           |
+| 5    | server            | REST API, WebSocket, webhook receivers, Bun.serve entry                  | Full message flow via WS                |
+| 6    | dashboard         | Next.js 16, agent management, memory browser, chat, monitoring, settings | UI functional                           |
+| 7    | agent-manager/a2a | delegate_to_agent tool, capability detection, relay fallback             | Agent A delegates to Agent B            |
+| 8    | cron-manager      | File watcher, workflow executor                                          | Create cron, verify execution           |
 | 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose, default data   | `docker-compose up`, full flow          |
 | 10   | memory (advanced) | Graph RAG, Agentic RAG, file ingest (PDF/CSV/TXT), Qdrant provider       | Can parallel with 8-9                   |
 | 11   | control-plane     | ContainerProvider + Fly.io, Auth (Supabase), Billing (Stripe), Portal    | Optional, cloud mode                    |
