@@ -26,7 +26,7 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
     setAgents(newAgents);
   }, []);
 
-  const { status, messages, sendMessage } = useWebSocket({
+  const { status, messages, sendMessage, isProcessing } = useWebSocket({
     url: WS_URL,
     onAgentStatus: handleAgentStatus,
   });
@@ -53,7 +53,13 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
       <AgentSelector agents={agents} selected={targetAgent} onSelect={setTargetAgent} />
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+      <div
+        ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-busy={isProcessing}
+        className="flex-1 overflow-y-auto p-4"
+      >
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center">
@@ -103,7 +109,7 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
       </div>
 
       {/* Input */}
-      <ChatInput onSend={handleSend} status={status} />
+      <ChatInput onSend={handleSend} status={status} isProcessing={isProcessing} />
     </div>
   );
 }

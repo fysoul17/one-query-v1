@@ -17,7 +17,13 @@ import {
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
 import { buildResponsePrompt, CONDUCTOR_SYSTEM_PROMPT } from './conductor-prompt.ts';
-import { ConductorNotInitializedError, DelegationDepthError, DelegationError } from './errors.ts';
+import {
+  ConductorNotInitializedError,
+  ConductorShutdownError,
+  DelegationDepthError,
+  DelegationError,
+  QueueFullError,
+} from './errors.ts';
 import { PermissionChecker } from './permissions.ts';
 import { createAIRouter, defaultRouter, RouterManager } from './router.ts';
 import {
@@ -33,6 +39,14 @@ import {
 } from './types.ts';
 
 const DEFAULT_MAX_DELEGATION_DEPTH = 5;
+const DEFAULT_MAX_QUEUE_DEPTH = 50;
+
+interface QueuedConductorMessage {
+  message: IncomingMessage;
+  onEvent?: OnConductorEvent;
+  resolve: (result: ConductorResponse) => void;
+  reject: (error: Error) => void;
+}
 
 const FALLBACK_NO_AGENTS =
   "I'm the Conductor. No specialist agents are available yet. You can create agents from the Agents page, or ask me to create one for a specific task.";
@@ -70,6 +84,8 @@ export class Conductor {
   private activityLog: ActivityLog;
   private initialized = false;
   private options: ConductorOptions;
+  private messageQueue: QueuedConductorMessage[] = [];
+  private processing = false;
 
   constructor(pool: AgentPool, memory: Memory, backend?: CLIBackend, options?: ConductorOptions) {
     this.pool = pool;
@@ -110,6 +126,10 @@ export class Conductor {
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor initialized');
   }
 
+  get queueDepth(): number {
+    return this.messageQueue.length;
+  }
+
   async handleMessage(
     message: IncomingMessage,
     onEvent?: OnConductorEvent,
@@ -117,75 +137,120 @@ export class Conductor {
     this.ensureInitialized();
     this.checkDelegationDepth(message);
 
-    const decisions: ConductorDecision[] = [];
+    // If already processing a message, queue this one
+    if (this.processing) {
+      const maxDepth = this.options.maxQueueDepth ?? DEFAULT_MAX_QUEUE_DEPTH;
+      if (this.messageQueue.length >= maxDepth) {
+        throw new QueueFullError(maxDepth);
+      }
+      onEvent?.({
+        type: ConductorEventType.QUEUED,
+        content: 'Message queued',
+      });
+      return new Promise<ConductorResponse>((resolve, reject) => {
+        this.messageQueue.push({ message, onEvent, resolve, reject });
+      });
+    }
 
-    // 1. Search memory for context (non-fatal)
-    const memoryContext = await this.timedStep(
-      () => this.searchMemoryContext(message),
-      (durationMs, result) =>
-        onEvent?.({
-          type: ConductorEventType.MEMORY_SEARCH,
-          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
-          durationMs,
-          memoryResults: result?.entries.length ?? 0,
-          memoryQuery: message.content,
-          memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
-        }),
-    );
+    return this.executeMessage(message, onEvent);
+  }
 
-    // 2. Route via RouterManager
-    onEvent?.({ type: ConductorEventType.ROUTING, content: 'Analyzing request...' });
-    const agents = this.pool.list();
-    const routingResult = await this.timedStep(
-      () => this.routerManager.route(message, agents, memoryContext),
-      (durationMs, result) => {
-        const routerType = this.backendProcess ? 'ai' : 'keyword';
-        decisions.push({
-          timestamp: new Date().toISOString(),
-          action: routerType === 'ai' ? 'ai_route' : 'route',
-          reason: result.reason,
-        });
-        onEvent?.({ type: ConductorEventType.ROUTING, content: result.reason });
-        onEvent?.({
-          type: ConductorEventType.ROUTING_COMPLETE,
-          content: result.reason,
-          durationMs,
-          routerType,
-        });
-      },
-    );
+  private async executeMessage(
+    message: IncomingMessage,
+    onEvent?: OnConductorEvent,
+  ): Promise<ConductorResponse> {
+    this.processing = true;
 
-    // 3. Dispatch to appropriate handler
-    const responseContent = await this.timedStep(
-      () => this.dispatch(routingResult, message, memoryContext, decisions, onEvent),
-      (durationMs) =>
-        onEvent?.({
-          type: ConductorEventType.DELEGATION_COMPLETE,
-          content: 'Delegation complete',
-          durationMs,
-          decisions,
-        }),
-    );
+    try {
+      const decisions: ConductorDecision[] = [];
 
-    // 4. Store conversation in memory (non-fatal)
-    await this.timedStep(
-      () => this.storeConversation(message, routingResult, decisions),
-      (durationMs) =>
-        onEvent?.({
-          type: ConductorEventType.MEMORY_STORE,
-          content: 'Conversation stored',
-          durationMs,
-        }),
-    );
+      // 1. Search memory for context (non-fatal)
+      const memoryContext = await this.timedStep(
+        () => this.searchMemoryContext(message),
+        (durationMs, result) =>
+          onEvent?.({
+            type: ConductorEventType.MEMORY_SEARCH,
+            content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
+            durationMs,
+            memoryResults: result?.entries.length ?? 0,
+            memoryQuery: message.content,
+            memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
+          }),
+      );
 
-    this.activityLog.record(
-      ActivityType.MESSAGE,
-      `Handled message from "${message.senderName}"`,
-      undefined,
-      { senderId: message.senderId, agentCount: routingResult.agentIds.length },
-    );
+      // 2. Route via RouterManager
+      onEvent?.({ type: ConductorEventType.ROUTING, content: 'Analyzing request...' });
+      const agents = this.pool.list();
+      const routingResult = await this.timedStep(
+        () => this.routerManager.route(message, agents, memoryContext),
+        (durationMs, result) => {
+          const routerType = this.backendProcess ? 'ai' : 'keyword';
+          decisions.push({
+            timestamp: new Date().toISOString(),
+            action: routerType === 'ai' ? 'ai_route' : 'route',
+            reason: result.reason,
+          });
+          onEvent?.({ type: ConductorEventType.ROUTING, content: result.reason });
+          onEvent?.({
+            type: ConductorEventType.ROUTING_COMPLETE,
+            content: result.reason,
+            durationMs,
+            routerType,
+          });
+        },
+      );
 
-    return { content: responseContent, agentId: routingResult.agentIds[0], decisions };
+      // 3. Dispatch to appropriate handler
+      const responseContent = await this.timedStep(
+        () => this.dispatch(routingResult, message, memoryContext, decisions, onEvent),
+        (durationMs) =>
+          onEvent?.({
+            type: ConductorEventType.DELEGATION_COMPLETE,
+            content: 'Delegation complete',
+            durationMs,
+            decisions,
+          }),
+      );
+
+      // 4. Store conversation in memory (non-fatal)
+      await this.timedStep(
+        () => this.storeConversation(message, routingResult, decisions),
+        (durationMs) =>
+          onEvent?.({
+            type: ConductorEventType.MEMORY_STORE,
+            content: 'Conversation stored',
+            durationMs,
+          }),
+      );
+
+      this.activityLog.record(
+        ActivityType.MESSAGE,
+        `Handled message from "${message.senderName}"`,
+        undefined,
+        { senderId: message.senderId, agentCount: routingResult.agentIds.length },
+      );
+
+      const response: ConductorResponse = {
+        content: responseContent,
+        agentId: routingResult.agentIds[0],
+        decisions,
+      };
+
+      this.processing = false;
+      this.processQueue();
+      return response;
+    } catch (error) {
+      this.processing = false;
+      this.processQueue();
+      throw error;
+    }
+  }
+
+  private processQueue(): void {
+    if (this.messageQueue.length === 0) return;
+    const next = this.messageQueue.shift();
+    if (!next) return;
+    this.executeMessage(next.message, next.onEvent).then(next.resolve, next.reject);
   }
 
   async createAgent(params: {
@@ -266,6 +331,13 @@ export class Conductor {
 
   async shutdown(): Promise<void> {
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor shutting down');
+
+    // Reject all queued messages
+    for (const queued of this.messageQueue) {
+      queued.reject(new ConductorShutdownError());
+    }
+    this.messageQueue = [];
+    this.processing = false;
 
     // Stop the conductor's own AI process
     if (this.backendProcess) {

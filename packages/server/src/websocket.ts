@@ -75,6 +75,7 @@ function buildDebugPayload(event: ConductorEvent): ConductorDebugPayload | undef
 
 function conductorEventToDebug(event: ConductorEvent): DebugEvent {
   const phaseMap: Record<string, string> = {
+    [ConductorEventType.QUEUED]: 'Message queued',
     [ConductorEventType.ROUTING]: 'Analyzing request',
     [ConductorEventType.CREATING_AGENT]: 'Creating agent',
     [ConductorEventType.AGENT_CREATED]: 'Agent created',
@@ -109,6 +110,10 @@ function sendConductorStatus(ws: ServerWebSocket<WSData>, event: ConductorEvent)
   let message: string;
 
   switch (event.type) {
+    case ConductorEventType.QUEUED:
+      phase = 'queued';
+      message = event.content ?? 'Message queued...';
+      break;
     case ConductorEventType.ROUTING:
       phase = 'analyzing';
       message = event.content ?? 'Analyzing your request...';

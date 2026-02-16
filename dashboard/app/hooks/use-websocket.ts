@@ -42,6 +42,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const retryCountRef = useRef(0);
+  const [isProcessing, setIsProcessing] = useState(false);
   const accumulatorRef = useRef<{ content: string; agentId: string; id: string } | null>(null);
   const pipelineRef = useRef<PipelinePhase[]>([]);
   const processingIdRef = useRef<string | null>(null);
@@ -80,6 +81,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
   }
 
   function handleComplete() {
+    setIsProcessing(false);
     const finalPipeline = pipelineRef.current.length > 0 ? pipelineRef.current.slice() : undefined;
     if (accumulatorRef.current) {
       const acc = accumulatorRef.current;
@@ -104,6 +106,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
   }
 
   function handleError(message: string) {
+    setIsProcessing(false);
     accumulatorRef.current = null;
     const errorPipeline = pipelineRef.current.length > 0 ? [...pipelineRef.current] : undefined;
     pipelineRef.current = [];
@@ -224,6 +227,10 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
 
       ws.onclose = () => {
         setStatus('disconnected');
+        setIsProcessing(false);
+        accumulatorRef.current = null;
+        processingIdRef.current = null;
+        pipelineRef.current = [];
         cleanup();
         scheduleReconnect();
       };
@@ -260,6 +267,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
       timestamp: Date.now(),
     };
     setMessages((prev) => [...prev, userMsg]);
+    setIsProcessing(true);
 
     const wsMsg: WSClientMessage = {
       type: 'message',
@@ -282,5 +290,5 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
     };
   }, [connect]);
 
-  return { status, messages, sendMessage };
+  return { status, messages, sendMessage, isProcessing };
 }

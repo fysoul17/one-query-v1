@@ -72,6 +72,7 @@ export interface WSServerA2AEvent {
 export interface WSServerConductorStatus {
   type: typeof WSServerMessageType.CONDUCTOR_STATUS;
   phase:
+    | 'queued'
     | 'analyzing'
     | 'creating_agent'
     | 'delegating'

@@ -47,9 +47,11 @@ export interface ConductorOptions {
   maxAgents?: number;
   idleTimeoutMs?: number;
   maxDelegationDepth?: number;
+  maxQueueDepth?: number;
 }
 
 export const ConductorEventType = {
+  QUEUED: 'queued',
   ROUTING: 'routing',
   CREATING_AGENT: 'creating_agent',
   AGENT_CREATED: 'agent_created',

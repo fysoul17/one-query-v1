@@ -12,9 +12,11 @@ export {
   ApprovalRequiredError,
   ConductorError,
   ConductorNotInitializedError,
+  ConductorShutdownError,
   DelegationDepthError,
   DelegationError,
   PermissionDeniedError,
+  QueueFullError,
   RoutingError,
 } from './errors.ts';
 export { PermissionChecker } from './permissions.ts';

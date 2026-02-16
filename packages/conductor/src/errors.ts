@@ -46,3 +46,17 @@ export class DelegationDepthError extends ConductorError {
     this.name = 'DelegationDepthError';
   }
 }
+
+export class ConductorShutdownError extends ConductorError {
+  constructor() {
+    super('Conductor is shutting down — message rejected');
+    this.name = 'ConductorShutdownError';
+  }
+}
+
+export class QueueFullError extends ConductorError {
+  constructor(maxDepth: number) {
+    super(`Message queue is full (max ${maxDepth}). Try again later.`);
+    this.name = 'QueueFullError';
+  }
+}
