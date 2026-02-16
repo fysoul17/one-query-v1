@@ -214,7 +214,7 @@ describe('WebSocket handler', () => {
   });
 });
 
-describe('WebSocket handler with debugEnabled', () => {
+describe('WebSocket handler with debugBus', () => {
   let conductor: MockConductor;
 
   beforeEach(() => {
@@ -222,13 +222,11 @@ describe('WebSocket handler with debugEnabled', () => {
     conductor.initialized = true;
   });
 
-  test('does not include debug payload when debugEnabled is false (default)', async () => {
+  test('always includes debug payload in conductor_status messages', async () => {
     const wsHandler = createWebSocketHandler(conductor as unknown as Conductor);
     const ws = new MockWebSocket();
     wsHandler.handler.open(asWS(ws));
 
-    // Need an onEvent-capable conductor — but MockConductor doesn't support it.
-    // Instead, verify the option is accepted and handler works normally.
     await wsHandler.handler.message(
       asWS(ws),
       JSON.stringify({ type: WSClientMessageType.MESSAGE, content: 'Hi' }),
@@ -239,18 +237,9 @@ describe('WebSocket handler with debugEnabled', () => {
     expect(messages[1].type).toBe(WSServerMessageType.COMPLETE);
   });
 
-  test('accepts debugEnabled option without error', () => {
-    const handler = createWebSocketHandler(conductor as unknown as Conductor, {
-      debugEnabled: true,
-    });
+  test('works without debugBus', () => {
+    const handler = createWebSocketHandler(conductor as unknown as Conductor);
     expect(handler).toBeDefined();
     expect(handler.getClientCount()).toBe(0);
-  });
-
-  test('accepts debugEnabled=false option without error', () => {
-    const handler = createWebSocketHandler(conductor as unknown as Conductor, {
-      debugEnabled: false,
-    });
-    expect(handler).toBeDefined();
   });
 });

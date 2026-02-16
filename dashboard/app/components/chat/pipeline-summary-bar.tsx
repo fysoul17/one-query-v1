@@ -12,7 +12,7 @@ export function PipelineSummaryBar({ phases }: { phases: PipelinePhase[] }) {
   // Calculate total duration from phases that have it
   const totalDuration = phases.reduce((sum, p) => sum + (p.durationMs ?? 0), 0);
 
-  // Deduplicate phases for the dot display (e.g. two ROUTING events → one dot)
+  // Deduplicate phases for the dot display (e.g. two ROUTING events -> one dot)
   const uniquePhases = [...new Set(phases.map((p) => p.phase))];
 
   return (
@@ -21,7 +21,7 @@ export function PipelineSummaryBar({ phases }: { phases: PipelinePhase[] }) {
         type="button"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
-        aria-label="Toggle pipeline details"
+        aria-label="Toggle processing details"
         className="flex items-center gap-2 glass rounded-md px-2 py-1 w-full hover:border-neon-cyan/20 transition-colors group"
       >
         {/* Phase dots */}
@@ -37,7 +37,7 @@ export function PipelineSummaryBar({ phases }: { phases: PipelinePhase[] }) {
         </span>
 
         <span className="text-[10px] text-muted-foreground/40">
-          {phases.length} phase{phases.length !== 1 ? 's' : ''}
+          {phases.length} step{phases.length !== 1 ? 's' : ''}
         </span>
 
         {/* Expand chevron */}

@@ -45,7 +45,7 @@ function PipelinePhaseRow({
           )}
         </div>
 
-        {/* Debug data rows */}
+        {/* Detail data rows */}
         {debug && (
           <div className="mt-0.5 space-y-0.5">
             {debug.memoryQuery && (
@@ -116,10 +116,10 @@ export function LivePipelineCard({
           type="button"
           onClick={() => setExpanded(!expanded)}
           aria-expanded={expanded}
-          aria-label="Toggle pipeline details"
+          aria-label="Toggle processing details"
           className="flex items-center gap-2 w-full glass rounded-t-md border-b-0 px-3 py-1.5 hover:border-neon-cyan/20 transition-colors group"
         >
-          <span className="text-[10px] font-mono font-medium text-neon-cyan/70">PIPELINE</span>
+          <span className="text-[10px] font-mono font-medium text-neon-cyan/70">PROCESSING</span>
 
           {/* Phase dots summary */}
           <div className="flex items-center gap-0.5 ml-1">

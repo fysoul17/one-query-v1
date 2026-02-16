@@ -2,6 +2,7 @@ import type { Conductor, ConductorEvent, IncomingMessage } from '@autonomy/condu
 import { ConductorEventType } from '@autonomy/conductor';
 import type {
   ConductorDebugPayload,
+  DebugEvent,
   WSClientMessage,
   WSServerAgentStatus,
   WSServerChunk,
@@ -10,15 +11,21 @@ import type {
   WSServerError,
   WSServerPong,
 } from '@autonomy/shared';
-import { WSClientMessageType, WSServerMessageType } from '@autonomy/shared';
+import {
+  DebugEventCategory,
+  DebugEventLevel,
+  WSClientMessageType,
+  WSServerMessageType,
+} from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
+import type { DebugBus } from './debug-bus.ts';
+import { makeDebugEvent } from './debug-bus.ts';
 
 const MAX_WS_MESSAGE_SIZE = 65_536; // 64 KB
 const MAX_WS_CLIENTS = 100;
 
 export interface WSData {
   id: string;
-  debugEnabled: boolean;
 }
 
 function sendWSError(ws: ServerWebSocket<WSData>, message: string): void {
@@ -66,11 +73,38 @@ function buildDebugPayload(event: ConductorEvent): ConductorDebugPayload | undef
   return hasData ? debug : undefined;
 }
 
-function sendConductorStatus(
-  ws: ServerWebSocket<WSData>,
-  event: ConductorEvent,
-  debugEnabled: boolean,
-): void {
+function conductorEventToDebug(event: ConductorEvent): DebugEvent {
+  const phaseMap: Record<string, string> = {
+    [ConductorEventType.ROUTING]: 'Analyzing request',
+    [ConductorEventType.CREATING_AGENT]: 'Creating agent',
+    [ConductorEventType.AGENT_CREATED]: 'Agent created',
+    [ConductorEventType.DELEGATING]: 'Delegating to agent',
+    [ConductorEventType.MEMORY_SEARCH]: 'Searching memory',
+    [ConductorEventType.ROUTING_COMPLETE]: 'Routing complete',
+    [ConductorEventType.MEMORY_STORE]: 'Storing conversation',
+    [ConductorEventType.DELEGATION_COMPLETE]: 'Delegation complete',
+    [ConductorEventType.RESPONDING]: 'Conductor responding',
+  };
+
+  return makeDebugEvent({
+    category: DebugEventCategory.CONDUCTOR,
+    level: DebugEventLevel.INFO,
+    source: `conductor.${event.type}`,
+    message: event.content ?? phaseMap[event.type] ?? event.type,
+    agentId: event.agentId,
+    durationMs: event.durationMs,
+    data: {
+      ...(event.agentName && { agentName: event.agentName }),
+      ...(event.memoryResults !== undefined && { memoryResults: event.memoryResults }),
+      ...(event.memoryQuery && { memoryQuery: event.memoryQuery }),
+      ...(event.routerType && { routerType: event.routerType }),
+      ...(event.decisions && { decisions: event.decisions }),
+      ...(event.dispatchTarget && { dispatchTarget: event.dispatchTarget }),
+    },
+  });
+}
+
+function sendConductorStatus(ws: ServerWebSocket<WSData>, event: ConductorEvent): void {
   let phase: WSServerConductorStatus['phase'];
   let message: string;
 
@@ -122,7 +156,7 @@ function sendConductorStatus(
     phase,
     message,
     agentName: event.agentName,
-    debug: debugEnabled ? buildDebugPayload(event) : undefined,
+    debug: buildDebugPayload(event),
   };
   ws.send(JSON.stringify(status));
 }
@@ -131,6 +165,7 @@ async function handleConductorMessage(
   ws: ServerWebSocket<WSData>,
   conductor: Conductor,
   parsed: WSClientMessage,
+  debugBus?: DebugBus,
 ): Promise<void> {
   const incoming: IncomingMessage = {
     content: parsed.content ?? '',
@@ -140,8 +175,21 @@ async function handleConductorMessage(
     targetAgentId: parsed.targetAgent,
   };
 
+  debugBus?.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.WEBSOCKET,
+      level: DebugEventLevel.INFO,
+      source: 'ws.message',
+      message: `Chat message received (${(parsed.content ?? '').length} chars)`,
+      data: { targetAgent: parsed.targetAgent },
+    }),
+  );
+
   try {
-    const onEvent = (event: ConductorEvent) => sendConductorStatus(ws, event, ws.data.debugEnabled);
+    const onEvent = (event: ConductorEvent) => {
+      sendConductorStatus(ws, event);
+      debugBus?.emit(conductorEventToDebug(event));
+    };
     const response = await conductor.handleMessage(incoming, onEvent);
     const chunk: WSServerChunk = {
       type: WSServerMessageType.CHUNK,
@@ -152,8 +200,27 @@ async function handleConductorMessage(
 
     const complete: WSServerComplete = { type: WSServerMessageType.COMPLETE };
     ws.send(JSON.stringify(complete));
+
+    debugBus?.emit(
+      makeDebugEvent({
+        category: DebugEventCategory.CONDUCTOR,
+        level: DebugEventLevel.INFO,
+        source: 'conductor.response',
+        message: `Response sent (${response.content.length} chars) via ${response.agentId ?? 'conductor'}`,
+        agentId: response.agentId,
+      }),
+    );
   } catch (error) {
-    sendWSError(ws, error instanceof Error ? error.message : String(error));
+    const msg = error instanceof Error ? error.message : String(error);
+    sendWSError(ws, msg);
+    debugBus?.emit(
+      makeDebugEvent({
+        category: DebugEventCategory.CONDUCTOR,
+        level: DebugEventLevel.ERROR,
+        source: 'conductor.error',
+        message: `Error handling message: ${msg}`,
+      }),
+    );
   }
 }
 
@@ -161,6 +228,7 @@ function handleParsedMessage(
   ws: ServerWebSocket<WSData>,
   conductor: Conductor,
   parsed: WSClientMessage,
+  debugBus?: DebugBus,
 ): Promise<void> | void {
   if (parsed.type === WSClientMessageType.PING) {
     const pong: WSServerPong = { type: WSServerMessageType.PONG };
@@ -169,13 +237,13 @@ function handleParsedMessage(
   }
 
   if (parsed.type === WSClientMessageType.MESSAGE) {
-    return handleConductorMessage(ws, conductor, parsed);
+    return handleConductorMessage(ws, conductor, parsed, debugBus);
   }
 
   sendWSError(ws, `Unknown message type: ${(parsed as { type?: string }).type}`);
 }
 
-export function createWebSocketHandler(conductor: Conductor) {
+export function createWebSocketHandler(conductor: Conductor, debugBus?: DebugBus) {
   const clients = new Set<ServerWebSocket<WSData>>();
   let statusInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -197,6 +265,21 @@ export function createWebSocketHandler(conductor: Conductor) {
       agents,
     };
     broadcast(msg);
+
+    if (debugBus && debugBus.getSubscriberCount() > 0) {
+      debugBus.emit(
+        makeDebugEvent({
+          category: DebugEventCategory.AGENT,
+          level: DebugEventLevel.DEBUG,
+          source: 'agent-pool.status',
+          message: `Agent status broadcast (${agents.length} agents, ${clients.size} clients)`,
+          data: {
+            agentCount: agents.length,
+            agents: agents.map((a) => ({ id: a.id, name: a.name, status: a.status })),
+          },
+        }),
+      );
+    }
   }
 
   function startStatusBroadcast(): void {
@@ -222,6 +305,16 @@ export function createWebSocketHandler(conductor: Conductor) {
       if (clients.size === 1) {
         startStatusBroadcast();
       }
+
+      debugBus?.emit(
+        makeDebugEvent({
+          category: DebugEventCategory.WEBSOCKET,
+          level: DebugEventLevel.INFO,
+          source: 'ws.connect',
+          message: `Chat client connected (${clients.size} total)`,
+          data: { clientId: ws.data.id },
+        }),
+      );
     },
 
     async message(ws: ServerWebSocket<WSData>, raw: string | Buffer): Promise<void> {
@@ -240,7 +333,7 @@ export function createWebSocketHandler(conductor: Conductor) {
         return;
       }
 
-      await handleParsedMessage(ws, conductor, parsed);
+      await handleParsedMessage(ws, conductor, parsed, debugBus);
     },
 
     close(ws: ServerWebSocket<WSData>): void {
@@ -248,6 +341,16 @@ export function createWebSocketHandler(conductor: Conductor) {
       if (clients.size === 0) {
         stopStatusBroadcast();
       }
+
+      debugBus?.emit(
+        makeDebugEvent({
+          category: DebugEventCategory.WEBSOCKET,
+          level: DebugEventLevel.INFO,
+          source: 'ws.disconnect',
+          message: `Chat client disconnected (${clients.size} remaining)`,
+          data: { clientId: ws.data.id },
+        }),
+      );
     },
   };
 

@@ -1,10 +1,12 @@
 import type { AgentRuntimeInfo } from './agent.ts';
 import type { AgentId } from './base.ts';
 import type { ConductorDebugPayload } from './conductor.ts';
+import type { DebugEvent, DebugEventCategory, DebugEventLevel } from './debug.ts';
 
 export const WSClientMessageType = {
   MESSAGE: 'message',
   PING: 'ping',
+  DEBUG_SUBSCRIBE: 'debug_subscribe',
 } as const;
 export type WSClientMessageType = (typeof WSClientMessageType)[keyof typeof WSClientMessageType];
 
@@ -16,6 +18,8 @@ export const WSServerMessageType = {
   AGENT_STATUS: 'agent_status',
   A2A_EVENT: 'a2a_event',
   CONDUCTOR_STATUS: 'conductor_status',
+  DEBUG_EVENT: 'debug_event',
+  DEBUG_HISTORY: 'debug_history',
 } as const;
 export type WSServerMessageType = (typeof WSServerMessageType)[keyof typeof WSServerMessageType];
 
@@ -23,6 +27,14 @@ export interface WSClientMessage {
   type: WSClientMessageType;
   content?: string;
   targetAgent?: AgentId;
+}
+
+export interface WSClientDebugSubscribe {
+  type: typeof WSClientMessageType.DEBUG_SUBSCRIBE;
+  filter?: {
+    categories?: DebugEventCategory[];
+    minLevel?: DebugEventLevel;
+  };
 }
 
 export interface WSServerChunk {
@@ -73,6 +85,16 @@ export interface WSServerConductorStatus {
   debug?: ConductorDebugPayload;
 }
 
+export interface WSServerDebugEvent {
+  type: typeof WSServerMessageType.DEBUG_EVENT;
+  event: DebugEvent;
+}
+
+export interface WSServerDebugHistory {
+  type: typeof WSServerMessageType.DEBUG_HISTORY;
+  events: DebugEvent[];
+}
+
 export type WSServerMessage =
   | WSServerChunk
   | WSServerComplete
@@ -80,4 +102,6 @@ export type WSServerMessage =
   | WSServerPong
   | WSServerAgentStatus
   | WSServerA2AEvent
-  | WSServerConductorStatus;
+  | WSServerConductorStatus
+  | WSServerDebugEvent
+  | WSServerDebugHistory;

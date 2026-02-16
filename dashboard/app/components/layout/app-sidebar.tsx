@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  Activity,
   Bot,
   Brain,
   Cpu,
@@ -9,6 +8,7 @@ import {
   MessageSquare,
   Radio,
   Settings,
+  Terminal,
   Timer,
 } from 'lucide-react';
 import {
@@ -32,7 +32,7 @@ const mainNav = [
 
 const systemNav = [
   { href: '/automation', label: 'Automation', icon: Timer },
-  { href: '/activity', label: 'Activity', icon: Activity },
+  { href: '/activity', label: 'Debug Console', icon: Terminal },
   { href: '/channels', label: 'Channels', icon: Radio },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

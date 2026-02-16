@@ -1,12 +1,12 @@
 import { Bot, Cpu, User } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/use-websocket';
-import { LivePipelineCard } from './live-pipeline-card';
 import { PipelineSummaryBar } from './pipeline-summary-bar';
 import { ProcessingIndicator } from './processing-indicator';
+import { ProcessingProgressStrip } from './processing-progress-strip';
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
-  debugMode?: boolean;
+  showSteps?: boolean;
 }
 
 function AvatarIcon({ isUser, isConductor }: { isUser: boolean; isConductor: boolean }) {
@@ -37,28 +37,35 @@ function getMessageStyles(isUser: boolean, isConductor: boolean) {
   };
 }
 
-export function ChatMessageBubble({ message, debugMode }: ChatMessageBubbleProps) {
-  if (message.role === 'system') {
-    // Debug mode: show real-time pipeline card with full data
-    if (debugMode && message.pipeline && message.pipeline.length > 0) {
-      return <LivePipelineCard phases={message.pipeline} isProcessing={message.isProcessing} />;
+function SystemMessage({ message, showSteps }: ChatMessageBubbleProps) {
+  // While processing: show compact progress strip if steps visible, otherwise bouncing dots
+  if (message.isProcessing) {
+    if (showSteps && message.pipeline && message.pipeline.length > 0) {
+      return <ProcessingProgressStrip phases={message.pipeline} />;
     }
+    return <ProcessingIndicator />;
+  }
 
-    // Non-debug mode: show clean processing indicator
-    if (message.isProcessing) {
-      return <ProcessingIndicator />;
-    }
+  // Completed system message with pipeline: nothing to show (summary bar is on assistant message)
+  if (message.pipeline && message.pipeline.length > 0) {
+    return null;
+  }
 
-    // Fallback: simple system message
-    return (
-      <div className="flex justify-center py-1">
-        {/* biome-ignore lint/a11y/useSemanticElements: status messages are not form outputs */}
-        <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground/70">
-          <Cpu className="h-3 w-3 text-neon-cyan/50" />
-          <span className="italic font-mono">{message.content}</span>
-        </div>
+  // Simple system status message (e.g. "Delegating to agent...")
+  return (
+    <div className="flex justify-center py-1">
+      {/* biome-ignore lint/a11y/useSemanticElements: status messages are not form outputs */}
+      <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground/70">
+        <Cpu className="h-3 w-3 text-neon-cyan/50" />
+        <span className="italic font-mono">{message.content}</span>
       </div>
-    );
+    </div>
+  );
+}
+
+export function ChatMessageBubble({ message, showSteps }: ChatMessageBubbleProps) {
+  if (message.role === 'system') {
+    return <SystemMessage message={message} showSteps={showSteps} />;
   }
 
   const isUser = message.role === 'user';
@@ -79,7 +86,8 @@ export function ChatMessageBubble({ message, debugMode }: ChatMessageBubbleProps
             <span className="inline-block h-4 w-1 animate-pulse bg-primary ml-0.5" />
           )}
         </div>
-        {debugMode && !isUser && message.pipeline && message.pipeline.length > 0 && (
+        {/* Pipeline summary bar under assistant messages */}
+        {showSteps && !isUser && message.pipeline && message.pipeline.length > 0 && (
           <PipelineSummaryBar phases={message.pipeline} />
         )}
       </div>

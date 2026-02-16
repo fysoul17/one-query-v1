@@ -1,9 +1,9 @@
 'use client';
 
 import type { AgentRuntimeInfo } from '@autonomy/shared';
-import { Bug } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useDebugMode } from '@/hooks/use-debug-mode';
+import { useShowSteps } from '@/hooks/use-show-steps';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { AgentSelector } from './agent-selector';
 import { ChatInput } from './chat-input';
@@ -20,15 +20,14 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
   const [agents, setAgents] = useState<AgentRuntimeInfo[]>(initialAgents);
   const [targetAgent, setTargetAgent] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { debugMode, toggleDebug } = useDebugMode();
+  const { showSteps, toggleSteps } = useShowSteps();
 
   const handleAgentStatus = useCallback((newAgents: AgentRuntimeInfo[]) => {
     setAgents(newAgents);
   }, []);
 
-  const wsUrl = debugMode ? `${WS_URL}?debug=true` : WS_URL;
   const { status, messages, sendMessage } = useWebSocket({
-    url: wsUrl,
+    url: WS_URL,
     onAgentStatus: handleAgentStatus,
   });
 
@@ -69,13 +68,13 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
         ) : (
           <div className="space-y-4">
             {messages.map((msg) => (
-              <ChatMessageBubble key={msg.id} message={msg} debugMode={debugMode} />
+              <ChatMessageBubble key={msg.id} message={msg} showSteps={showSteps} />
             ))}
           </div>
         )}
       </div>
 
-      {/* Connection status + debug toggle */}
+      {/* Connection status + steps toggle */}
       <div className="flex items-center gap-2 border-t border-border/50 px-4 py-1">
         <span
           className={`h-2 w-2 rounded-full animate-pulse-glow ${
@@ -88,23 +87,19 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
         />
         <span className="text-[10px] text-muted-foreground capitalize">{status}</span>
 
-        <div className="ml-auto flex items-center gap-1">
-          <button
-            type="button"
-            onClick={toggleDebug}
-            aria-pressed={debugMode}
-            aria-label="Toggle debug mode"
-            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-mono transition-colors ${
-              debugMode
-                ? 'bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30'
-                : 'text-muted-foreground/50 hover:text-muted-foreground/70'
-            }`}
-            title="Toggle debug mode (Ctrl+Shift+D)"
-          >
-            <Bug className="h-3 w-3" />
-            Debug
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={toggleSteps}
+          aria-label={showSteps ? 'Hide processing steps' : 'Show processing steps'}
+          className={`ml-auto flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-mono transition-colors ${
+            showSteps
+              ? 'bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20'
+              : 'text-muted-foreground/50 hover:text-muted-foreground'
+          }`}
+        >
+          <Layers className="h-3 w-3" />
+          <span>Steps</span>
+        </button>
       </div>
 
       {/* Input */}

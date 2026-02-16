@@ -147,4 +147,31 @@ describe('@autonomy/shared exports', () => {
     expect(shared.BACKEND_CAPABILITIES.claude.customTools).toBe(true);
     expect(shared.BACKEND_CAPABILITIES.codex.customTools).toBe(false);
   });
+
+  test('exports DebugEventCategory enum', () => {
+    expect(shared.DebugEventCategory).toBeDefined();
+    expect(shared.DebugEventCategory.CONDUCTOR).toBe('conductor');
+    expect(shared.DebugEventCategory.AGENT).toBe('agent');
+    expect(shared.DebugEventCategory.MEMORY).toBe('memory');
+    expect(shared.DebugEventCategory.WEBSOCKET).toBe('websocket');
+    expect(shared.DebugEventCategory.SYSTEM).toBe('system');
+    expect(Object.keys(shared.DebugEventCategory)).toHaveLength(5);
+  });
+
+  test('exports DebugEventLevel enum', () => {
+    expect(shared.DebugEventLevel).toBeDefined();
+    expect(shared.DebugEventLevel.DEBUG).toBe('debug');
+    expect(shared.DebugEventLevel.INFO).toBe('info');
+    expect(shared.DebugEventLevel.WARN).toBe('warn');
+    expect(shared.DebugEventLevel.ERROR).toBe('error');
+    expect(Object.keys(shared.DebugEventLevel)).toHaveLength(4);
+  });
+
+  test('exports DEBUG_LEVEL_ORDER constant', () => {
+    expect(shared.DEBUG_LEVEL_ORDER).toBeDefined();
+    expect(shared.DEBUG_LEVEL_ORDER.debug).toBe(0);
+    expect(shared.DEBUG_LEVEL_ORDER.info).toBe(1);
+    expect(shared.DEBUG_LEVEL_ORDER.warn).toBe(2);
+    expect(shared.DEBUG_LEVEL_ORDER.error).toBe(3);
+  });
 });
