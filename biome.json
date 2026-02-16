@@ -12,6 +12,9 @@
         "noNonNullAssertion": "warn",
         "useConst": "error"
       },
+      "correctness": {
+        "noUnknownPseudoElement": "off"
+      },
       "suspicious": {
         "noExplicitAny": "warn"
       }

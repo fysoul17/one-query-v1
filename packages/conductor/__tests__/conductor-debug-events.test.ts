@@ -9,7 +9,7 @@ import {
 } from '@autonomy/shared';
 import { Conductor } from '../src/conductor.ts';
 import { type ConductorEvent, ConductorEventType } from '../src/types.ts';
-import { makeAgent, makeMessage } from './helpers/fixtures.ts';
+import { makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
 
 function createMockPool() {
@@ -61,8 +61,8 @@ describe('Conductor debug events', () => {
 
     const memorySearch = events.find((e) => e.type === ConductorEventType.MEMORY_SEARCH);
     expect(memorySearch).toBeDefined();
-    expect(memorySearch!.durationMs).toBeGreaterThanOrEqual(0);
-    expect(typeof memorySearch!.memoryResults).toBe('number');
+    expect(memorySearch?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(typeof memorySearch?.memoryResults).toBe('number');
   });
 
   test('emits ROUTING_COMPLETE event with durationMs and routerType', async () => {
@@ -76,8 +76,8 @@ describe('Conductor debug events', () => {
 
     const routingComplete = events.find((e) => e.type === ConductorEventType.ROUTING_COMPLETE);
     expect(routingComplete).toBeDefined();
-    expect(routingComplete!.durationMs).toBeGreaterThanOrEqual(0);
-    expect(routingComplete!.routerType).toBe('keyword'); // no backend = keyword router
+    expect(routingComplete?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(routingComplete?.routerType).toBe('keyword'); // no backend = keyword router
   });
 
   test('emits DELEGATION_COMPLETE event with durationMs and decisions', async () => {
@@ -93,8 +93,8 @@ describe('Conductor debug events', () => {
       (e) => e.type === ConductorEventType.DELEGATION_COMPLETE,
     );
     expect(delegationComplete).toBeDefined();
-    expect(delegationComplete!.durationMs).toBeGreaterThanOrEqual(0);
-    expect(Array.isArray(delegationComplete!.decisions)).toBe(true);
+    expect(delegationComplete?.durationMs).toBeGreaterThanOrEqual(0);
+    expect(Array.isArray(delegationComplete?.decisions)).toBe(true);
   });
 
   test('emits MEMORY_STORE event with durationMs', async () => {
@@ -108,7 +108,7 @@ describe('Conductor debug events', () => {
 
     const memoryStore = events.find((e) => e.type === ConductorEventType.MEMORY_STORE);
     expect(memoryStore).toBeDefined();
-    expect(memoryStore!.durationMs).toBeGreaterThanOrEqual(0);
+    expect(memoryStore?.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   test('durationMs values are non-negative integers', async () => {
@@ -147,7 +147,7 @@ describe('Conductor debug events', () => {
     await conductor.handleMessage(makeMessage(), (e) => events.push(e));
 
     const memorySearch = events.find((e) => e.type === ConductorEventType.MEMORY_SEARCH);
-    expect(memorySearch!.memoryResults).toBe(2);
+    expect(memorySearch?.memoryResults).toBe(2);
   });
 
   test('MEMORY_SEARCH reports 0 when memory search throws', async () => {
@@ -162,7 +162,7 @@ describe('Conductor debug events', () => {
     await conductor.handleMessage(makeMessage(), (e) => events.push(e));
 
     const memorySearch = events.find((e) => e.type === ConductorEventType.MEMORY_SEARCH);
-    expect(memorySearch!.memoryResults).toBe(0);
+    expect(memorySearch?.memoryResults).toBe(0);
   });
 
   test('emits all debug events in correct order', async () => {
