@@ -1,7 +1,19 @@
-import { Bot, User } from 'lucide-react';
+import { Bot, Cpu, User } from 'lucide-react';
 import type { ChatMessage } from '@/hooks/use-websocket';
 
 export function ChatMessageBubble({ message }: { message: ChatMessage }) {
+  if (message.role === 'system') {
+    return (
+      <div className="flex justify-center py-1">
+        {/* biome-ignore lint/a11y/useSemanticElements: status messages are not form outputs */}
+        <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground/70">
+          <Cpu className="h-3 w-3 text-neon-cyan/50" />
+          <span className="italic font-mono">{message.content}</span>
+        </div>
+      </div>
+    );
+  }
+
   const isUser = message.role === 'user';
 
   return (
@@ -18,9 +30,9 @@ export function ChatMessageBubble({ message }: { message: ChatMessage }) {
         )}
       </div>
       <div className={`max-w-[80%] space-y-1 ${isUser ? 'items-end' : ''}`}>
-        {!isUser && message.agentId && (
+        {!isUser && (message.agentName || message.agentId) && (
           <span className="text-[10px] font-mono text-neon-purple text-glow-purple">
-            {message.agentId}
+            {message.agentName ?? message.agentId}
           </span>
         )}
         <div

@@ -64,8 +64,8 @@ async function main() {
   });
   console.log('[server] Agent pool created');
 
-  // Initialize Conductor
-  const conductor = new Conductor(pool, memory);
+  // Initialize Conductor (with AI backend for intelligent routing)
+  const conductor = new Conductor(pool, memory, backend);
   await conductor.initialize();
   console.log('[server] Conductor initialized');
 

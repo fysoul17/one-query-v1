@@ -327,6 +327,21 @@ User Message (from any channel)
           └──── A2A comm ──────┘
 ```
 
+### AI Routing (Step 7)
+
+The Conductor has its own `CLIBackend` process that makes intelligent routing decisions. When a message arrives:
+
+1. **Memory search** → relevant context retrieved
+2. **AI routing** → Conductor AI receives available agents list + memory context + user message, outputs JSON `{ agentIds, createAgent?, reason }`
+3. **Dynamic agent creation** → if no suitable agent exists, Conductor creates one on the fly (conductor-owned, non-persistent)
+4. **Delegation** → message forwarded to selected/created agent(s) with memory context wrapped in `<memory-context>` tags
+
+**Fallback chain**: AI returns valid JSON → use it; invalid JSON → keyword router; hallucinated agent IDs → filter then keyword fallback; AI process fails → keyword router. Backward compatible — if no CLIBackend is provided, falls back to keyword-based routing.
+
+**Safety**: `validateAgentCreation()` enforces length limits and blocklists dangerous patterns (curl, wget, process.env, etc.) in AI-generated system prompts. MaxAgents enforcement with idle conductor-agent eviction. Delegation depth limit (default: 5).
+
+**Real-time status**: `ConductorEvent` callback emits routing/creating_agent/agent_created/delegating events. Server maps these to `conductor_status` WebSocket messages. Dashboard renders them as system status messages.
+
 ### Agent Ownership in Dashboard
 
 ```
@@ -639,7 +654,7 @@ How products customize this template:
 
 ## 14. Build Order
 
-Implement in this sequence. Steps 1-4 complete. Steps 5-6 reordered to prioritize end-to-end demo (server + dashboard) before A2A and cron.
+Implement in this sequence. Steps 1-7 complete.
 
 | Step | Package           | What                                                                     | Test                                    |
 | ---- | ----------------- | ------------------------------------------------------------------------ | --------------------------------------- |
@@ -649,7 +664,7 @@ Implement in this sequence. Steps 1-4 complete. Steps 5-6 reordered to prioritiz
 | 4    | conductor         | Router, Conductor class, agent CRUD with ownership                       | Route messages, multi-agent delegation  |
 | 5    | server            | REST API, WebSocket, webhook receivers, Bun.serve entry                  | Full message flow via WS                |
 | 6    | dashboard         | Next.js 16, agent management, memory browser, chat, monitoring, settings | UI functional                           |
-| 7    | agent-manager/a2a | delegate_to_agent tool, capability detection, relay fallback             | Agent A delegates to Agent B            |
+| 7    | conductor (AI)    | AI-powered routing, dynamic agent creation, conductor_status WS events   | AI routes, creates agents, emits events |
 | 8    | cron-manager      | File watcher, workflow executor                                          | Create cron, verify execution           |
 | 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose, default data   | `docker-compose up`, full flow          |
 | 10   | memory (advanced) | Graph RAG, Agentic RAG, file ingest (PDF/CSV/TXT), Qdrant provider       | Can parallel with 8-9                   |

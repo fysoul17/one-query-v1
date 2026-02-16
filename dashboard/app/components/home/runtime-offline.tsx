@@ -13,7 +13,7 @@ export function RuntimeOffline() {
           <p className="text-sm text-muted-foreground">
             Cannot connect to the runtime at{' '}
             <code className="font-mono text-xs">
-              {process.env.RUNTIME_URL ?? 'http://localhost:3001'}
+              {process.env.RUNTIME_URL ?? 'http://localhost:7820'}
             </code>
             . Make sure the server is running.
           </p>

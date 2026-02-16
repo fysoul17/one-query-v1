@@ -41,7 +41,26 @@ export interface ConductorOptions {
   systemPrompt?: string;
   maxAgents?: number;
   idleTimeoutMs?: number;
+  maxDelegationDepth?: number;
 }
+
+export const ConductorEventType = {
+  ROUTING: 'routing',
+  CREATING_AGENT: 'creating_agent',
+  AGENT_CREATED: 'agent_created',
+  DELEGATING: 'delegating',
+} as const;
+export type ConductorEventType = (typeof ConductorEventType)[keyof typeof ConductorEventType];
+
+export interface ConductorEvent {
+  type: ConductorEventType;
+  agentId?: string;
+  agentName?: string;
+  content?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export type OnConductorEvent = (event: ConductorEvent) => void;
 
 export interface PermissionCheckResult {
   allowed: boolean;

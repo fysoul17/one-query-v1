@@ -28,7 +28,14 @@ export interface ConductorPermissionRule {
 
 export interface ConductorDecision {
   timestamp: Timestamp;
-  action: 'route' | 'delegate' | 'create_agent' | 'synthesize' | 'store_memory';
+  action:
+    | 'route'
+    | 'delegate'
+    | 'create_agent'
+    | 'synthesize'
+    | 'store_memory'
+    | 'ai_route'
+    | 'ai_fallback';
   targetAgentId?: AgentId;
   reason: string;
 }

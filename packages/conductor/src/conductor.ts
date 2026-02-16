@@ -1,4 +1,5 @@
-import type { AgentPool } from '@autonomy/agent-manager';
+import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
+import { MaxAgentsReachedError } from '@autonomy/agent-manager';
 import type { Memory } from '@autonomy/memory';
 import {
   type ActivityEntry,
@@ -7,6 +8,7 @@ import {
   type AgentId,
   AgentOwner,
   type AgentRuntimeInfo,
+  AgentStatus,
   ConductorAction,
   type ConductorDecision,
   type MemorySearchResult,
@@ -14,61 +16,116 @@ import {
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
-import { ConductorNotInitializedError, DelegationError } from './errors.ts';
+import { CONDUCTOR_SYSTEM_PROMPT } from './conductor-prompt.ts';
+import { ConductorNotInitializedError, DelegationDepthError, DelegationError } from './errors.ts';
 import { PermissionChecker } from './permissions.ts';
-import { RouterManager } from './router.ts';
-import type {
-  ConductorOptions,
-  ConductorResponse,
-  DelegationPipelineResult,
-  DelegationStep,
-  IncomingMessage,
-  RouterFn,
-  RoutingResult,
+import { createAIRouter, defaultRouter, RouterManager } from './router.ts';
+import {
+  ConductorEventType,
+  type ConductorOptions,
+  type ConductorResponse,
+  type DelegationPipelineResult,
+  type DelegationStep,
+  type IncomingMessage,
+  type OnConductorEvent,
+  type RouterFn,
+  type RoutingResult,
 } from './types.ts';
+
+const DEFAULT_MAX_DELEGATION_DEPTH = 5;
 
 export class Conductor {
   private pool: AgentPool;
   private memory: Memory;
+  private backend?: CLIBackend;
+  private backendProcess?: BackendProcess;
   private routerManager = new RouterManager();
   private permissions = new PermissionChecker();
   private activityLog: ActivityLog;
   private initialized = false;
+  private options: ConductorOptions;
 
-  constructor(pool: AgentPool, memory: Memory, options?: ConductorOptions) {
+  constructor(pool: AgentPool, memory: Memory, backend?: CLIBackend, options?: ConductorOptions) {
     this.pool = pool;
     this.memory = memory;
+    this.backend = backend;
+    this.options = options ?? {};
     this.activityLog = new ActivityLog(options?.maxActivityLogSize);
   }
 
   async initialize(): Promise<void> {
     if (this.initialized) return;
+
+    // If an AI backend is provided, spawn the conductor's own AI process
+    if (this.backend) {
+      try {
+        const systemPrompt = this.options.systemPrompt ?? CONDUCTOR_SYSTEM_PROMPT;
+        this.backendProcess = await this.backend.spawn({
+          agentId: 'conductor',
+          systemPrompt,
+        });
+        const aiRouter = createAIRouter(this.backendProcess);
+        this.routerManager.setRouter(aiRouter);
+        this.activityLog.record(ActivityType.MESSAGE, 'Conductor AI router initialized');
+      } catch (error) {
+        // AI initialization failure is non-fatal — fall back to keyword router
+        const detail = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(
+          `[conductor] Failed to initialize AI router, using keyword fallback: ${detail}`,
+        );
+        this.activityLog.record(
+          ActivityType.ERROR,
+          'AI router initialization failed, using keyword fallback',
+        );
+      }
+    }
+
     this.initialized = true;
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor initialized');
   }
 
-  async handleMessage(message: IncomingMessage): Promise<ConductorResponse> {
+  async handleMessage(
+    message: IncomingMessage,
+    onEvent?: OnConductorEvent,
+  ): Promise<ConductorResponse> {
     this.ensureInitialized();
+
+    // Check delegation depth
+    const depth = (message.metadata?.delegationDepth as number) ?? 0;
+    const maxDepth = this.options.maxDelegationDepth ?? DEFAULT_MAX_DELEGATION_DEPTH;
+    if (depth > maxDepth) {
+      throw new DelegationDepthError(depth, maxDepth);
+    }
+
     const decisions: ConductorDecision[] = [];
 
     // 1. Search memory for context (non-fatal)
     const memoryContext = await this.searchMemoryContext(message);
 
     // 2. Route via RouterManager
+    onEvent?.({ type: ConductorEventType.ROUTING, content: 'Analyzing request...' });
     const agents = this.pool.list();
     const routingResult = await this.routerManager.route(message, agents, memoryContext);
 
     decisions.push({
       timestamp: new Date().toISOString(),
-      action: 'route',
+      action: this.backendProcess ? 'ai_route' : 'route',
       reason: routingResult.reason,
     });
 
+    onEvent?.({ type: ConductorEventType.ROUTING, content: routingResult.reason });
+
     // 3. Dispatch to appropriate handler
-    const responseContent = await this.dispatch(routingResult, message, memoryContext, decisions);
+    const responseContent = await this.dispatch(
+      routingResult,
+      message,
+      memoryContext,
+      decisions,
+      onEvent,
+    );
 
     // 4. Store conversation in memory (non-fatal)
-    await this.storeConversation(message, responseContent, decisions);
+    await this.storeConversation(message, decisions);
 
     this.activityLog.record(
       ActivityType.MESSAGE,
@@ -162,6 +219,17 @@ export class Conductor {
 
   async shutdown(): Promise<void> {
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor shutting down');
+
+    // Stop the conductor's own AI process
+    if (this.backendProcess) {
+      try {
+        await this.backendProcess.stop();
+      } catch {
+        // Ignore stop errors during shutdown
+      }
+      this.backendProcess = undefined;
+    }
+
     this.initialized = false;
   }
 
@@ -183,13 +251,15 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
     decisions: ConductorDecision[],
+    onEvent?: OnConductorEvent,
   ): Promise<string> {
     if (routingResult.createAgent) {
-      return this.dispatchCreateAgent(routingResult, message, memoryContext, decisions);
+      return this.dispatchCreateAgent(routingResult, message, memoryContext, decisions, onEvent);
     }
 
     if (routingResult.agentIds.length === 1) {
       const agentId = routingResult.agentIds[0] as string;
+      onEvent?.({ type: ConductorEventType.DELEGATING, agentId });
       const result = await this.delegateToAgent(agentId, message, memoryContext);
       decisions.push({
         timestamp: new Date().toISOString(),
@@ -230,6 +300,7 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
     decisions: ConductorDecision[],
+    onEvent?: OnConductorEvent,
   ): Promise<string> {
     const create = routingResult.createAgent as NonNullable<RoutingResult['createAgent']>;
     const newAgentId = nanoid();
@@ -248,7 +319,18 @@ export class Conductor {
       systemPrompt: create.systemPrompt,
     };
 
-    await this.pool.create(definition);
+    onEvent?.({ type: ConductorEventType.CREATING_AGENT, agentName: create.name });
+
+    try {
+      await this.pool.create(definition);
+    } catch (error) {
+      if (!(error instanceof MaxAgentsReachedError)) throw error;
+      const fallback = await this.handleMaxAgentsError(message, memoryContext, decisions, onEvent);
+      if (fallback !== null) return fallback;
+      // Eviction succeeded — retry creation
+      await this.pool.create(definition);
+    }
+
     this.activityLog.record(
       ActivityType.AGENT_CREATED,
       `Created agent "${definition.name}"`,
@@ -261,6 +343,13 @@ export class Conductor {
       reason: `Created agent "${definition.name}" for task`,
     });
 
+    onEvent?.({
+      type: ConductorEventType.AGENT_CREATED,
+      agentId: newAgentId,
+      agentName: create.name,
+    });
+    onEvent?.({ type: ConductorEventType.DELEGATING, agentId: newAgentId });
+
     const result = await this.delegateToAgent(newAgentId, message, memoryContext);
     decisions.push({
       timestamp: new Date().toISOString(),
@@ -271,9 +360,58 @@ export class Conductor {
     return result;
   }
 
+  /** Try to evict one conductor-owned, non-persistent, idle agent. Returns true if evicted. */
+  private async evictIdleAgent(): Promise<boolean> {
+    const agents = this.pool.list();
+    const evictCandidate = agents.find(
+      (a) => a.owner === AgentOwner.CONDUCTOR && !a.persistent && a.status === AgentStatus.IDLE,
+    );
+    if (!evictCandidate) return false;
+
+    await this.pool.remove(evictCandidate.id);
+    this.activityLog.record(
+      ActivityType.AGENT_DELETED,
+      `Evicted idle agent "${evictCandidate.name}" to make room`,
+      evictCandidate.id,
+    );
+    return true;
+  }
+
+  /** Handle MaxAgentsReachedError: try eviction, fall back to existing agent. Returns response string or null if eviction succeeded. */
+  private async handleMaxAgentsError(
+    message: IncomingMessage,
+    memoryContext: MemorySearchResult | null,
+    decisions: ConductorDecision[],
+    onEvent?: OnConductorEvent,
+  ): Promise<string | null> {
+    const evicted = await this.evictIdleAgent();
+    if (evicted) return null;
+
+    // Cannot evict — fall back to best existing agent
+    decisions.push({
+      timestamp: new Date().toISOString(),
+      action: 'ai_fallback',
+      reason: 'MaxAgents reached, cannot evict idle agent — routing to existing agent',
+    });
+    const agents = this.pool.list();
+    const fallbackResult = await defaultRouter(message, agents, memoryContext);
+    if (fallbackResult.agentIds.length > 0) {
+      const fallbackId = fallbackResult.agentIds[0] as string;
+      onEvent?.({ type: ConductorEventType.DELEGATING, agentId: fallbackId });
+      const result = await this.delegateToAgent(fallbackId, message, memoryContext);
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'delegate',
+        targetAgentId: fallbackId,
+        reason: `Fallback delegation to "${fallbackId}" after MaxAgents`,
+      });
+      return result;
+    }
+    return 'Unable to create or route to any agent — pool is full.';
+  }
+
   private async storeConversation(
     message: IncomingMessage,
-    _responseContent: string,
     decisions: ConductorDecision[],
   ): Promise<void> {
     try {
@@ -299,14 +437,14 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
   ): Promise<string> {
-    // Augment message with memory context
+    // Augment message with memory context (wrapped in delimiters for isolation)
     let augmentedMessage = message.content;
     if (memoryContext && memoryContext.entries.length > 0) {
       const contextSnippet = memoryContext.entries
         .slice(0, 3)
         .map((e) => e.content)
         .join('\n---\n');
-      augmentedMessage = `Context from memory:\n${contextSnippet}\n\n---\nUser message: ${message.content}`;
+      augmentedMessage = `<memory-context>\n${contextSnippet}\n</memory-context>\n\nUser message: ${message.content}`;
     }
 
     try {

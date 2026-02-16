@@ -12,8 +12,8 @@ import type {
 
 const RUNTIME_URL =
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:3001')
-    : 'http://localhost:3001';
+    ? (process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820')
+    : 'http://localhost:7820';
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${RUNTIME_URL}${path}`, {

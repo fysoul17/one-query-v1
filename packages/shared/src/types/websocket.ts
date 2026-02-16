@@ -14,6 +14,7 @@ export const WSServerMessageType = {
   PONG: 'pong',
   AGENT_STATUS: 'agent_status',
   A2A_EVENT: 'a2a_event',
+  CONDUCTOR_STATUS: 'conductor_status',
 } as const;
 export type WSServerMessageType = (typeof WSServerMessageType)[keyof typeof WSServerMessageType];
 
@@ -27,6 +28,7 @@ export interface WSServerChunk {
   type: typeof WSServerMessageType.CHUNK;
   content: string;
   agentId: AgentId;
+  agentName?: string;
 }
 
 export interface WSServerComplete {
@@ -54,10 +56,18 @@ export interface WSServerA2AEvent {
   task: string;
 }
 
+export interface WSServerConductorStatus {
+  type: typeof WSServerMessageType.CONDUCTOR_STATUS;
+  phase: 'analyzing' | 'creating_agent' | 'delegating';
+  message: string;
+  agentName?: string;
+}
+
 export type WSServerMessage =
   | WSServerChunk
   | WSServerComplete
   | WSServerError
   | WSServerPong
   | WSServerAgentStatus
-  | WSServerA2AEvent;
+  | WSServerA2AEvent
+  | WSServerConductorStatus;

@@ -1,9 +1,11 @@
-import type { Conductor, IncomingMessage } from '@autonomy/conductor';
+import type { Conductor, ConductorEvent, IncomingMessage } from '@autonomy/conductor';
+import { ConductorEventType } from '@autonomy/conductor';
 import type {
   WSClientMessage,
   WSServerAgentStatus,
   WSServerChunk,
   WSServerComplete,
+  WSServerConductorStatus,
   WSServerError,
   WSServerPong,
 } from '@autonomy/shared';
@@ -22,6 +24,42 @@ function sendWSError(ws: ServerWebSocket<WSData>, message: string): void {
   ws.send(JSON.stringify(err));
 }
 
+function sendConductorStatus(ws: ServerWebSocket<WSData>, event: ConductorEvent): void {
+  let phase: WSServerConductorStatus['phase'];
+  let message: string;
+
+  switch (event.type) {
+    case ConductorEventType.ROUTING:
+      phase = 'analyzing';
+      message = event.content ?? 'Analyzing your request...';
+      break;
+    case ConductorEventType.CREATING_AGENT:
+      phase = 'creating_agent';
+      message = event.agentName
+        ? `Creating specialist agent "${event.agentName}"...`
+        : 'Creating a new agent...';
+      break;
+    case ConductorEventType.AGENT_CREATED:
+      phase = 'creating_agent';
+      message = event.agentName ? `Agent "${event.agentName}" created` : 'Agent created';
+      break;
+    case ConductorEventType.DELEGATING:
+      phase = 'delegating';
+      message = 'Delegating to agent...';
+      break;
+    default:
+      return;
+  }
+
+  const status: WSServerConductorStatus = {
+    type: WSServerMessageType.CONDUCTOR_STATUS,
+    phase,
+    message,
+    agentName: event.agentName,
+  };
+  ws.send(JSON.stringify(status));
+}
+
 async function handleConductorMessage(
   ws: ServerWebSocket<WSData>,
   conductor: Conductor,
@@ -35,7 +73,8 @@ async function handleConductorMessage(
   };
 
   try {
-    const response = await conductor.handleMessage(incoming);
+    const onEvent = (event: ConductorEvent) => sendConductorStatus(ws, event);
+    const response = await conductor.handleMessage(incoming, onEvent);
     const chunk: WSServerChunk = {
       type: WSServerMessageType.CHUNK,
       content: response.content,

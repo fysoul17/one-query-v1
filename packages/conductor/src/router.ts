@@ -1,5 +1,7 @@
+import type { BackendProcess } from '@autonomy/agent-manager';
 import type { AgentRuntimeInfo, MemorySearchResult } from '@autonomy/shared';
 import { AgentStatus } from '@autonomy/shared';
+import { buildRoutingPrompt, extractJSON, validateAgentCreation } from './conductor-prompt.ts';
 import { RoutingError } from './errors.ts';
 import type { IncomingMessage, RouterFn, RoutingResult } from './types.ts';
 
@@ -80,6 +82,90 @@ export const defaultRouter: RouterFn = async (
     reason: `Fallback routing to first available agent "${fallback.name}"`,
   };
 };
+
+interface AIRoutingParsed {
+  agentIds?: string[];
+  createAgent?: { name: string; role: string; systemPrompt: string };
+  reason?: string;
+}
+
+function parseAIResponse(aiResponse: string): AIRoutingParsed | null {
+  try {
+    const jsonStr = extractJSON(aiResponse);
+    const parsed = JSON.parse(jsonStr) as AIRoutingParsed;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    console.warn('[conductor] AI returned invalid JSON, falling back to keyword router');
+    return null;
+  }
+}
+
+function resolveRoutingResult(
+  parsed: AIRoutingParsed,
+  agents: AgentRuntimeInfo[],
+): RoutingResult | null {
+  const reason = typeof parsed.reason === 'string' ? parsed.reason : 'AI routing decision';
+
+  // Handle createAgent
+  if (parsed.createAgent) {
+    const validated = validateAgentCreation(parsed.createAgent);
+    if (validated) {
+      return { agentIds: [], createAgent: validated, reason };
+    }
+  }
+
+  // Handle agentIds — filter to real agents only
+  const rawIds = Array.isArray(parsed.agentIds) ? parsed.agentIds : [];
+  const agentIdSet = new Set(agents.map((a) => a.id));
+  const validIds = rawIds.filter(
+    (id): id is string => typeof id === 'string' && agentIdSet.has(id),
+  );
+
+  if (validIds.length > 0) {
+    return { agentIds: validIds, reason };
+  }
+
+  return null;
+}
+
+/**
+ * Creates an AI-powered router that uses a BackendProcess (e.g. claude -p)
+ * to make intelligent routing decisions. Falls back to defaultRouter on failure.
+ */
+export function createAIRouter(backendProcess: BackendProcess): RouterFn {
+  return async (
+    message: IncomingMessage,
+    agents: AgentRuntimeInfo[],
+    memoryContext: MemorySearchResult | null,
+  ): Promise<RoutingResult> => {
+    // Fast path: if message targets a specific agent, use keyword router
+    if (message.targetAgentId) {
+      return defaultRouter(message, agents, memoryContext);
+    }
+
+    // Build prompt and call AI
+    const prompt = buildRoutingPrompt(message, agents, memoryContext);
+
+    let aiResponse: string;
+    try {
+      aiResponse = await backendProcess.send(prompt);
+    } catch {
+      return defaultRouter(message, agents, memoryContext);
+    }
+
+    const parsed = parseAIResponse(aiResponse);
+    if (!parsed) {
+      return defaultRouter(message, agents, memoryContext);
+    }
+
+    const result = resolveRoutingResult(parsed, agents);
+    if (result) return result;
+
+    // AI returned no valid agents and no createAgent → fallback
+    return defaultRouter(message, agents, memoryContext);
+  };
+}
 
 export class RouterManager {
   private router: RouterFn = defaultRouter;

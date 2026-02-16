@@ -7,9 +7,10 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
   agentId?: string;
+  agentName?: string;
   timestamp: number;
   streaming?: boolean;
 }
@@ -109,6 +110,19 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
                 id: `err-${Date.now()}`,
                 role: 'assistant',
                 content: `Error: ${parsed.message}`,
+                timestamp: Date.now(),
+              },
+            ]);
+            break;
+          }
+          case 'conductor_status': {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `status-${Date.now()}`,
+                role: 'system',
+                content: parsed.message,
+                agentName: parsed.agentName,
                 timestamp: Date.now(),
               },
             ]);

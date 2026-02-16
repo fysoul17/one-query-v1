@@ -7,7 +7,7 @@ import { AgentSelector } from './agent-selector';
 import { ChatInput } from './chat-input';
 import { ChatMessageBubble } from './chat-message';
 
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:3001';
+const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820';
 const WS_URL = `${RUNTIME_URL.replace(/^http/, 'ws')}/ws/chat`;
 
 interface ChatInterfaceProps {

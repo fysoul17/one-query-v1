@@ -9,7 +9,7 @@ import type {
   PlatformConfig,
 } from '@autonomy/shared';
 
-const RUNTIME_URL = process.env.RUNTIME_URL ?? 'http://localhost:3001';
+const RUNTIME_URL = process.env.RUNTIME_URL ?? 'http://localhost:7820';
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${RUNTIME_URL}${path}`, {

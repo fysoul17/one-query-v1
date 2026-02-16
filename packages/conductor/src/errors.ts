@@ -39,3 +39,10 @@ export class DelegationError extends ConductorError {
     this.name = 'DelegationError';
   }
 }
+
+export class DelegationDepthError extends ConductorError {
+  constructor(depth: number, max: number) {
+    super(`Delegation depth ${depth} exceeds maximum ${max}`);
+    this.name = 'DelegationDepthError';
+  }
+}

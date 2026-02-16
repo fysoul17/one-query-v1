@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack --port 7821",
     "build": "next build",
-    "start": "next start",
+    "start": "next start --port 7821",
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "clean": "rm -rf .next node_modules .turbo"

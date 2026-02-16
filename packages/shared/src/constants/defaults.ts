@@ -1,9 +1,9 @@
 import { AIBackend, LogLevel, RuntimeMode, VectorProvider } from '../types/index.ts';
 
 export const DEFAULTS = {
-  PORT: 3001,
+  PORT: 7820,
   DATA_DIR: './data',
-  RUNTIME_URL: 'http://localhost:3001',
+  RUNTIME_URL: 'http://localhost:7820',
   AI_BACKEND: AIBackend.CLAUDE,
   IDLE_TIMEOUT_MS: 300_000,
   MAX_AGENTS: 10,
