@@ -86,6 +86,7 @@ export const defaultRouter: RouterFn = async (
 interface AIRoutingParsed {
   agentIds?: string[];
   createAgent?: { name: string; role: string; systemPrompt: string };
+  directResponse?: boolean;
   reason?: string;
 }
 
@@ -124,6 +125,11 @@ function resolveRoutingResult(
 
   if (validIds.length > 0) {
     return { agentIds: validIds, reason };
+  }
+
+  // Handle directResponse — conductor responds directly
+  if (parsed.directResponse === true) {
+    return { agentIds: [], directResponse: true, reason };
   }
 
   return null;

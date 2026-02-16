@@ -12,6 +12,7 @@ export const PHASE_CONFIG: Record<string, PhaseConfig> = {
   delegating: { dot: 'bg-neon-amber', text: 'text-neon-amber', label: 'Delegation' },
   delegation_complete: { dot: 'bg-neon-amber', text: 'text-neon-amber', label: 'Complete' },
   memory_store: { dot: 'bg-neon-green', text: 'text-neon-green', label: 'Memory Store' },
+  responding: { dot: 'bg-neon-cyan', text: 'text-neon-cyan', label: 'Direct Response' },
 };
 
 const DEFAULT_CONFIG: PhaseConfig = {

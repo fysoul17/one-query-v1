@@ -66,7 +66,8 @@ export interface WSServerConductorStatus {
     | 'memory_search'
     | 'routing_complete'
     | 'memory_store'
-    | 'delegation_complete';
+    | 'delegation_complete'
+    | 'responding';
   message: string;
   agentName?: string;
   debug?: ConductorDebugPayload;

@@ -27,6 +27,7 @@ export interface RoutingResult {
     role: string;
     systemPrompt: string;
   };
+  directResponse?: boolean;
   reason: string;
 }
 
@@ -53,6 +54,7 @@ export const ConductorEventType = {
   ROUTING_COMPLETE: 'routing_complete',
   MEMORY_STORE: 'memory_store',
   DELEGATION_COMPLETE: 'delegation_complete',
+  RESPONDING: 'responding',
 } as const;
 export type ConductorEventType = (typeof ConductorEventType)[keyof typeof ConductorEventType];
 

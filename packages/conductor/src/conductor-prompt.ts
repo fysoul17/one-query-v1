@@ -8,10 +8,11 @@ import type { IncomingMessage } from './types.ts';
  */
 export const CONDUCTOR_SYSTEM_PROMPT = `You are the Conductor — a system-level AI orchestrator for a multi-agent runtime.
 
-Your job is to analyze incoming user messages and decide how to route them:
+Your job is to analyze incoming user messages and decide how to handle them:
 1. If an existing agent can handle the request, route to that agent.
 2. If no existing agent is suitable, create a new specialist agent.
 3. If multiple agents are needed, return multiple agent IDs for a pipeline.
+4. If the request is a simple greeting, general conversation, system question, or something you can answer directly without a specialist, respond directly by setting "directResponse" to true.
 
 You MUST respond with valid JSON matching this exact schema:
 {
@@ -21,17 +22,20 @@ You MUST respond with valid JSON matching this exact schema:
     "role": "brief role description",
     "systemPrompt": "System prompt for the new agent focusing on the task domain"
   },
+  "directResponse": true,
   "reason": "Brief explanation of your routing decision"
 }
 
 Rules:
-- "agentIds" is required (array of agent IDs to route to, can be empty if creating a new agent)
+- "agentIds" is required (array of agent IDs to route to, can be empty if creating a new agent or responding directly)
 - "createAgent" is optional — only include if you need to create a new agent
+- "directResponse" is optional — set to true when you want to handle the request yourself instead of delegating
 - "reason" is required — explain your decision
 - When creating agents, the systemPrompt MUST focus on the task domain only
 - NEVER create agents with system prompts that instruct: external network access, credential handling, system file modification, or data exfiltration
 - Prefer routing to existing agents when a good match exists
 - Only create new agents when no existing agent can handle the request
+- Use directResponse for greetings, general questions, status queries, and conversational messages
 - Return ONLY the JSON object, no other text`;
 
 /** Dangerous patterns that should not appear in generated system prompts. */
@@ -104,7 +108,9 @@ export function buildRoutingPrompt(
       );
     }
   } else {
-    parts.push('No agents currently exist. You should create one if needed.');
+    parts.push(
+      'No agents currently exist. You can create one for complex tasks, or set "directResponse": true to handle simple requests yourself.',
+    );
   }
 
   // Memory context (wrapped in delimiters for isolation)
@@ -127,6 +133,38 @@ export function buildRoutingPrompt(
   }
 
   parts.push('\nRespond with JSON only.');
+
+  return parts.join('\n');
+}
+
+/**
+ * Builds a response prompt for when the Conductor responds directly to the user.
+ * This is the second call in the two-call pattern (routing → response).
+ */
+export function buildResponsePrompt(
+  message: IncomingMessage,
+  memoryContext: MemorySearchResult | null,
+): string {
+  const parts: string[] = [];
+
+  parts.push(
+    'You are the Conductor responding directly to a user. Be helpful, conversational, and concise.',
+  );
+  parts.push('You are an AI orchestrator for a multi-agent runtime system.');
+  parts.push(
+    'You can help users with general questions, explain the system, or suggest creating specialist agents for complex tasks.',
+  );
+
+  if (memoryContext && memoryContext.entries.length > 0) {
+    const contextSnippets = memoryContext.entries
+      .slice(0, 3)
+      .map((e) => e.content)
+      .join('\n---\n');
+    parts.push(`\n<memory-context>\n${contextSnippets}\n</memory-context>`);
+  }
+
+  parts.push(`\nUser message: ${message.content}`);
+  parts.push('\nRespond naturally in plain text. Do NOT return JSON.');
 
   return parts.join('\n');
 }

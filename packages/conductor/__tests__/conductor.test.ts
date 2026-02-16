@@ -121,7 +121,9 @@ describe('Conductor', () => {
 
     test('handles message when no agents exist (fallback)', async () => {
       const response = await conductor.handleMessage(makeMessage());
-      expect(response.content).toBe('No agents available to handle this request.');
+      // No backend → improved fallback message (not the old dead-end string)
+      expect(response.content).toContain('Conductor');
+      expect(response.content).toContain('agent');
     });
 
     test('delegates to single agent when one is available', async () => {

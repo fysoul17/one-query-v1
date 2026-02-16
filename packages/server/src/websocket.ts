@@ -96,6 +96,10 @@ function sendConductorStatus(
       phase = 'delegation_complete';
       message = event.content ?? 'Delegation complete';
       break;
+    case ConductorEventType.RESPONDING:
+      phase = 'responding';
+      message = event.content ?? 'Conductor is responding...';
+      break;
     default:
       return;
   }

@@ -97,7 +97,7 @@ function createMockBackend(aiResponse: string | Error): CLIBackend {
 // ---------------------------------------------------------------------------
 
 describe('Conductor without AI backend (backward compat)', () => {
-  test('returns dead-end string when no agents and no backend', async () => {
+  test('returns actionable fallback when no agents and no backend', async () => {
     const pool = createMockPool();
     const memory = new MockMemory();
     // No backend provided — uses keyword router
@@ -105,7 +105,9 @@ describe('Conductor without AI backend (backward compat)', () => {
     await conductor.initialize();
 
     const response = await conductor.handleMessage(makeMessage());
-    expect(response.content).toBe('No agents available to handle this request.');
+    // Improved fallback: actionable message instead of dead-end
+    expect(response.content).toContain('Conductor');
+    expect(response.content).toContain('agent');
   });
 
   test('decision action is "route" not "ai_route" without backend', async () => {
@@ -234,8 +236,9 @@ describe('Conductor with AI backend', () => {
     await conductor.initialize(); // Should not throw
 
     const response = await conductor.handleMessage(makeMessage());
-    // Falls back to keyword router → no agents → dead-end string
-    expect(response.content).toBe('No agents available to handle this request.');
+    // Falls back to keyword router → no agents → actionable fallback
+    expect(response.content).toContain('Conductor');
+    expect(response.content).toContain('agent');
   });
 
   test('shutdown stops the conductor AI process', async () => {

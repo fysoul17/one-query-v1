@@ -35,7 +35,8 @@ export interface ConductorDecision {
     | 'synthesize'
     | 'store_memory'
     | 'ai_route'
-    | 'ai_fallback';
+    | 'ai_fallback'
+    | 'direct_response';
   targetAgentId?: AgentId;
   reason: string;
 }

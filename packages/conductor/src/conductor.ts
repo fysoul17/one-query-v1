@@ -16,7 +16,7 @@ import {
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
-import { CONDUCTOR_SYSTEM_PROMPT } from './conductor-prompt.ts';
+import { buildResponsePrompt, CONDUCTOR_SYSTEM_PROMPT } from './conductor-prompt.ts';
 import { ConductorNotInitializedError, DelegationDepthError, DelegationError } from './errors.ts';
 import { PermissionChecker } from './permissions.ts';
 import { createAIRouter, defaultRouter, RouterManager } from './router.ts';
@@ -33,6 +33,32 @@ import {
 } from './types.ts';
 
 const DEFAULT_MAX_DELEGATION_DEPTH = 5;
+
+const FALLBACK_NO_AGENTS =
+  "I'm the Conductor. No specialist agents are available yet. You can create agents from the Agents page, or ask me to create one for a specific task.";
+
+const FALLBACK_RESPONSE_ERROR =
+  "I'm the Conductor. I tried to respond but encountered an error. You can try again or create a specialist agent for your task.";
+
+function buildAgentDefinition(
+  id: string,
+  create: { name: string; role: string; systemPrompt: string },
+): AgentDefinition {
+  return {
+    id,
+    name: create.name,
+    role: create.role,
+    tools: [],
+    canModifyFiles: false,
+    canDelegateToAgents: false,
+    maxConcurrent: 1,
+    owner: AgentOwner.CONDUCTOR,
+    persistent: false,
+    createdBy: 'conductor',
+    createdAt: new Date().toISOString(),
+    systemPrompt: create.systemPrompt,
+  };
+}
 
 export class Conductor {
   private pool: AgentPool;
@@ -89,77 +115,66 @@ export class Conductor {
     onEvent?: OnConductorEvent,
   ): Promise<ConductorResponse> {
     this.ensureInitialized();
-
-    // Check delegation depth
-    const depth = (message.metadata?.delegationDepth as number) ?? 0;
-    const maxDepth = this.options.maxDelegationDepth ?? DEFAULT_MAX_DELEGATION_DEPTH;
-    if (depth > maxDepth) {
-      throw new DelegationDepthError(depth, maxDepth);
-    }
+    this.checkDelegationDepth(message);
 
     const decisions: ConductorDecision[] = [];
 
     // 1. Search memory for context (non-fatal)
-    const memorySearchStart = performance.now();
-    const memoryContext = await this.searchMemoryContext(message);
-    const memorySearchDuration = Math.round(performance.now() - memorySearchStart);
-    onEvent?.({
-      type: ConductorEventType.MEMORY_SEARCH,
-      content: memoryContext
-        ? `Found ${memoryContext.entries.length} memory entries`
-        : 'No memory results',
-      durationMs: memorySearchDuration,
-      memoryResults: memoryContext?.entries.length ?? 0,
-    });
+    const memoryContext = await this.timedStep(
+      () => this.searchMemoryContext(message),
+      (durationMs, result) =>
+        onEvent?.({
+          type: ConductorEventType.MEMORY_SEARCH,
+          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
+          durationMs,
+          memoryResults: result?.entries.length ?? 0,
+        }),
+    );
 
     // 2. Route via RouterManager
     onEvent?.({ type: ConductorEventType.ROUTING, content: 'Analyzing request...' });
-    const routingStart = performance.now();
     const agents = this.pool.list();
-    const routingResult = await this.routerManager.route(message, agents, memoryContext);
-    const routingDuration = Math.round(performance.now() - routingStart);
-
-    const routerType = this.backendProcess ? 'ai' : 'keyword';
-    decisions.push({
-      timestamp: new Date().toISOString(),
-      action: routerType === 'ai' ? 'ai_route' : 'route',
-      reason: routingResult.reason,
-    });
-
-    onEvent?.({ type: ConductorEventType.ROUTING, content: routingResult.reason });
-    onEvent?.({
-      type: ConductorEventType.ROUTING_COMPLETE,
-      content: routingResult.reason,
-      durationMs: routingDuration,
-      routerType,
-    });
+    const routingResult = await this.timedStep(
+      () => this.routerManager.route(message, agents, memoryContext),
+      (durationMs, result) => {
+        const routerType = this.backendProcess ? 'ai' : 'keyword';
+        decisions.push({
+          timestamp: new Date().toISOString(),
+          action: routerType === 'ai' ? 'ai_route' : 'route',
+          reason: result.reason,
+        });
+        onEvent?.({ type: ConductorEventType.ROUTING, content: result.reason });
+        onEvent?.({
+          type: ConductorEventType.ROUTING_COMPLETE,
+          content: result.reason,
+          durationMs,
+          routerType,
+        });
+      },
+    );
 
     // 3. Dispatch to appropriate handler
-    const dispatchStart = performance.now();
-    const responseContent = await this.dispatch(
-      routingResult,
-      message,
-      memoryContext,
-      decisions,
-      onEvent,
+    const responseContent = await this.timedStep(
+      () => this.dispatch(routingResult, message, memoryContext, decisions, onEvent),
+      (durationMs) =>
+        onEvent?.({
+          type: ConductorEventType.DELEGATION_COMPLETE,
+          content: 'Delegation complete',
+          durationMs,
+          decisions,
+        }),
     );
-    const dispatchDuration = Math.round(performance.now() - dispatchStart);
-    onEvent?.({
-      type: ConductorEventType.DELEGATION_COMPLETE,
-      content: 'Delegation complete',
-      durationMs: dispatchDuration,
-      decisions,
-    });
 
     // 4. Store conversation in memory (non-fatal)
-    const storeStart = performance.now();
-    await this.storeConversation(message, decisions);
-    const storeDuration = Math.round(performance.now() - storeStart);
-    onEvent?.({
-      type: ConductorEventType.MEMORY_STORE,
-      content: 'Conversation stored',
-      durationMs: storeDuration,
-    });
+    await this.timedStep(
+      () => this.storeConversation(message, decisions),
+      (durationMs) =>
+        onEvent?.({
+          type: ConductorEventType.MEMORY_STORE,
+          content: 'Conversation stored',
+          durationMs,
+        }),
+    );
 
     this.activityLog.record(
       ActivityType.MESSAGE,
@@ -168,11 +183,7 @@ export class Conductor {
       { senderId: message.senderId, agentCount: routingResult.agentIds.length },
     );
 
-    return {
-      content: responseContent,
-      agentId: routingResult.agentIds[0],
-      decisions,
-    };
+    return { content: responseContent, agentId: routingResult.agentIds[0], decisions };
   }
 
   async createAgent(params: {
@@ -326,7 +337,18 @@ export class Conductor {
       return pipelineResult.finalResult;
     }
 
-    return 'No agents available to handle this request.';
+    // Direct response: conductor responds via its own AI process
+    if (routingResult.directResponse && this.backendProcess) {
+      return this.generateDirectResponse(message, memoryContext, decisions, onEvent);
+    }
+
+    // Defense-in-depth: if we have a backend process but routing didn't set directResponse,
+    // still try to respond directly rather than returning a dead-end error
+    if (this.backendProcess) {
+      return this.generateDirectResponse(message, memoryContext, decisions, onEvent);
+    }
+
+    return FALLBACK_NO_AGENTS;
   }
 
   private async dispatchCreateAgent(
@@ -338,20 +360,7 @@ export class Conductor {
   ): Promise<string> {
     const create = routingResult.createAgent as NonNullable<RoutingResult['createAgent']>;
     const newAgentId = nanoid();
-    const definition: AgentDefinition = {
-      id: newAgentId,
-      name: create.name,
-      role: create.role,
-      tools: [],
-      canModifyFiles: false,
-      canDelegateToAgents: false,
-      maxConcurrent: 1,
-      owner: AgentOwner.CONDUCTOR,
-      persistent: false,
-      createdBy: 'conductor',
-      createdAt: new Date().toISOString(),
-      systemPrompt: create.systemPrompt,
-    };
+    const definition = buildAgentDefinition(newAgentId, create);
 
     onEvent?.({ type: ConductorEventType.CREATING_AGENT, agentName: create.name });
 
@@ -392,6 +401,45 @@ export class Conductor {
       reason: `Delegated to newly created agent "${definition.name}"`,
     });
     return result;
+  }
+
+  private async generateDirectResponse(
+    message: IncomingMessage,
+    memoryContext: MemorySearchResult | null,
+    decisions: ConductorDecision[],
+    onEvent?: OnConductorEvent,
+  ): Promise<string> {
+    onEvent?.({
+      type: ConductorEventType.RESPONDING,
+      content: 'Conductor is responding directly...',
+    });
+
+    const responsePrompt = buildResponsePrompt(message, memoryContext);
+
+    const process = this.backendProcess;
+    if (!process) {
+      return FALLBACK_NO_AGENTS;
+    }
+
+    try {
+      const response = await process.send(responsePrompt);
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'direct_response',
+        reason: 'Conductor responded directly',
+      });
+      this.activityLog.record(ActivityType.MESSAGE, 'Conductor responded directly to user');
+      return response;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.activityLog.record(ActivityType.ERROR, `Direct response failed: ${detail}`);
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'direct_response',
+        reason: `Direct response failed: ${detail}`,
+      });
+      return FALLBACK_RESPONSE_ERROR;
+    }
   }
 
   /** Try to evict one conductor-owned, non-persistent, idle agent. Returns true if evicted. */
@@ -532,6 +580,24 @@ export class Conductor {
       finalResult,
       success: successResults.length > 0,
     };
+  }
+
+  private checkDelegationDepth(message: IncomingMessage): void {
+    const depth = (message.metadata?.delegationDepth as number) ?? 0;
+    const maxDepth = this.options.maxDelegationDepth ?? DEFAULT_MAX_DELEGATION_DEPTH;
+    if (depth > maxDepth) {
+      throw new DelegationDepthError(depth, maxDepth);
+    }
+  }
+
+  private async timedStep<T>(
+    fn: () => Promise<T>,
+    onComplete: (durationMs: number, result: T) => void,
+  ): Promise<T> {
+    const start = performance.now();
+    const result = await fn();
+    onComplete(Math.round(performance.now() - start), result);
+    return result;
   }
 
   private ensureInitialized(): void {
