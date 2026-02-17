@@ -1,5 +1,5 @@
 import type { AgentDefinition, AgentId, AgentRuntimeInfo } from '@autonomy/shared';
-import { AgentStatus } from '@autonomy/shared';
+import { AgentStatus, deriveLifecycle, isAgentPersistent } from '@autonomy/shared';
 import type { BackendProcess, CLIBackend } from './backends/types.ts';
 import { AgentStateError, BackendError } from './errors.ts';
 
@@ -24,12 +24,17 @@ export class AgentProcess {
   private idleTimeoutMs: number;
   private messageQueue: QueuedMessage[] = [];
   private processing = false;
+  /** Session UUID, generated at construction for persistent agents. */
+  private _sessionId: string | undefined;
 
   constructor(definition: AgentDefinition, backend: CLIBackend, options?: AgentProcessOptions) {
     this.id = definition.id;
     this.definition = definition;
     this.backend = backend;
     this.idleTimeoutMs = options?.idleTimeoutMs ?? 0;
+    // Auto-generate sessionId for persistent agents that don't have one
+    this._sessionId =
+      definition.sessionId ?? (isAgentPersistent(definition) ? crypto.randomUUID() : undefined);
   }
 
   get status(): AgentStatus {
@@ -50,6 +55,12 @@ export class AgentProcess {
         agentId: this.id,
         systemPrompt: this.definition.systemPrompt,
         tools: this.definition.tools,
+        ...(this._sessionId
+          ? {
+              sessionId: this._sessionId,
+              sessionPersistence: true,
+            }
+          : {}),
       });
       this._status = AgentStatus.IDLE;
       this.resetIdleTimer();
@@ -102,6 +113,8 @@ export class AgentProcess {
       owner: this.definition.owner,
       persistent: this.definition.persistent,
       createdAt: this.definition.createdAt,
+      lifecycle: deriveLifecycle(this.definition),
+      sessionId: this._sessionId,
     };
   }
 

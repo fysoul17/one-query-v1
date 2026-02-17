@@ -11,6 +11,8 @@ import {
   AgentStatus,
   ConductorAction,
   type ConductorDecision,
+  deriveLifecycle,
+  isAgentPersistent,
   type MemorySearchResult,
   MemoryType,
 } from '@autonomy/shared';
@@ -56,22 +58,32 @@ const FALLBACK_RESPONSE_ERROR =
 
 function buildAgentDefinition(
   id: string,
-  create: { name: string; role: string; systemPrompt: string },
+  create: {
+    name: string;
+    role: string;
+    systemPrompt: string;
+    tools?: string[];
+    persistent?: boolean;
+  },
 ): AgentDefinition {
-  return {
+  const persistent = create.persistent ?? false;
+  const def: AgentDefinition = {
     id,
     name: create.name,
     role: create.role,
-    tools: [],
+    tools: create.tools ?? [],
     canModifyFiles: false,
     canDelegateToAgents: false,
     maxConcurrent: 1,
     owner: AgentOwner.CONDUCTOR,
-    persistent: false,
+    persistent,
     createdBy: 'conductor',
     createdAt: new Date().toISOString(),
     systemPrompt: create.systemPrompt,
   };
+  def.lifecycle = deriveLifecycle(def);
+  def.sessionId = isAgentPersistent(def) ? crypto.randomUUID() : undefined;
+  return def;
 }
 
 export class Conductor {
@@ -95,6 +107,11 @@ export class Conductor {
     this.activityLog = new ActivityLog(options?.maxActivityLogSize);
   }
 
+  /** Conductor's session UUID, preserved across shutdown for later resume. */
+  get sessionId(): string | undefined {
+    return this.options.sessionId;
+  }
+
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -105,6 +122,12 @@ export class Conductor {
         this.backendProcess = await this.backend.spawn({
           agentId: 'conductor',
           systemPrompt,
+          ...(this.options.sessionId
+            ? {
+                sessionId: this.options.sessionId,
+                sessionPersistence: true,
+              }
+            : {}),
         });
         const aiRouter = createAIRouter(this.backendProcess);
         this.routerManager.setRouter(aiRouter);
@@ -263,21 +286,7 @@ export class Conductor {
     this.ensureInitialized();
 
     const id = nanoid();
-    const definition: AgentDefinition = {
-      id,
-      name: params.name,
-      role: params.role,
-      tools: params.tools ?? [],
-      canModifyFiles: false,
-      canDelegateToAgents: false,
-      maxConcurrent: 1,
-      owner: AgentOwner.CONDUCTOR,
-      persistent: params.persistent ?? false,
-      createdBy: 'conductor',
-      createdAt: new Date().toISOString(),
-      systemPrompt: params.systemPrompt,
-    };
-
+    const definition = buildAgentDefinition(id, params);
     const process = await this.pool.create(definition);
     this.activityLog.record(ActivityType.AGENT_CREATED, `Created agent "${params.name}"`, id);
 

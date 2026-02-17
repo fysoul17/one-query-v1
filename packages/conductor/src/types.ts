@@ -48,6 +48,10 @@ export interface ConductorOptions {
   idleTimeoutMs?: number;
   maxDelegationDepth?: number;
   maxQueueDepth?: number;
+  /** Conductor's own session UUID for stateful personality via --resume. */
+  sessionId?: string;
+  /** User-chosen conductor personality name (e.g., 'JARVIS', 'Friday'). */
+  conductorName?: string;
 }
 
 export const ConductorEventType = {

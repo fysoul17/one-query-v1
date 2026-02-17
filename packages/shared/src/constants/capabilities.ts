@@ -11,13 +11,19 @@ export const BACKEND_CAPABILITIES: BackendCapabilityMap = {
   [AIBackend.CODEX]: {
     customTools: false,
     streaming: true,
-    sessionPersistence: false,
+    sessionPersistence: true,
     fileAccess: true,
   },
   [AIBackend.GEMINI]: {
     customTools: false,
-    streaming: false,
-    sessionPersistence: false,
+    streaming: true,
+    sessionPersistence: true,
     fileAccess: false,
+  },
+  [AIBackend.GOOSE]: {
+    customTools: false,
+    streaming: true,
+    sessionPersistence: true,
+    fileAccess: true,
   },
 };

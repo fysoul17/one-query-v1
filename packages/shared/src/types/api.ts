@@ -1,6 +1,8 @@
+import type { AIBackend } from './a2a.ts';
 import type { AgentId, Timestamp } from './base.ts';
 import type { PlatformConfig } from './config.ts';
 import type { CronWorkflow } from './cron.ts';
+import type { AgentLifecycle } from './session.ts';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -25,6 +27,12 @@ export interface CreateAgentRequest {
   maxConcurrent?: number;
   persistent: boolean;
   systemPrompt: string;
+  /** Agent lifecycle type. When set, overrides `persistent` flag semantics. */
+  lifecycle?: AgentLifecycle;
+  /** Which AI backend to use for this agent. */
+  backend?: AIBackend;
+  /** Department namespace for memory scoping. */
+  department?: string;
 }
 
 export interface UpdateAgentRequest {

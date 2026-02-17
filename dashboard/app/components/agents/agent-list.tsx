@@ -1,4 +1,5 @@
 import type { AgentRuntimeInfo } from '@autonomy/shared';
+import { isAgentPersistent } from '@autonomy/shared';
 import { AgentCard } from './agent-card';
 
 interface AgentListProps {
@@ -14,14 +15,12 @@ export function AgentList({ agents }: AgentListProps) {
     );
   }
 
-  const system = agents.filter((a) => a.owner === 'system');
-  const conductor = agents.filter((a) => a.owner === 'conductor');
-  const user = agents.filter((a) => a.owner === 'user');
+  const persistent = agents.filter(isAgentPersistent);
+  const ephemeral = agents.filter((a) => !isAgentPersistent(a));
 
   const groups = [
-    { label: 'System', agents: system },
-    { label: 'Conductor-Created', agents: conductor },
-    { label: 'User-Created', agents: user },
+    { label: 'Persistent', agents: persistent },
+    { label: 'Ephemeral', agents: ephemeral },
   ].filter((g) => g.agents.length > 0);
 
   return (

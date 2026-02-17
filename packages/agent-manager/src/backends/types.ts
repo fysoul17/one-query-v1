@@ -8,6 +8,10 @@ export interface BackendSpawnConfig {
   cwd?: string;
   /** Whether to skip permission checks. Default: true (for Docker sandbox). */
   skipPermissions?: boolean;
+  /** Session UUID for conversation persistence (--session-id / --resume). */
+  sessionId?: string;
+  /** Whether to persist session to disk. Default: true. False = --no-session-persistence. */
+  sessionPersistence?: boolean;
 }
 
 /** A spawned backend process that can send/receive messages. */

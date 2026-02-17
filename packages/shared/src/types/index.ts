@@ -8,4 +8,5 @@ export * from './config.ts';
 export * from './cron.ts';
 export * from './debug.ts';
 export * from './memory.ts';
+export * from './session.ts';
 export * from './websocket.ts';

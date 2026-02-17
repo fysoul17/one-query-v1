@@ -5,28 +5,7 @@
  * can run without spawning real CLI processes.
  */
 import type { AIBackend, BackendCapabilities } from '@autonomy/shared';
-
-// ---- Interfaces the implementation will export ----
-// These mirror the expected contracts from src/backends/types.ts
-
-export interface BackendSpawnConfig {
-  agentId: string;
-  systemPrompt: string;
-  tools?: string[];
-  cwd?: string;
-}
-
-export interface BackendProcess {
-  send(message: string): Promise<string>;
-  stop(): Promise<void>;
-  readonly alive: boolean;
-}
-
-export interface CLIBackend {
-  readonly name: AIBackend;
-  readonly capabilities: BackendCapabilities;
-  spawn(config: BackendSpawnConfig): Promise<BackendProcess>;
-}
+import type { BackendProcess, BackendSpawnConfig, CLIBackend } from '../../src/backends/types.ts';
 
 // ---- MockBackendProcess ----
 

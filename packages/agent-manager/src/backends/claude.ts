@@ -33,6 +33,8 @@ class ClaudeProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
+  /** Tracks whether this session has been established (first send completed). */
+  private sessionCreated = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -95,6 +97,20 @@ class ClaudeProcess implements BackendProcess {
     if (this.config.skipPermissions !== false) {
       // Default: skip permissions (autonomous runtime in Docker sandbox)
       args.push('--dangerously-skip-permissions');
+    }
+
+    // Session persistence flags
+    if (this.config.sessionPersistence === false) {
+      args.push('--no-session-persistence');
+    } else if (this.config.sessionId) {
+      if (this.sessionCreated) {
+        // Subsequent sends resume the existing session
+        args.push('--resume', this.config.sessionId);
+      } else {
+        // First send creates the session
+        args.push('--session-id', this.config.sessionId);
+        this.sessionCreated = true;
+      }
     }
 
     return args;
