@@ -527,6 +527,7 @@ Dashboard Pages:
 │   └── Add channel       — Linking code flow
 │
 └── ⚙️ Settings
+    ├── Conductor Identity — Name, communication style, traits, presets (JARVIS/Friday/Alfred)
     ├── Backend           — Select CLI backend + capability display
     ├── Auth              — BYOK (API key) or CLI login (re-auth anytime)
     └── System            — Memory provider, idle timeout, max agents
@@ -575,6 +576,8 @@ Backend selection, API keys (per provider), default model, idle timeout, max age
 | `DELETE` | `/api/crons/:id`          | Delete cron                    |
 | `POST`   | `/api/crons/:id/trigger`  | Manually trigger cron          |
 | `GET`    | `/api/activity`           | Activity timeline              |
+| `GET`    | `/api/conductor/settings` | Get conductor identity + session info |
+| `PUT`    | `/api/conductor/settings` | Update conductor personality    |
 | `GET`    | `/api/config`             | Get config (keys redacted)     |
 | `PUT`    | `/api/config`             | Update config                  |
 

@@ -32,7 +32,7 @@ export interface ChatMessage {
 
 interface UseWebSocketOptions {
   url: string;
-  onAgentStatus?: (agents: AgentRuntimeInfo[]) => void;
+  onAgentStatus?: (agents: AgentRuntimeInfo[], conductorName?: string) => void;
 }
 
 export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
@@ -218,7 +218,7 @@ export function useWebSocket({ url, onAgentStatus }: UseWebSocketOptions) {
             handleConductorStatus(parsed);
             break;
           case 'agent_status':
-            onAgentStatusRef.current?.(parsed.agents);
+            onAgentStatusRef.current?.(parsed.agents, parsed.conductorName);
             break;
           case 'pong':
             break;

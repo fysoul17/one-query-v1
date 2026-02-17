@@ -2,7 +2,9 @@ import type {
   AgentId,
   AgentRuntimeInfo,
   ConductorDecision,
+  ConductorPersonality,
   MemorySearchResult,
+  PendingQuestion,
 } from '@autonomy/shared';
 
 export interface IncomingMessage {
@@ -52,6 +54,20 @@ export interface ConductorOptions {
   sessionId?: string;
   /** User-chosen conductor personality name (e.g., 'JARVIS', 'Friday'). */
   conductorName?: string;
+  /** Conductor personality configuration. */
+  personality?: ConductorPersonality;
+  /** Expiry time for pending questions in ms (default 30 min). */
+  questionExpiryMs?: number;
+  /** Max unrelated messages before a pending question expires (default 3). */
+  maxUnrelatedMessages?: number;
+}
+
+export interface RoutingContext {
+  message: IncomingMessage;
+  agents: AgentRuntimeInfo[];
+  memoryContext: MemorySearchResult | null;
+  pendingQuestions?: PendingQuestion[];
+  personality?: ConductorPersonality;
 }
 
 export const ConductorEventType = {
@@ -65,6 +81,9 @@ export const ConductorEventType = {
   MEMORY_STORE: 'memory_store',
   DELEGATION_COMPLETE: 'delegation_complete',
   RESPONDING: 'responding',
+  QUESTION_ASKED: 'question_asked',
+  QUESTION_ANSWERED: 'question_answered',
+  QUESTION_EXPIRED: 'question_expired',
 } as const;
 export type ConductorEventType = (typeof ConductorEventType)[keyof typeof ConductorEventType];
 

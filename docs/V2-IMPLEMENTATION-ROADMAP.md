@@ -160,7 +160,7 @@
 | **Chat** | No conductor routing explanation ("why this agent") | Phase 1+ | TODO |
 | **Chat** | No ephemeral agent labeling in messages | Phase 1 | DONE — lifecycle icons in agent selector |
 | **Memory** | Stub page — no namespace browser | Phase 4 | TODO |
-| **Settings** | Stub — no conductor identity config (name, personality) | Phase 1+ | TODO |
+| **Settings** | Conductor identity config (name, style, traits, presets) + session info | Phase 1+ | DONE — ConductorSettingsForm |
 | **Onboarding** | None — first-time setup flow missing | Phase 6 | TODO |
 | **Home** | No soul/ephemeral metrics, no delegation stats | Phase 3 | TODO |
 | **Activity** | No soul lifecycle events, no anomaly viewer | Phase 5 | TODO |
@@ -180,7 +180,7 @@
 | 7 | **Define BackendRegistry interface** (no impl yet) | TODO | Phase 2 |
 | 8 | **Add FTS5 table to SQLiteStore** | TODO | Phase 4 |
 | 9 | **Add ephemeral/persistent badges to dashboard** | DONE (Phase 1) | Phase 1 |
-| 10 | **Pending question tracking types** | TODO | Phase 1 (cont.) |
+| 10 | **Pending question tracking types** | DONE (Phase 1 cont.) | Phase 1 (cont.) |
 
 ---
 
@@ -324,13 +324,16 @@ Week 1: Session Foundation (Phase 1) — COMPLETED
   ├── Dashboard ephemeral/persistent badges ✓
   └── 4-person code review (security, quality, test, product) ✓
 
-NEXT: Conductor Soul (Phase 1 continued — deferred items)
-  ├── Pending question tracking types + server tracker
-  ├── Dynamic context builder (buildRoutingContext)
-  ├── Conductor personality config (name, traits)
-  └── Dashboard conductor identity settings
+DONE: Conductor Soul (Phase 1 continued — 2026-02-17)
+  ├── Pending question tracking (PendingQuestionTracker + detectQuestion) ✓
+  ├── Dynamic context builder (RoutingContext + buildRoutingPrompt refactor) ✓
+  ├── Conductor personality config (name, traits, hot-swap updatePersonality) ✓
+  ├── Dashboard conductor identity settings (ConductorSettingsForm + presets) ✓
+  ├── REST API: GET/PUT /api/conductor/settings ✓
+  ├── Prompt injection defense (isPromptSafe blocklist on personality fields) ✓
+  └── 5-person code review (security, quality, test, product, performance) ✓
 
-THEN: Backend Registry (Phase 2)
+NEXT: Backend Registry (Phase 2)
   ├── BackendRegistry interface + implementation
   ├── AgentPool refactor to use registry
   ├── GooseBackend implementation
@@ -369,8 +372,8 @@ THEN: Hierarchy & Memory (Phase 3-4)
 | Memory search quality | Vector-only | Vector-only | Namespaced + hybrid |
 | Permission granularity | Agent CRUD only | + session, + lifecycle | + per-tool audit |
 | Ephemeral cleanup | Manual | Manual (types ready) | + timeout + metrics |
-| Conductor personality | None (anonymous router) | sessionId + conductorName support | + self-reflection + learning |
-| Test count | 578 | 606 (28 new session tests) | 800+ |
+| Conductor personality | None (anonymous router) | Personality config + hot-swap + Settings UI + pending questions | + self-reflection + learning |
+| Test count | 578 | 672 (94 new tests: sessions + soul) | 800+ |
 
 ---
 

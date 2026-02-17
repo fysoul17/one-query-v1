@@ -11,6 +11,7 @@ import { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket
 import { Router } from './router.ts';
 import { createActivityRoute } from './routes/activity.ts';
 import { createAgentRoutes } from './routes/agents.ts';
+import { createConductorRoutes } from './routes/conductor.ts';
 import { createConfigRoutes } from './routes/config.ts';
 import { createCronRoutes } from './routes/crons.ts';
 import { createHealthRoute } from './routes/health.ts';
@@ -32,6 +33,7 @@ export {
 export { type RouteHandler, type RouteParams, Router } from './router.ts';
 export { createActivityRoute } from './routes/activity.ts';
 export { createAgentRoutes } from './routes/agents.ts';
+export { createConductorRoutes } from './routes/conductor.ts';
 export { createConfigRoutes } from './routes/config.ts';
 export { createCronRoutes } from './routes/crons.ts';
 export { createHealthRoute } from './routes/health.ts';
@@ -59,6 +61,34 @@ function hashToVector(text: string, dimensions: number): number[] {
     vector.push(Math.sin(hash));
   }
   return vector;
+}
+
+/**
+ * Load or create a persistent conductor session ID.
+ * Stored at {dataDir}/conductor-session.json so the conductor keeps the same
+ * session across server restarts (enabling --resume in the AI backend).
+ */
+function loadOrCreateConductorSessionId(dataDir: string): string {
+  const path = `${dataDir}/conductor-session.json`;
+  try {
+    // Synchronous check + read for startup simplicity
+    const text = require('node:fs').readFileSync(path, 'utf-8');
+    const data = JSON.parse(text) as { sessionId?: string };
+    if (data.sessionId && typeof data.sessionId === 'string') {
+      return data.sessionId;
+    }
+  } catch {
+    // File doesn't exist or is invalid — create new
+  }
+
+  const sessionId = crypto.randomUUID();
+  try {
+    require('node:fs').mkdirSync(dataDir, { recursive: true });
+    require('node:fs').writeFileSync(path, JSON.stringify({ sessionId }, null, 2));
+  } catch (err) {
+    console.warn(`[server] Could not persist conductor session ID: ${err}`);
+  }
+  return sessionId;
 }
 
 // --- Combined WS data type for Bun.serve ---
@@ -121,9 +151,14 @@ async function main() {
   );
 
   // Initialize Conductor (with AI backend for intelligent routing)
-  const conductor = new Conductor(pool, memory, backend);
+  const conductorSessionId = loadOrCreateConductorSessionId(config.DATA_DIR);
+  const conductor = new Conductor(pool, memory, backend, {
+    sessionId: conductorSessionId,
+    maxAgents: config.MAX_AGENTS,
+    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+  });
   await conductor.initialize();
-  console.log('[server] Conductor initialized');
+  console.log(`[server] Conductor initialized (session=${conductorSessionId.slice(0, 8)}...)`);
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.CONDUCTOR,
@@ -147,6 +182,7 @@ async function main() {
 
   const healthRoute = createHealthRoute(conductor, memory, startTime);
   const agentRoutes = createAgentRoutes(conductor, pool);
+  const conductorRoutes = createConductorRoutes(conductor);
   const memoryRoutes = createMemoryRoutes(memory);
   const cronRoutes = createCronRoutes();
   const activityRoute = createActivityRoute(conductor);
@@ -170,6 +206,9 @@ async function main() {
   router.delete('/api/crons/:id', cronRoutes.remove);
 
   router.get('/api/activity', activityRoute);
+
+  router.get('/api/conductor/settings', conductorRoutes.getSettings);
+  router.put('/api/conductor/settings', conductorRoutes.updateSettings);
 
   router.get('/api/config', configRoutes.get);
   router.put('/api/config', configRoutes.update);

@@ -107,7 +107,7 @@ If AI routing fails, keyword-based scoring takes over automatically.
 ## Features
 
 ### Intelligent Orchestration
-The Conductor receives every message first, searches memory for context, routes via AI (with keyword fallback), and delegates to the right agent. It can create specialist agents dynamically when no suitable one exists.
+The Conductor ("Mother AI") receives every message first, searches memory for context, routes via AI (with keyword fallback), and delegates to the right agent. It can create specialist agents dynamically when no suitable one exists. Give it a personality (JARVIS, Friday, Alfred — or your own) and it maintains stateful sessions across restarts via `--resume`.
 
 ### Pluggable AI Backends
 Swap AI providers without changing code. Any CLI tool that reads stdin and writes stdout works. `claude -p` is the default, but Codex CLI, Gemini CLI, or custom wrappers slot in via the `CLIBackend` interface.
@@ -163,7 +163,7 @@ docker-compose up
 ### Run Tests
 
 ```bash
-bun run test           # All packages (500+ tests)
+bun run test           # All packages (670+ tests)
 bun run typecheck      # TypeScript checking
 bun run lint           # Biome linting
 ```
@@ -200,6 +200,8 @@ pyx/
 ├── dashboard/           # Next.js 16.1 cyberpunk dashboard
 ├── docs/
 │   ├── SPEC.md          # Full specification (single source of truth)
+│   ├── ARCHITECTURE-V2.md    # Pyx V2 product architecture
+│   ├── V2-IMPLEMENTATION-ROADMAP.md  # Migration roadmap
 │   └── PRODUCT-DISCOVERY.md  # Feature docs + competitive analysis
 ├── package.json         # Monorepo root
 ├── turbo.json           # Turborepo config
@@ -260,6 +262,8 @@ bun run typecheck            # Type checking
 | POST | `/api/memory/ingest` | Store to memory |
 | GET | `/api/memory/stats` | Memory statistics |
 | GET | `/api/activity` | Activity log |
+| GET | `/api/conductor/settings` | Conductor identity + session |
+| PUT | `/api/conductor/settings` | Update conductor personality |
 | GET | `/api/config` | Runtime config |
 
 ### WebSocket
@@ -278,6 +282,8 @@ bun run typecheck            # Type checking
 - [x] **Server** — REST API + WebSocket + graceful shutdown
 - [x] **Dashboard** — Cyberpunk UI with chat, agents, debug console
 - [x] **AI Conductor** — AI-powered routing with fallback chain
+- [x] **Session Support** — Agent lifecycle (persistent/ephemeral), `--resume` session persistence
+- [x] **Conductor Soul** — Personality config, pending question tracking, settings dashboard
 - [ ] **Cron Manager** — Scheduled autonomous tasks
 - [ ] **Docker Deployment** — `docker-compose up` for instant setup
 - [ ] **Channel Adapters** — Telegram, Discord, Slack

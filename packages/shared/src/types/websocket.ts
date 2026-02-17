@@ -60,6 +60,7 @@ export interface WSServerPong {
 export interface WSServerAgentStatus {
   type: typeof WSServerMessageType.AGENT_STATUS;
   agents: AgentRuntimeInfo[];
+  conductorName?: string;
 }
 
 export interface WSServerA2AEvent {

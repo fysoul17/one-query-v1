@@ -9,6 +9,7 @@ interface AgentSelectorProps {
   agents: AgentRuntimeInfo[];
   selected: string | undefined;
   onSelect: (agentId: string | undefined) => void;
+  conductorName?: string;
 }
 
 const statusDot: Record<string, string> = {
@@ -19,14 +20,19 @@ const statusDot: Record<string, string> = {
   error: 'bg-neon-red',
 };
 
-export function AgentSelector({ agents, selected, onSelect }: AgentSelectorProps) {
+export function AgentSelector({
+  agents,
+  selected,
+  onSelect,
+  conductorName = 'Conductor',
+}: AgentSelectorProps) {
   return (
     <ScrollArea className="border-b border-border">
       <div className="flex items-center gap-2 p-2">
         <button
           type="button"
           onClick={() => onSelect(undefined)}
-          aria-label="Conductor (persistent)"
+          aria-label={`${conductorName} (persistent)`}
           className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all ${
             selected === undefined
               ? 'bg-neon-purple/20 text-neon-purple glow-purple'
@@ -34,7 +40,7 @@ export function AgentSelector({ agents, selected, onSelect }: AgentSelectorProps
           }`}
         >
           <Anchor className="h-3 w-3" aria-hidden="true" />
-          Conductor
+          {conductorName}
         </button>
         {agents.map((agent) => {
           const persistent = isAgentPersistent(agent);

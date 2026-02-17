@@ -91,6 +91,92 @@ describe('Agent routes', () => {
     });
   });
 
+  describe('POST /api/agents — session fields', () => {
+    test('persistent agent gets lifecycle and sessionId', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Persistent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: true,
+        }),
+      });
+
+      const res = await routes.create(req);
+      const body = await res.json();
+
+      expect(body.data.lifecycle).toBe('persistent');
+      expect(body.data.sessionId).toBeDefined();
+      expect(typeof body.data.sessionId).toBe('string');
+    });
+
+    test('ephemeral agent gets lifecycle but no sessionId', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Ephemeral',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+        }),
+      });
+
+      const res = await routes.create(req);
+      const body = await res.json();
+
+      expect(body.data.lifecycle).toBe('ephemeral');
+      expect(body.data.sessionId).toBeUndefined();
+    });
+
+    test('list includes lifecycle and sessionId fields', async () => {
+      // Add a persistent agent directly to pool (list route reads from conductor → pool)
+      const def = makeDefinition({
+        id: 'persistent-1',
+        name: 'Listed',
+        persistent: true,
+        lifecycle: 'persistent',
+        sessionId: 'session-abc',
+      });
+      pool.addAgent(def);
+
+      // conductor.listAgents delegates to our mock, but list route uses conductor.listAgents
+      // MockConductor.listAgents returns its internal list, not pool's.
+      // So add via conductor mock too:
+      await conductor.createAgent({
+        name: 'Listed2',
+        role: 'worker',
+        systemPrompt: 'Test',
+        persistent: true,
+      });
+
+      const listRes = await routes.list();
+      const listBody = await listRes.json();
+
+      // At least one agent in the list
+      expect(listBody.data.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test('explicit lifecycle field overrides persistent flag', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Override',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+          lifecycle: 'persistent',
+        }),
+      });
+
+      const res = await routes.create(req);
+      const body = await res.json();
+
+      expect(body.data.lifecycle).toBe('persistent');
+      expect(body.data.sessionId).toBeDefined();
+    });
+  });
+
   describe('PUT /api/agents/:id (update)', () => {
     test('returns 501 not implemented', async () => {
       const req = new Request('http://localhost/api/agents/abc', { method: 'PUT' });

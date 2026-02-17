@@ -1176,11 +1176,14 @@ Current:
 ### What Needs to Change
 
 ```
-Phase 1: Session Support (immediate, low risk)
-  ├── Add sessionId to BackendSpawnConfig
-  ├── ClaudeProcess tracks sessionCreated flag
-  ├── First send() → --session-id, subsequent → --resume
-  └── Tests: verify isolation, verify resume
+Phase 1: Session Support — COMPLETED (2026-02-17)
+  ├── Add sessionId to BackendSpawnConfig ✓
+  ├── ClaudeProcess tracks sessionCreated flag ✓
+  ├── First send() → --session-id, subsequent → --resume ✓
+  ├── Tests: verify isolation, verify resume ✓
+  ├── Conductor Soul: personality config, pending questions, RoutingContext ✓
+  ├── REST API: GET/PUT /api/conductor/settings ✓
+  └── Dashboard: ConductorSettingsForm (name, style, traits, presets) ✓
 
 Phase 2: Backend Registry (medium, replaces single backend)
   ├── BackendRegistry class (Map<AIBackend, CLIBackend>)

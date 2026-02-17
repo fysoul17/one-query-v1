@@ -2,11 +2,13 @@ import type {
   ActivityEntry,
   AgentRuntimeInfo,
   ApiResponse,
+  ConductorPersonality,
   CreateAgentRequest,
   HealthCheckResponse,
   MemoryIngestRequest,
   MemorySearchResult,
   MemoryStats,
+  PendingQuestion,
   PlatformConfig,
 } from '@autonomy/shared';
 
@@ -83,4 +85,27 @@ export async function getActivity(limit = 50): Promise<ActivityEntry[]> {
 
 export async function getConfig(): Promise<PlatformConfig> {
   return fetchApi<PlatformConfig>('/api/config');
+}
+
+export interface ConductorSettingsResponse {
+  personality?: ConductorPersonality;
+  conductorName: string;
+  sessionId?: string;
+  pendingQuestions: PendingQuestion[];
+}
+
+export async function getConductorSettings(): Promise<ConductorSettingsResponse> {
+  return fetchApi<ConductorSettingsResponse>('/api/conductor/settings');
+}
+
+export async function updateConductorSettings(data: {
+  personality: ConductorPersonality;
+}): Promise<{ success: boolean; personality: ConductorPersonality }> {
+  return fetchApi<{ success: boolean; personality: ConductorPersonality }>(
+    '/api/conductor/settings',
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    },
+  );
 }

@@ -19,12 +19,17 @@ interface ChatInterfaceProps {
 export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
   const [agents, setAgents] = useState<AgentRuntimeInfo[]>(initialAgents);
   const [targetAgent, setTargetAgent] = useState<string | undefined>(undefined);
+  const [conductorName, setConductorName] = useState('Conductor');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { showSteps, toggleSteps } = useShowSteps();
 
-  const handleAgentStatus = useCallback((newAgents: AgentRuntimeInfo[]) => {
-    setAgents(newAgents);
-  }, []);
+  const handleAgentStatus = useCallback(
+    (newAgents: AgentRuntimeInfo[], newConductorName?: string) => {
+      setAgents(newAgents);
+      if (newConductorName) setConductorName(newConductorName);
+    },
+    [],
+  );
 
   const { status, messages, sendMessage, isProcessing } = useWebSocket({
     url: WS_URL,
@@ -50,7 +55,12 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col">
       {/* Agent selector */}
-      <AgentSelector agents={agents} selected={targetAgent} onSelect={setTargetAgent} />
+      <AgentSelector
+        agents={agents}
+        selected={targetAgent}
+        onSelect={setTargetAgent}
+        conductorName={conductorName}
+      />
 
       {/* Messages */}
       <div
@@ -66,7 +76,7 @@ export function ChatInterface({ initialAgents }: ChatInterfaceProps) {
               <p className="text-lg font-medium text-muted-foreground">
                 {targetAgent
                   ? `Chat with ${agents.find((a) => a.id === targetAgent)?.name ?? 'agent'}`
-                  : 'Chat with Conductor'}
+                  : `Chat with ${conductorName}`}
               </p>
               <p className="text-sm text-muted-foreground/60">Send a message to get started.</p>
             </div>

@@ -2,10 +2,12 @@ import type {
   ActivityEntry,
   AgentRuntimeInfo,
   ApiResponse,
+  ConductorPersonality,
   CreateAgentRequest,
   HealthCheckResponse,
   MemorySearchResult,
   MemoryStats,
+  PendingQuestion,
   PlatformConfig,
 } from '@autonomy/shared';
 
@@ -72,4 +74,15 @@ export async function restartAgent(id: string): Promise<AgentRuntimeInfo> {
   return fetchApi<AgentRuntimeInfo>(`/api/agents/${id}/restart`, {
     method: 'POST',
   });
+}
+
+export interface ConductorSettingsResponse {
+  personality?: ConductorPersonality;
+  conductorName: string;
+  sessionId?: string;
+  pendingQuestions: PendingQuestion[];
+}
+
+export async function getConductorSettings(): Promise<ConductorSettingsResponse> {
+  return fetchApi<ConductorSettingsResponse>('/api/conductor/settings');
 }

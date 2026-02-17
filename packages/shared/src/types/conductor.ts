@@ -53,3 +53,35 @@ export interface ConductorDebugPayload {
   memoryEntryPreviews?: string[];
   dispatchTarget?: string;
 }
+
+// --- Pending Question Tracking ---
+
+export const QuestionStatus = {
+  PENDING: 'pending',
+  ANSWERED: 'answered',
+  EXPIRED: 'expired',
+} as const;
+export type QuestionStatus = (typeof QuestionStatus)[keyof typeof QuestionStatus];
+
+export interface PendingQuestion {
+  id: string;
+  agentId: string;
+  agentName: string;
+  question: string;
+  createdAt: string;
+  status: QuestionStatus;
+  unrelatedMessageCount: number;
+}
+
+// --- Conductor Personality ---
+
+export interface ConductorPersonality {
+  name: string;
+  communicationStyle?: string;
+  traits?: string;
+}
+
+export interface ConductorIdentityConfig {
+  personality?: ConductorPersonality;
+  sessionId?: string;
+}

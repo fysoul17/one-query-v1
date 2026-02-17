@@ -11,10 +11,12 @@ import {
   AgentStatus,
   ConductorAction,
   type ConductorDecision,
+  type ConductorPersonality,
   deriveLifecycle,
   isAgentPersistent,
   type MemorySearchResult,
   MemoryType,
+  type PendingQuestion,
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
@@ -26,6 +28,7 @@ import {
   DelegationError,
   QueueFullError,
 } from './errors.ts';
+import { detectQuestion, PendingQuestionTracker } from './pending-questions.ts';
 import { PermissionChecker } from './permissions.ts';
 import { createAIRouter, defaultRouter, RouterManager } from './router.ts';
 import {
@@ -94,6 +97,7 @@ export class Conductor {
   private routerManager = new RouterManager();
   private permissions = new PermissionChecker();
   private activityLog: ActivityLog;
+  private questionTracker: PendingQuestionTracker;
   private initialized = false;
   private options: ConductorOptions;
   private messageQueue: QueuedConductorMessage[] = [];
@@ -105,11 +109,39 @@ export class Conductor {
     this.backend = backend;
     this.options = options ?? {};
     this.activityLog = new ActivityLog(options?.maxActivityLogSize);
+    this.questionTracker = new PendingQuestionTracker(
+      options?.questionExpiryMs,
+      options?.maxUnrelatedMessages,
+    );
   }
 
   /** Conductor's session UUID, preserved across shutdown for later resume. */
   get sessionId(): string | undefined {
     return this.options.sessionId;
+  }
+
+  /** Conductor personality, if configured. */
+  get personality(): ConductorPersonality | undefined {
+    return this.options.personality;
+  }
+
+  /** Display name: personality name or default "Conductor". */
+  get conductorName(): string {
+    return this.options.personality?.name ?? this.options.conductorName ?? 'Conductor';
+  }
+
+  /** All pending questions awaiting user follow-up. */
+  get pendingQuestions(): PendingQuestion[] {
+    return this.questionTracker.getAll();
+  }
+
+  /** Update conductor personality at runtime (hot-swap, no restart needed). */
+  updatePersonality(personality: ConductorPersonality): void {
+    this.options.personality = personality;
+    this.activityLog.record(
+      ActivityType.MESSAGE,
+      `Conductor personality updated to "${personality.name}"`,
+    );
   }
 
   async initialize(): Promise<void> {
@@ -187,6 +219,15 @@ export class Conductor {
     try {
       const decisions: ConductorDecision[] = [];
 
+      // 0. Evict expired pending questions
+      const expiredCount = this.questionTracker.evictExpired();
+      if (expiredCount > 0) {
+        onEvent?.({
+          type: ConductorEventType.QUESTION_EXPIRED,
+          content: `${expiredCount} pending question(s) expired`,
+        });
+      }
+
       // 1. Search memory for context (non-fatal)
       const memoryContext = await this.timedStep(
         () => this.searchMemoryContext(message),
@@ -201,7 +242,7 @@ export class Conductor {
           }),
       );
 
-      // 2. Route via RouterManager
+      // 2. Route via RouterManager (with enriched context)
       onEvent?.({ type: ConductorEventType.ROUTING, content: 'Analyzing request...' });
       const agents = this.pool.list();
       const routingResult = await this.timedStep(
@@ -235,7 +276,10 @@ export class Conductor {
           }),
       );
 
-      // 4. Store conversation in memory (non-fatal)
+      // 4. Post-dispatch: track pending questions + record unrelated messages
+      this.trackQuestionsAfterDispatch(routingResult, responseContent, onEvent);
+
+      // 5. Store conversation in memory (non-fatal)
       await this.timedStep(
         () => this.storeConversation(message, routingResult, decisions),
         (durationMs) =>
@@ -514,7 +558,7 @@ export class Conductor {
       dispatchTarget: 'conductor (direct)',
     });
 
-    const responsePrompt = buildResponsePrompt(message, memoryContext);
+    const responsePrompt = buildResponsePrompt(message, memoryContext, this.options.personality);
 
     const process = this.backendProcess;
     if (!process) {
@@ -590,6 +634,56 @@ export class Conductor {
       return result;
     }
     return 'Unable to create or route to any agent — pool is full.';
+  }
+
+  /**
+   * After dispatch: detect questions in agent responses, resolve answered questions,
+   * and record unrelated messages for pending question expiry.
+   */
+  private trackQuestionsAfterDispatch(
+    routingResult: RoutingResult,
+    responseContent: string,
+    onEvent?: OnConductorEvent,
+  ): void {
+    const targetAgentId = routingResult.agentIds[0];
+
+    // If message routed to an agent that had pending questions, resolve them
+    if (targetAgentId) {
+      const resolved = this.questionTracker.resolveByAgent(targetAgentId);
+      for (const q of resolved) {
+        onEvent?.({
+          type: ConductorEventType.QUESTION_ANSWERED,
+          agentId: q.agentId,
+          agentName: q.agentName,
+          content: `Question answered: "${q.question}"`,
+        });
+      }
+
+      // If the message went to a different agent than pending questions, record as unrelated
+      if (resolved.length === 0 && this.questionTracker.count > 0) {
+        this.questionTracker.recordUnrelatedMessage();
+      }
+    } else if (this.questionTracker.count > 0) {
+      // Direct response (no agent target) — counts as unrelated to pending questions
+      this.questionTracker.recordUnrelatedMessage();
+    }
+
+    // Detect new questions in the response
+    if (targetAgentId && responseContent) {
+      const detectedQuestion = detectQuestion(responseContent);
+      if (detectedQuestion) {
+        const agent = this.pool.list().find((a) => a.id === targetAgentId);
+        const agentName = agent?.name ?? targetAgentId;
+        const pq = this.questionTracker.add(targetAgentId, agentName, detectedQuestion);
+        onEvent?.({
+          type: ConductorEventType.QUESTION_ASKED,
+          agentId: targetAgentId,
+          agentName,
+          content: `Agent "${agentName}" asked: "${detectedQuestion}"`,
+          metadata: { questionId: pq.id },
+        });
+      }
+    }
   }
 
   private async storeConversation(

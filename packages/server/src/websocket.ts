@@ -85,6 +85,9 @@ function conductorEventToDebug(event: ConductorEvent): DebugEvent {
     [ConductorEventType.MEMORY_STORE]: 'Storing conversation',
     [ConductorEventType.DELEGATION_COMPLETE]: 'Delegation complete',
     [ConductorEventType.RESPONDING]: 'Conductor responding',
+    [ConductorEventType.QUESTION_ASKED]: 'Agent asked a question',
+    [ConductorEventType.QUESTION_ANSWERED]: 'Question answered',
+    [ConductorEventType.QUESTION_EXPIRED]: 'Question expired',
   };
 
   return makeDebugEvent({
@@ -151,6 +154,13 @@ function sendConductorStatus(ws: ServerWebSocket<WSData>, event: ConductorEvent)
     case ConductorEventType.RESPONDING:
       phase = 'responding';
       message = event.content ?? 'Conductor is responding...';
+      break;
+    case ConductorEventType.QUESTION_ASKED:
+    case ConductorEventType.QUESTION_ANSWERED:
+    case ConductorEventType.QUESTION_EXPIRED:
+      // Question events are informational — emit as routing_complete phase
+      phase = 'routing_complete';
+      message = event.content ?? `Question ${event.type.replace('question_', '')}`;
       break;
     default:
       return;
@@ -268,6 +278,7 @@ export function createWebSocketHandler(conductor: Conductor, debugBus?: DebugBus
     const msg: WSServerAgentStatus = {
       type: WSServerMessageType.AGENT_STATUS,
       agents,
+      conductorName: conductor.conductorName,
     };
     broadcast(msg);
 

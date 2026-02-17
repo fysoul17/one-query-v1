@@ -1,5 +1,5 @@
-import type { AgentRuntimeInfo, MemorySearchResult } from '@autonomy/shared';
-import type { IncomingMessage } from './types.ts';
+import type { AgentRuntimeInfo, ConductorPersonality, MemorySearchResult } from '@autonomy/shared';
+import type { IncomingMessage, RoutingContext } from './types.ts';
 
 /**
  * System prompt for the Conductor AI process.
@@ -43,7 +43,7 @@ Rules:
 - Return ONLY the JSON object, no other text`;
 
 /** Dangerous patterns that should not appear in generated system prompts. */
-const PROMPT_BLOCKLIST = [
+export const PROMPT_BLOCKLIST = [
   /\bcurl\b/i,
   /\bwget\b/i,
   /\bfetch\s*\(/i,
@@ -57,6 +57,14 @@ const PROMPT_BLOCKLIST = [
   /child_process/,
   /\bexec\s*\(/,
 ];
+
+/**
+ * Checks a string against the prompt blocklist.
+ * Returns true if the text is safe (no blocked patterns found).
+ */
+export function isPromptSafe(text: string): boolean {
+  return !PROMPT_BLOCKLIST.some((pattern) => pattern.test(text));
+}
 
 /**
  * Validates AI-generated agent creation parameters.
@@ -94,21 +102,44 @@ export function validateAgentCreation(createAgent: {
 
 /**
  * Builds the full routing prompt sent to the Conductor AI process.
- * Assembles user message, available agents, and memory context.
+ * Overloaded: accepts either a RoutingContext object or positional params for backward compat.
  */
 export function buildRoutingPrompt(
-  message: IncomingMessage,
-  agents: AgentRuntimeInfo[],
-  memoryContext: MemorySearchResult | null,
+  messageOrCtx: IncomingMessage | RoutingContext,
+  agents?: AgentRuntimeInfo[],
+  memoryContext?: MemorySearchResult | null,
 ): string {
+  // Normalize to RoutingContext
+  const ctx: RoutingContext =
+    'message' in messageOrCtx && 'agents' in messageOrCtx
+      ? (messageOrCtx as RoutingContext)
+      : {
+          message: messageOrCtx as IncomingMessage,
+          agents: agents ?? [],
+          memoryContext: memoryContext ?? null,
+        };
+
   const parts: string[] = [];
 
+  // Pending questions (highest priority — per ARCHITECTURE-V2.md Section 5.4)
+  if (ctx.pendingQuestions && ctx.pendingQuestions.length > 0) {
+    parts.push('<pending-questions>');
+    parts.push(
+      'IMPORTANT: The following questions from agents are awaiting user answers. If the user message is answering one of these, route to that agent.',
+    );
+    for (const q of ctx.pendingQuestions) {
+      parts.push(`- Agent "${q.agentName}" (${q.agentId}) asked: "${q.question}"`);
+    }
+    parts.push('</pending-questions>');
+  }
+
   // Available agents
-  if (agents.length > 0) {
+  if (ctx.agents.length > 0) {
     parts.push('Available agents:');
-    for (const agent of agents) {
+    for (const agent of ctx.agents) {
+      const lifecycle = agent.lifecycle ?? (agent.persistent ? 'persistent' : 'ephemeral');
       parts.push(
-        `- ID: "${agent.id}" | Name: "${agent.name}" | Role: "${agent.role}" | Status: ${agent.status}`,
+        `- ID: "${agent.id}" | Name: "${agent.name}" | Role: "${agent.role}" | Status: ${agent.status} | Lifecycle: ${lifecycle}`,
       );
     }
   } else {
@@ -118,8 +149,8 @@ export function buildRoutingPrompt(
   }
 
   // Memory context (wrapped in delimiters for isolation)
-  if (memoryContext && memoryContext.entries.length > 0) {
-    const contextSnippets = memoryContext.entries
+  if (ctx.memoryContext && ctx.memoryContext.entries.length > 0) {
+    const contextSnippets = ctx.memoryContext.entries
       .slice(0, 5)
       .map((e) => e.content)
       .join('\n');
@@ -127,12 +158,12 @@ export function buildRoutingPrompt(
   }
 
   // User message
-  parts.push(`\nUser message: ${message.content}`);
+  parts.push(`\nUser message: ${ctx.message.content}`);
 
   // Target agent hint
-  if (message.targetAgentId) {
+  if (ctx.message.targetAgentId) {
     parts.push(
-      `\nNote: The user has specifically targeted agent "${message.targetAgentId}". Route to that agent if it exists.`,
+      `\nNote: The user has specifically targeted agent "${ctx.message.targetAgentId}". Route to that agent if it exists.`,
     );
   }
 
@@ -144,16 +175,30 @@ export function buildRoutingPrompt(
 /**
  * Builds a response prompt for when the Conductor responds directly to the user.
  * This is the second call in the two-call pattern (routing → response).
+ * When personality is set, the conductor adopts the configured identity.
  */
 export function buildResponsePrompt(
   message: IncomingMessage,
   memoryContext: MemorySearchResult | null,
+  personality?: ConductorPersonality,
 ): string {
   const parts: string[] = [];
 
-  parts.push(
-    'You are the Conductor responding directly to a user. Be helpful, conversational, and concise.',
-  );
+  if (personality) {
+    parts.push(
+      `You are ${personality.name}, the user's AI orchestrator. Be helpful, conversational, and concise.`,
+    );
+    if (personality.communicationStyle) {
+      parts.push(`Communication style: ${personality.communicationStyle}.`);
+    }
+    if (personality.traits) {
+      parts.push(personality.traits);
+    }
+  } else {
+    parts.push(
+      'You are the Conductor responding directly to a user. Be helpful, conversational, and concise.',
+    );
+  }
   parts.push('You are an AI orchestrator for a multi-agent runtime system.');
   parts.push(
     'You can help users with general questions, explain the system, or suggest creating specialist agents for complex tasks.',

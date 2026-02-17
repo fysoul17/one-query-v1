@@ -55,6 +55,8 @@ export class MockAgentProcess {
       owner: this.definition.owner,
       persistent: this.definition.persistent,
       createdAt: this.definition.createdAt,
+      lifecycle: this.definition.lifecycle,
+      sessionId: this.definition.sessionId,
     };
   }
 }

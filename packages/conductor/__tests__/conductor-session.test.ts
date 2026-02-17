@@ -10,7 +10,8 @@
  *  - Conductor creates persistent agents with session IDs
  */
 import { describe, expect, test } from 'bun:test';
-import type { BackendProcess, CLIBackend } from '@autonomy/agent-manager';
+import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
+import type { Memory } from '@autonomy/memory';
 import { type AgentDefinition, type AgentRuntimeInfo, AgentStatus } from '@autonomy/shared';
 import { Conductor } from '../src/conductor.ts';
 import type { ConductorOptions } from '../src/types.ts';
@@ -144,7 +145,12 @@ describe('V2 Phase 1 — Conductor session support', () => {
       // After V2 Phase 1, we should be able to pass sessionId in options
       (options as Record<string, unknown>).sessionId = 'jarvis-session-001';
 
-      const conductor = new Conductor(pool as any, memory as any, backend, options);
+      const conductor = new Conductor(
+        pool as unknown as AgentPool,
+        memory as unknown as Memory,
+        backend,
+        options,
+      );
 
       await conductor.initialize();
 
@@ -170,7 +176,12 @@ describe('V2 Phase 1 — Conductor session support', () => {
       const options: ConductorOptions = {};
       (options as Record<string, unknown>).sessionId = 'conductor-sess';
 
-      const conductor = new Conductor(pool as any, memory as any, backend, options);
+      const conductor = new Conductor(
+        pool as unknown as AgentPool,
+        memory as unknown as Memory,
+        backend,
+        options,
+      );
       await conductor.initialize();
 
       // Conductor is always persistent — should have sessionPersistence: true
@@ -196,7 +207,12 @@ describe('V2 Phase 1 — Conductor session support', () => {
       const options: ConductorOptions = {};
       (options as Record<string, unknown>).sessionId = 'persistent-conductor-session';
 
-      const conductor = new Conductor(pool as any, memory as any, backend, options);
+      const conductor = new Conductor(
+        pool as unknown as AgentPool,
+        memory as unknown as Memory,
+        backend,
+        options,
+      );
       await conductor.initialize();
       await conductor.shutdown();
 
@@ -219,7 +235,11 @@ describe('V2 Phase 1 — Conductor session support', () => {
       });
       const { backend } = createMockBackend(routingResponse);
 
-      const conductor = new Conductor(pool as any, memory as any, backend);
+      const conductor = new Conductor(
+        pool as unknown as AgentPool,
+        memory as unknown as Memory,
+        backend,
+      );
       await conductor.initialize();
 
       const agentInfo = await conductor.createAgent({
@@ -248,7 +268,11 @@ describe('V2 Phase 1 — Conductor session support', () => {
       });
       const { backend } = createMockBackend(routingResponse);
 
-      const conductor = new Conductor(pool as any, memory as any, backend);
+      const conductor = new Conductor(
+        pool as unknown as AgentPool,
+        memory as unknown as Memory,
+        backend,
+      );
       await conductor.initialize();
 
       const agentInfo = await conductor.createAgent({
