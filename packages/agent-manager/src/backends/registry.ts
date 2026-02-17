@@ -23,6 +23,7 @@ export class DefaultBackendRegistry implements BackendRegistry {
     this.defaultBackend = defaultBackend;
   }
 
+  /** Register a backend. Overwrites any existing backend with the same name. */
   register(backend: CLIBackend): void {
     this.backends.set(backend.name, backend);
   }

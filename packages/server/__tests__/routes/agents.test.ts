@@ -177,6 +177,77 @@ describe('Agent routes', () => {
     });
   });
 
+  describe('POST /api/agents — backend validation', () => {
+    test('accepts valid backend field', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Claude Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+          backend: 'claude',
+        }),
+      });
+
+      const res = await routes.create(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(body.data.backend).toBe('claude');
+    });
+
+    test('rejects invalid backend with 400', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Bad Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+          backend: 'invalid-backend',
+        }),
+      });
+
+      await expect(routes.create(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('succeeds without backend field (uses default)', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Default Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+        }),
+      });
+
+      const res = await routes.create(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(body.data.name).toBe('Default Agent');
+    });
+
+    test('passes department to definition', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Dept Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          persistent: false,
+          department: 'engineering',
+        }),
+      });
+
+      await routes.create(req);
+      expect(pool.createCalls.length).toBe(1);
+      expect(pool.createCalls[0]?.department).toBe('engineering');
+    });
+  });
+
   describe('PUT /api/agents/:id (update)', () => {
     test('returns 501 not implemented', async () => {
       const req = new Request('http://localhost/api/agents/abc', { method: 'PUT' });

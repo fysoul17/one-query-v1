@@ -21,10 +21,14 @@ const backendConfig: Record<string, { label: string; className: string }> = {
   },
 };
 
+const defaultBackendConfig = {
+  label: 'Unknown',
+  className: 'bg-muted text-muted-foreground border-border',
+};
+
 export function BackendBadge({ backend }: { backend?: AIBackend }) {
   if (!backend) return null;
-  const config = backendConfig[backend];
-  if (!config) return null;
+  const config = backendConfig[backend] ?? defaultBackendConfig;
 
   return (
     <Badge variant="outline" className={`gap-1 ${config.className}`}>

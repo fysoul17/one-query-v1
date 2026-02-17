@@ -24,8 +24,10 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { createAgent } from '@/lib/api';
 
+const BACKEND_DEFAULT = '_default';
+
 const BACKEND_OPTIONS = [
-  { value: '', label: 'Default (platform)' },
+  { value: BACKEND_DEFAULT, label: 'Default (platform)' },
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini', label: 'Gemini' },
@@ -37,7 +39,7 @@ export function CreateAgentDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [backend, setBackend] = useState('_default');
+  const [backend, setBackend] = useState(BACKEND_DEFAULT);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -74,13 +76,13 @@ export function CreateAgentDialog() {
         canModifyFiles,
         canDelegateToAgents,
         persistent,
-        ...(backend && backend !== '_default'
+        ...(backend !== BACKEND_DEFAULT
           ? { backend: backend as 'claude' | 'codex' | 'gemini' | 'goose' }
           : {}),
         ...(department ? { department } : {}),
       });
       setOpen(false);
-      setBackend('_default');
+      setBackend(BACKEND_DEFAULT);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create agent');
@@ -141,7 +143,7 @@ export function CreateAgentDialog() {
                 </SelectTrigger>
                 <SelectContent>
                   {BACKEND_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value || '_default'} value={opt.value || '_default'}>
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
@@ -154,7 +156,7 @@ export function CreateAgentDialog() {
               <Input
                 id="department"
                 name="department"
-                placeholder="eng, mktg..."
+                placeholder="e.g. engineering"
                 className="font-mono"
               />
             </div>

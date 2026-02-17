@@ -57,6 +57,7 @@ export class MockAgentProcess {
       createdAt: this.definition.createdAt,
       lifecycle: this.definition.lifecycle,
       sessionId: this.definition.sessionId,
+      backend: this.definition.backend,
     };
   }
 }
