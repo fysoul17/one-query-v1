@@ -40,6 +40,8 @@ export function parseEnvConfig(): EnvironmentConfig {
     DEFAULTS.LOG_LEVEL) as (typeof LogLevel)[keyof typeof LogLevel];
   const mode = (env.MODE ?? DEFAULTS.MODE) as (typeof RuntimeMode)[keyof typeof RuntimeMode];
 
+  const authEnabled = env.AUTH_ENABLED === 'true';
+
   return {
     ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
     DATA_DIR: env.DATA_DIR ?? DEFAULTS.DATA_DIR,
@@ -53,5 +55,7 @@ export function parseEnvConfig(): EnvironmentConfig {
     LOG_LEVEL: logLevel,
     MODE: mode,
     MEMORY_URL: env.MEMORY_URL,
+    AUTH_ENABLED: authEnabled,
+    AUTH_MASTER_KEY: env.AUTH_MASTER_KEY,
   };
 }

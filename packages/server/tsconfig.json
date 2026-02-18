@@ -12,7 +12,9 @@
       "@autonomy/memory": ["../memory/src/index.ts"],
       "@autonomy/memory/*": ["../memory/src/*"],
       "@autonomy/cron-manager": ["../cron-manager/src/index.ts"],
-      "@autonomy/cron-manager/*": ["../cron-manager/src/*"]
+      "@autonomy/cron-manager/*": ["../cron-manager/src/*"],
+      "@autonomy/control-plane": ["../control-plane/src/index.ts"],
+      "@autonomy/control-plane/*": ["../control-plane/src/*"]
     }
   },
   "include": ["src/**/*.ts"],

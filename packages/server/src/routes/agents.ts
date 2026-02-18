@@ -5,10 +5,11 @@ import {
   AgentOwner,
   AIBackend,
   type CreateAgentRequest,
+  type UpdateAgentRequest,
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { BadRequestError, NotFoundError } from '../errors.ts';
-import { errorResponse, jsonResponse, parseJsonBody } from '../middleware.ts';
+import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
 
 export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
@@ -55,8 +56,46 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
       return jsonResponse(process.toRuntimeInfo(), 201);
     },
 
-    update: async (_req: Request, _params: RouteParams): Promise<Response> => {
-      return errorResponse('Agent update not implemented yet', 501);
+    update: async (req: Request, params: RouteParams): Promise<Response> => {
+      const { id } = params;
+      if (!id) throw new BadRequestError('Agent id is required');
+
+      const agent = pool.get(id);
+      if (!agent) throw new NotFoundError(`Agent "${id}" not found`);
+
+      const body = await parseJsonBody<UpdateAgentRequest>(req);
+
+      // Validate backend if provided
+      if (body.backend) {
+        const validBackends = Object.values(AIBackend) as string[];
+        if (!validBackends.includes(body.backend)) {
+          throw new BadRequestError(
+            `Invalid backend "${body.backend}". Valid: ${validBackends.join(', ')}`,
+          );
+        }
+      }
+
+      // Pick only defined fields from the request body
+      const allowedFields = [
+        'name',
+        'role',
+        'tools',
+        'canModifyFiles',
+        'canDelegateToAgents',
+        'maxConcurrent',
+        'persistent',
+        'systemPrompt',
+        'backend',
+      ] as const;
+      const updates: Partial<AgentDefinition> = {};
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) {
+          (updates as Record<string, unknown>)[field] = body[field];
+        }
+      }
+
+      const updated = await pool.update(id, updates);
+      return jsonResponse(updated.toRuntimeInfo());
     },
 
     remove: async (_req: Request, params: RouteParams): Promise<Response> => {

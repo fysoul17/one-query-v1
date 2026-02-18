@@ -65,11 +65,22 @@ export class MockPool {
   private agents = new Map<string, MockAgentProcess>();
   createCalls: AgentDefinition[] = [];
   removeCalls: string[] = [];
+  updateCalls: { id: string; updates: Partial<AgentDefinition> }[] = [];
 
   async create(definition: AgentDefinition): Promise<MockAgentProcess> {
     this.createCalls.push(definition);
     const process = new MockAgentProcess(definition);
     this.agents.set(definition.id, process);
+    return process;
+  }
+
+  async update(id: AgentId, updates: Partial<AgentDefinition>): Promise<MockAgentProcess> {
+    this.updateCalls.push({ id, updates });
+    const existing = this.agents.get(id);
+    if (!existing) throw new Error(`Agent "${id}" not found`);
+    const merged = { ...existing.definition, ...updates, id };
+    const process = new MockAgentProcess(merged);
+    this.agents.set(id, process);
     return process;
   }
 

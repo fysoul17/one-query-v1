@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot, Brain, Cpu, Home, MessageSquare, Terminal, Timer } from 'lucide-react';
+import { BarChart3, Bot, Brain, Cpu, Home, Key, MessageSquare, Settings, Terminal, Timer } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +23,12 @@ const mainNav = [
 const systemNav = [
   { href: '/automation', label: 'Automation', icon: Timer },
   { href: '/activity', label: 'Debug Console', icon: Terminal },
+];
+
+const adminNav = [
+  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/settings/keys', label: 'API Keys', icon: Key },
+  { href: '/settings/usage', label: 'Usage', icon: BarChart3 },
 ];
 
 export function AppSidebar() {
@@ -63,6 +69,16 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <NavLinks items={systemNav} />
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Admin
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <NavLinks items={adminNav} />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

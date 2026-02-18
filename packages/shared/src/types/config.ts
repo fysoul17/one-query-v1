@@ -37,4 +37,8 @@ export interface EnvironmentConfig {
   LOG_LEVEL: LogLevel;
   MODE: RuntimeMode;
   MEMORY_URL?: string;
+  /** Enable API key authentication (opt-in). */
+  AUTH_ENABLED: boolean;
+  /** Optional bootstrap admin key for initial setup. */
+  AUTH_MASTER_KEY?: string;
 }

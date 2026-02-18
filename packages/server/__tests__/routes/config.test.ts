@@ -1,11 +1,15 @@
-import { describe, expect, test } from 'bun:test';
-import type { EnvironmentConfig } from '@autonomy/shared';
-import { DEFAULTS } from '@autonomy/shared';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { DEFAULTS, type EnvironmentConfig } from '@autonomy/shared';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { ConfigManager } from '../../src/config-manager.ts';
 import { createConfigRoutes } from '../../src/routes/config.ts';
+
+const TEST_DATA_DIR = join(import.meta.dir, '.test-data-config-routes');
 
 function makeConfig(overrides?: Partial<EnvironmentConfig>): EnvironmentConfig {
   return {
-    DATA_DIR: DEFAULTS.DATA_DIR,
+    DATA_DIR: TEST_DATA_DIR,
     PORT: DEFAULTS.PORT,
     RUNTIME_URL: DEFAULTS.RUNTIME_URL,
     AI_BACKEND: DEFAULTS.AI_BACKEND,
@@ -19,10 +23,20 @@ function makeConfig(overrides?: Partial<EnvironmentConfig>): EnvironmentConfig {
 }
 
 describe('Config routes', () => {
+  beforeEach(() => {
+    if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true });
+    mkdirSync(TEST_DATA_DIR, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (existsSync(TEST_DATA_DIR)) rmSync(TEST_DATA_DIR, { recursive: true });
+  });
+
   describe('GET /api/config', () => {
     test('returns config with redacted API key', async () => {
-      const config = makeConfig({ ANTHROPIC_API_KEY: 'sk-secret-key-123' });
-      const routes = createConfigRoutes(config);
+      const cm = new ConfigManager(makeConfig({ ANTHROPIC_API_KEY: 'sk-secret-key-123' }));
+      cm.initialize();
+      const routes = createConfigRoutes(cm);
 
       const res = await routes.get();
       const body = await res.json();
@@ -33,8 +47,9 @@ describe('Config routes', () => {
     });
 
     test('omits API key when not set', async () => {
-      const config = makeConfig();
-      const routes = createConfigRoutes(config);
+      const cm = new ConfigManager(makeConfig());
+      cm.initialize();
+      const routes = createConfigRoutes(cm);
 
       const res = await routes.get();
       const body = await res.json();
@@ -44,10 +59,53 @@ describe('Config routes', () => {
   });
 
   describe('PUT /api/config', () => {
-    test('returns 501 not implemented', async () => {
-      const routes = createConfigRoutes(makeConfig());
-      const res = await routes.update();
-      expect(res.status).toBe(501);
+    test('updates config fields', async () => {
+      const cm = new ConfigManager(makeConfig());
+      cm.initialize();
+      const routes = createConfigRoutes(cm);
+
+      const req = new Request('http://localhost/api/config', {
+        method: 'PUT',
+        body: JSON.stringify({ MAX_AGENTS: 25 }),
+      });
+
+      const res = await routes.update(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data.MAX_AGENTS).toBe(25);
+    });
+
+    test('rejects API key updates with 400', async () => {
+      const cm = new ConfigManager(makeConfig());
+      cm.initialize();
+      const routes = createConfigRoutes(cm);
+
+      const req = new Request('http://localhost/api/config', {
+        method: 'PUT',
+        body: JSON.stringify({ ANTHROPIC_API_KEY: 'sk-new-key' }),
+      });
+
+      // The BadRequestError gets thrown and would be caught by the router
+      await expect(routes.update(req)).rejects.toThrow('Cannot update sensitive fields');
+    });
+
+    test('preserves existing config on partial update', async () => {
+      const cm = new ConfigManager(makeConfig({ MAX_AGENTS: 10 }));
+      cm.initialize();
+      const routes = createConfigRoutes(cm);
+
+      const req = new Request('http://localhost/api/config', {
+        method: 'PUT',
+        body: JSON.stringify({ AI_BACKEND: 'claude' }),
+      });
+
+      const res = await routes.update(req);
+      const body = await res.json();
+
+      expect(body.data.MAX_AGENTS).toBe(10);
+      expect(body.data.AI_BACKEND).toBe('claude');
     });
   });
 });

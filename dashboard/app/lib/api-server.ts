@@ -1,27 +1,38 @@
 import type {
   ActivityEntry,
   AgentRuntimeInfo,
+  ApiKey,
   ApiResponse,
   CreateAgentRequest,
   CronEntry,
+  EnvironmentConfig,
   GraphNode,
   GraphRelationship,
   HealthCheckResponse,
+  InstanceInfo,
   MemoryEntry,
   MemorySearchResult,
   MemoryStats,
   PlatformConfig,
+  UsageSummary,
 } from '@autonomy/shared';
 
 const RUNTIME_URL = process.env.RUNTIME_URL ?? 'http://localhost:7820';
+const RUNTIME_API_KEY = process.env.RUNTIME_API_KEY ?? '';
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string>),
+  };
+
+  if (RUNTIME_API_KEY) {
+    headers.Authorization = `Bearer ${RUNTIME_API_KEY}`;
+  }
+
   const res = await fetch(`${RUNTIME_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   const body = (await res.json()) as ApiResponse<T>;
@@ -124,4 +135,24 @@ export async function getGraphEdges(): Promise<{
   stats: { nodeCount: number; edgeCount: number };
 }> {
   return fetchMemoryApi('/api/memory/graph/edges');
+}
+
+// --- Control Plane Server APIs ---
+
+export async function getRuntimeConfig(): Promise<EnvironmentConfig> {
+  return fetchApi<EnvironmentConfig>('/api/config');
+}
+
+export async function getApiKeys(): Promise<ApiKey[]> {
+  return fetchApi<ApiKey[]>('/api/auth/keys');
+}
+
+export async function getUsageSummary(
+  period: 'day' | 'month' = 'day',
+): Promise<UsageSummary[]> {
+  return fetchApi<UsageSummary[]>(`/api/usage/summary?period=${period}`);
+}
+
+export async function getInstances(): Promise<InstanceInfo[]> {
+  return fetchApi<InstanceInfo[]>('/api/instances');
 }

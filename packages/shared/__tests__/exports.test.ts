@@ -111,7 +111,8 @@ describe('@autonomy/shared exports', () => {
     expect(shared.DEFAULTS.LOG_LEVEL).toBe('info');
     expect(shared.DEFAULTS.MODE).toBe('standalone');
     expect(shared.DEFAULTS.MEMORY_SERVER_PORT).toBe(3002);
-    expect(Object.keys(shared.DEFAULTS)).toHaveLength(11);
+    expect(shared.DEFAULTS.AUTH_ENABLED).toBe(false);
+    expect(Object.keys(shared.DEFAULTS)).toHaveLength(12);
   });
 
   test('exports BACKEND_CAPABILITIES', () => {

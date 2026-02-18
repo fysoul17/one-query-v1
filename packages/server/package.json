@@ -19,6 +19,7 @@
     "@autonomy/agent-manager": "workspace:*",
     "@autonomy/memory": "workspace:*",
     "@autonomy/cron-manager": "workspace:*",
+    "@autonomy/control-plane": "workspace:*",
     "nanoid": "^5.1.6"
   }
 }

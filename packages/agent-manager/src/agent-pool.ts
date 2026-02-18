@@ -47,6 +47,42 @@ export class AgentPool {
     return [...this.agents.values()].map((a) => a.toRuntimeInfo());
   }
 
+  async update(id: AgentId, updates: Partial<AgentDefinition>): Promise<AgentProcess> {
+    const existing = this.agents.get(id);
+    if (!existing) {
+      throw new AgentNotFoundError(id);
+    }
+
+    // Merge definition, preserving fields not in updates
+    const merged: AgentDefinition = { ...existing.definition, ...updates, id };
+
+    // Stop the old process
+    await existing.stop();
+
+    // Resolve backend (may have changed)
+    const resolved = this.resolveBackend(merged);
+    const agent = new AgentProcess(merged, resolved, {
+      idleTimeoutMs: this.idleTimeoutMs,
+    });
+
+    try {
+      await agent.start();
+    } catch (err) {
+      // Restart old agent to avoid losing the agent entirely
+      try {
+        await existing.start();
+        this.agents.set(id, existing);
+      } catch {
+        // Old agent also failed to restart — remove from pool
+        this.agents.delete(id);
+      }
+      throw err;
+    }
+
+    this.agents.set(id, agent);
+    return agent;
+  }
+
   async remove(id: AgentId): Promise<void> {
     const agent = this.agents.get(id);
     if (!agent) return;

@@ -39,6 +39,8 @@ export interface UpdateAgentRequest {
   maxConcurrent?: number;
   persistent?: boolean;
   systemPrompt?: string;
+  /** Which AI backend to use for this agent. */
+  backend?: AIBackend;
 }
 
 export interface CreateCronRequest {

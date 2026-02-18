@@ -12,4 +12,5 @@ export const DEFAULTS = {
   LOG_LEVEL: LogLevel.INFO,
   MODE: RuntimeMode.STANDALONE,
   MEMORY_SERVER_PORT: 3002,
+  AUTH_ENABLED: false,
 } as const;

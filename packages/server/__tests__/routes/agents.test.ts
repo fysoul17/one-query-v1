@@ -183,10 +183,61 @@ describe('Agent routes', () => {
   });
 
   describe('PUT /api/agents/:id (update)', () => {
-    test('returns 501 not implemented', async () => {
-      const req = new Request('http://localhost/api/agents/abc', { method: 'PUT' });
-      const res = await routes.update(req, { id: 'abc' });
-      expect(res.status).toBe(501);
+    test('updates existing agent', async () => {
+      const def = makeDefinition({ id: 'agent-1', name: 'Original' });
+      pool.addAgent(def);
+
+      const req = new Request('http://localhost/api/agents/agent-1', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'Renamed' }),
+      });
+      const res = await routes.update(req, { id: 'agent-1' });
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data.name).toBe('Renamed');
+      expect(pool.updateCalls.length).toBe(1);
+      expect(pool.updateCalls[0]?.updates.name).toBe('Renamed');
+    });
+
+    test('throws NotFoundError for non-existent agent', async () => {
+      const req = new Request('http://localhost/api/agents/nope', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'X' }),
+      });
+      await expect(routes.update(req, { id: 'nope' })).rejects.toBeInstanceOf(NotFoundError);
+    });
+
+    test('preserves fields not in update', async () => {
+      const def = makeDefinition({
+        id: 'agent-1',
+        name: 'Original',
+        role: 'worker',
+        systemPrompt: 'Do stuff',
+      });
+      pool.addAgent(def);
+
+      const req = new Request('http://localhost/api/agents/agent-1', {
+        method: 'PUT',
+        body: JSON.stringify({ name: 'NewName' }),
+      });
+      const res = await routes.update(req, { id: 'agent-1' });
+      const body = await res.json();
+
+      expect(body.data.name).toBe('NewName');
+      expect(body.data.role).toBe('worker');
+    });
+
+    test('rejects invalid backend', async () => {
+      const def = makeDefinition({ id: 'agent-1' });
+      pool.addAgent(def);
+
+      const req = new Request('http://localhost/api/agents/agent-1', {
+        method: 'PUT',
+        body: JSON.stringify({ backend: 'invalid-backend' }),
+      });
+      await expect(routes.update(req, { id: 'agent-1' })).rejects.toBeInstanceOf(BadRequestError);
     });
   });
 
