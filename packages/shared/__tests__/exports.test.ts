@@ -110,7 +110,7 @@ describe('@autonomy/shared exports', () => {
     expect(shared.DEFAULTS.EMBEDDING_PROVIDER).toBe('stub');
     expect(shared.DEFAULTS.LOG_LEVEL).toBe('info');
     expect(shared.DEFAULTS.MODE).toBe('standalone');
-    expect(shared.DEFAULTS.MEMORY_SERVER_PORT).toBe(3002);
+    expect(shared.DEFAULTS.MEMORY_SERVER_PORT).toBe(7822);
     expect(shared.DEFAULTS.AUTH_ENABLED).toBe(false);
     expect(Object.keys(shared.DEFAULTS)).toHaveLength(12);
   });

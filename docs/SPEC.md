@@ -169,7 +169,7 @@ template/
 │   │   ├── embeddings/          # Pluggable embedding providers (stub, anthropic, openai)
 │   │   ├── graph/               # Graph stores (SQLite, Neo4j)
 │   │   └── ingestion/           # File parsers + chunking pipeline
-│   ├── memory-server/           # Standalone memory sidecar (:3002)
+│   ├── memory-server/           # Standalone memory sidecar (:7822)
 │   ├── cron-manager/            # Autonomous scheduling
 │   └── shared/                  # Types, utils, constants
 │

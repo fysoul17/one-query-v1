@@ -5,7 +5,7 @@ import { parseMemoryServerConfig } from '../src/config.ts';
 // Save original env and restore after each test
 let savedEnv: Record<string, string | undefined>;
 const CONFIG_KEYS = [
-  'PORT',
+  'MEMORY_SERVER_PORT',
   'DATA_DIR',
   'EMBEDDING_PROVIDER',
   'EMBEDDING_API_KEY',
@@ -48,19 +48,19 @@ describe('parseMemoryServerConfig', () => {
     expect(config.NEO4J_PASSWORD).toBeUndefined();
   });
 
-  test('reads PORT from env', () => {
-    Bun.env.PORT = '4000';
+  test('reads MEMORY_SERVER_PORT from env', () => {
+    Bun.env.MEMORY_SERVER_PORT = '4000';
     const config = parseMemoryServerConfig();
     expect(config.PORT).toBe(4000);
   });
 
-  test('throws on invalid PORT', () => {
-    Bun.env.PORT = 'abc';
+  test('throws on invalid MEMORY_SERVER_PORT', () => {
+    Bun.env.MEMORY_SERVER_PORT = 'abc';
     expect(() => parseMemoryServerConfig()).toThrow('Invalid PORT');
   });
 
-  test('throws on out-of-range PORT', () => {
-    Bun.env.PORT = '99999';
+  test('throws on out-of-range MEMORY_SERVER_PORT', () => {
+    Bun.env.MEMORY_SERVER_PORT = '99999';
     expect(() => parseMemoryServerConfig()).toThrow('Invalid PORT');
   });
 

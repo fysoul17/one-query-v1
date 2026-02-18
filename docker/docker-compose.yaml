@@ -44,12 +44,12 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.memory
     ports:
-      - "3002:3002"
+      - "7822:7822"
     volumes:
       - memory-data:/data
     environment:
       - DATA_DIR=/data
-      - PORT=3002
+      - MEMORY_SERVER_PORT=7822
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-stub}
       - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
@@ -61,7 +61,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:7822/health"]
       interval: 10s
       timeout: 5s
       retries: 5

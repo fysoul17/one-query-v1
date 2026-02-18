@@ -11,6 +11,6 @@ export const DEFAULTS = {
   EMBEDDING_PROVIDER: EmbeddingProviderName.STUB,
   LOG_LEVEL: LogLevel.INFO,
   MODE: RuntimeMode.STANDALONE,
-  MEMORY_SERVER_PORT: 3002,
+  MEMORY_SERVER_PORT: 7822,
   AUTH_ENABLED: false,
 } as const;

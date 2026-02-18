@@ -15,7 +15,7 @@ export interface MemoryServerConfig {
 export function parseMemoryServerConfig(): MemoryServerConfig {
   const env = typeof Bun !== 'undefined' ? Bun.env : process.env;
 
-  const portStr = env.PORT ?? String(DEFAULTS.MEMORY_SERVER_PORT);
+  const portStr = env.MEMORY_SERVER_PORT ?? String(DEFAULTS.MEMORY_SERVER_PORT);
   const port = parseInt(portStr, 10);
   if (Number.isNaN(port) || port < 0 || port > 65535) {
     throw new Error(`Invalid PORT: "${portStr}"`);

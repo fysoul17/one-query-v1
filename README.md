@@ -178,7 +178,7 @@ agent-forge/
 │   ├── shared/          # Types, interfaces, constants
 │   ├── agent-manager/   # CLIBackend, AgentProcess, AgentPool, BackendRegistry
 │   ├── memory/          # SQLite + LanceDB + Naive/Graph/Agentic RAG + embeddings + ingestion
-│   ├── memory-server/   # Standalone memory sidecar (:3002) — optional
+│   ├── memory-server/   # Standalone memory sidecar (:7822) — optional
 │   ├── conductor/       # Simple AI agent with memory + delegation
 │   ├── cron-manager/    # Scheduled tasks
 │   ├── control-plane/   # API key auth, usage tracking, quotas, instance registry
@@ -200,7 +200,7 @@ agent-forge/
        ├──▶ @autonomy/agent-manager
        ├──▶ @autonomy/memory
        │         │
-       │         └──▶ @autonomy/memory-server (optional sidecar :3002)
+       │         └──▶ @autonomy/memory-server (optional sidecar :7822)
        ├──▶ @autonomy/cron-manager
        └──▶ @autonomy/control-plane (auth, usage, quotas)
                     │
