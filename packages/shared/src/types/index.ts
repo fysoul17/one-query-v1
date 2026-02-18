@@ -8,4 +8,5 @@ export * from './control-plane.ts';
 export * from './cron.ts';
 export * from './debug.ts';
 export * from './memory.ts';
+export * from './plugin.ts';
 export * from './websocket.ts';

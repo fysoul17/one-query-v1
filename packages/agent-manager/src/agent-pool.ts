@@ -1,5 +1,10 @@
-import type { AgentDefinition, AgentId, AgentRuntimeInfo } from '@autonomy/shared';
-import { DEFAULTS } from '@autonomy/shared';
+import type {
+  AgentDefinition,
+  AgentId,
+  AgentRuntimeInfo,
+  HookRegistryInterface,
+} from '@autonomy/shared';
+import { DEFAULTS, HookName } from '@autonomy/shared';
 import { AgentProcess } from './agent-process.ts';
 import type { BackendRegistry } from './backends/registry.ts';
 import type { CLIBackend } from './backends/types.ts';
@@ -8,6 +13,7 @@ import { AgentManagerError, AgentNotFoundError, MaxAgentsReachedError } from './
 export interface AgentPoolOptions {
   maxAgents?: number;
   idleTimeoutMs?: number;
+  hookRegistry?: HookRegistryInterface;
 }
 
 export class AgentPool {
@@ -15,11 +21,13 @@ export class AgentPool {
   private backend: CLIBackend | BackendRegistry;
   private maxAgents: number;
   private idleTimeoutMs: number;
+  private hookRegistry?: HookRegistryInterface;
 
   constructor(backend: CLIBackend | BackendRegistry, options?: AgentPoolOptions) {
     this.backend = backend;
     this.maxAgents = options?.maxAgents ?? DEFAULTS.MAX_AGENTS;
     this.idleTimeoutMs = options?.idleTimeoutMs ?? 0;
+    this.hookRegistry = options?.hookRegistry;
   }
 
   async create(definition: AgentDefinition): Promise<AgentProcess> {
@@ -30,12 +38,35 @@ export class AgentPool {
       throw new MaxAgentsReachedError(this.maxAgents);
     }
 
-    const resolved = this.resolveBackend(definition);
-    const agent = new AgentProcess(definition, resolved, {
+    // Hook: onBeforeAgentCreate — plugins can transform or reject the definition
+    let processedDef = definition;
+    if (this.hookRegistry) {
+      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_AGENT_CREATE, {
+        definition,
+      });
+      if (hookResult === null || hookResult === undefined) {
+        throw new AgentManagerError(`Agent creation rejected by plugin`);
+      }
+      if (typeof hookResult === 'object' && 'definition' in hookResult) {
+        processedDef = (hookResult as { definition: AgentDefinition }).definition;
+      }
+    }
+
+    const resolved = this.resolveBackend(processedDef);
+    const agent = new AgentProcess(processedDef, resolved, {
       idleTimeoutMs: this.idleTimeoutMs,
     });
     await agent.start();
-    this.agents.set(definition.id, agent);
+    this.agents.set(processedDef.id, agent);
+
+    // Hook: onAfterAgentCreate — observation only
+    if (this.hookRegistry) {
+      await this.hookRegistry.emit(HookName.AFTER_AGENT_CREATE, {
+        definition: processedDef,
+        runtimeInfo: agent.toRuntimeInfo(),
+      });
+    }
+
     return agent;
   }
 
@@ -86,6 +117,17 @@ export class AgentPool {
   async remove(id: AgentId): Promise<void> {
     const agent = this.agents.get(id);
     if (!agent) return;
+
+    // Hook: onBeforeAgentDelete — plugins can reject deletion
+    if (this.hookRegistry) {
+      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_AGENT_DELETE, {
+        agentId: id,
+      });
+      if (hookResult === null || hookResult === undefined) {
+        return; // Deletion rejected by plugin — silently skip
+      }
+    }
+
     await agent.stop();
     this.agents.delete(id);
   }

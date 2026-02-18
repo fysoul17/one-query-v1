@@ -11,7 +11,8 @@ export interface ConductorDecision {
     | 'skip_memory'
     | 'ai_route'
     | 'ai_fallback'
-    | 'direct_response';
+    | 'direct_response'
+    | 'plugin_reject';
   targetAgentId?: AgentId;
   reason: string;
 }

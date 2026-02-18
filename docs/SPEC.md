@@ -171,6 +171,7 @@ template/
 │   │   └── ingestion/           # File parsers + chunking pipeline
 │   ├── memory-server/           # Standalone memory sidecar (:7822)
 │   ├── cron-manager/            # Autonomous scheduling
+│   ├── plugin-system/           # Event hooks, middleware pipeline, plugin manager
 │   └── shared/                  # Types, utils, constants
 │
 ├── dashboard/                   # Next.js 16.1 (built-in UI)
@@ -327,10 +328,18 @@ Dashboard Pages:
 │
 ├── ⚡ Automation          — Cron management (stub)
 │
-└── 📊 Activity            — Debug Console
-    ├── Timeline          — Who did what, when
-    ├── Filters           — Category, level, search
-    └── Live stream       — Real-time debug events via WebSocket
+├── 📊 Activity            — Debug Console
+│   ├── Timeline          — Who did what, when
+│   ├── Filters           — Category, level, search
+│   └── Live stream       — Real-time debug events via WebSocket
+│
+├── 💬 Sessions (planned)  — Conversation history
+│   ├── Session list      — Browse past conversations
+│   ├── Resume session    — Continue a previous conversation
+│   └── Delete session    — Remove conversation history
+│
+└── 🔐 Login (planned)     — Dashboard authentication
+    └── Basic auth        — Protect dashboard access
 ```
 
 ---
@@ -414,18 +423,73 @@ Server → Client:
 
 ---
 
-## 13. Extension Interface
+## 13. Plugin System
+
+The plugin system (`@autonomy/plugin-system`) provides event hooks and a middleware pipeline so products can customize behavior without modifying core source files.
+
+### Core Components
+
+| Component | Purpose |
+|-----------|---------|
+| `HookRegistry` | Central event bus — register handlers for hook points, emit fire-and-forget or waterfall events |
+| `MiddlewarePipeline` | Koa-style `(ctx, next)` middleware chain with priority ordering and short-circuit |
+| `PluginManager` | Plugin lifecycle — load, unload, shutdown; declarative hook registration |
+
+### Hook Points
+
+| Hook Name | Location | Can Modify | Can Reject |
+|-----------|----------|-----------|------------|
+| `onBeforeMessage` | Before memory search | message content | Yes (return null) |
+| `onAfterMemorySearch` | After memory search | memory results | No |
+| `onBeforeResponse` | Before AI call | prompt text | No |
+| `onAfterResponse` | After response generated | response content | No |
+| `onBeforeAgentCreate` | Before agent spawn | agent definition | Yes (return null) |
+| `onAfterAgentCreate` | After agent spawn | observation only | No |
+| `onBeforeAgentDelete` | Before agent stop | — | Yes (return null) |
+| `onBeforeMemoryStore` | Before memory store | content, metadata | Yes (return null) |
+
+### Design Principles
+
+- **Zero overhead** when no plugins registered (fast-path `if` checks)
+- **Error isolation** — buggy plugin handlers are caught and logged, never crash the system
+- **Priority ordering** — handlers execute in priority order (lower = first)
+- **Waterfall pattern** — data flows through handlers sequentially; returning `null` signals rejection
+
+### Plugin Definition
+
+```typescript
+const myPlugin: PluginDefinition = {
+  name: 'my-plugin',
+  version: '1.0.0',
+  hooks: [
+    { hookType: HookType.ON_MESSAGE, handler: (data) => { /* transform */ return data; } },
+  ],
+  initialize: (registry) => { /* optional setup */ },
+  shutdown: () => { /* optional cleanup */ },
+};
+```
+
+### Integration Points
+
+- **Conductor** accepts optional `hookRegistry` in `ConductorOptions` — fires 5 hooks during message processing
+- **AgentPool** accepts optional `hookRegistry` in `AgentPoolOptions` — fires 3 hooks during agent lifecycle
+- **Server bootstrap** creates `HookRegistry` + `PluginManager` and passes to both
+
+---
+
+## 14. Extension Interface
 
 How products customize this template:
 
 1. **Fork the repo**
 2. **Add agent definitions** in `/data/agents/` — or users create via Dashboard UI
-3. **Extend Conductor** — add routing logic, permissions, personality, pending question tracking
-4. **Ingest domain data** into Memory via Dashboard UI or API
-5. **Add packages** to monorepo for product-specific logic
-6. **Add channel adapters** by implementing webhook handlers on the server
-7. **Customize Dashboard** — add product-specific pages/sections
-8. **Customize Dockerfile** — add product dependencies
+3. **Register plugin hooks** — `onBeforeMessage`, `onAfterResponse`, `onBeforeAgentCreate`, `onBeforeMemoryStore` etc. (see Section 13)
+4. **Extend Conductor** — add routing logic, permissions, personality, pending question tracking
+5. **Ingest domain data** into Memory via Dashboard UI (file upload) or API
+6. **Add packages** to monorepo for product-specific logic
+7. **Add channel adapters** by implementing webhook handlers on the server
+8. **Customize Dashboard** — add product-specific pages/sections
+9. **Customize Dockerfile** — add product dependencies
 
 **The template provides the autonomous runtime.**
 **The product provides the agents, data, and domain logic.**
@@ -448,7 +512,7 @@ How products customize this template:
 
 ---
 
-## 14. Build Order
+## 15. Build Order
 
 Implement in this sequence.
 
@@ -465,3 +529,9 @@ Implement in this sequence.
 | 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose       | ✅ Done      |
 | 10   | memory (advanced) | Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI | ✅ Done      |
 | 11   | control-plane     | API key auth, usage tracking, quotas, instance registry, settings UI | ✅ Done      |
+| 12   | plugin-system     | Event hook system, middleware pipeline, `onMessage`/`onResponse`/`onAgentCreate` hooks | ✅ Done      |
+| 13   | sessions          | Conversation history API, session browse/resume/delete, dashboard sessions UI | 🔲 Planned   |
+| 14   | dashboard-enhance | File upload in memory page, dashboard auth (login), health auto-refresh widget | 🔲 Planned   |
+| 15   | agent-comms       | Direct agent-to-agent messaging, pub/sub channels, collaborative workflows | 🔲 Planned   |
+| 16   | production        | IP rate limiting, structured JSON logging, standardized streaming contract for all backends | 🔲 Planned   |
+| 17   | ci-cd             | GitHub Actions (test → lint → build → docker), E2E integration tests | 🔲 Planned   |

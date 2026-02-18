@@ -8,6 +8,8 @@ import {
   AgentOwner,
   type AgentRuntimeInfo,
   type ConductorDecision,
+  HookName,
+  type HookRegistryInterface,
   type MemorySearchResult,
   MemoryType,
 } from '@autonomy/shared';
@@ -78,14 +80,21 @@ export class Conductor {
   private activityLog: ActivityLog;
   private initialized = false;
   private options: ConductorOptions;
+  private hookRegistry?: HookRegistryInterface;
   private messageQueue: QueuedConductorMessage[] = [];
   private processing = false;
 
-  constructor(pool: AgentPool, memory: MemoryInterface, backend?: CLIBackend, options?: ConductorOptions) {
+  constructor(
+    pool: AgentPool,
+    memory: MemoryInterface,
+    backend?: CLIBackend,
+    options?: ConductorOptions,
+  ) {
     this.pool = pool;
     this.memory = memory;
     this.backend = backend;
     this.options = options ?? {};
+    this.hookRegistry = options?.hookRegistry;
     this.activityLog = new ActivityLog(options?.maxActivityLogSize);
   }
 
@@ -152,34 +161,58 @@ export class Conductor {
     try {
       const decisions: ConductorDecision[] = [];
 
+      // Hook: onBeforeMessage — plugins can transform or reject the message
+      const processedMessage = await this.runBeforeMessageHook(message);
+      if (processedMessage === null) {
+        this.processing = false;
+        this.processQueue();
+        return {
+          content: 'Message rejected by plugin.',
+          decisions: [
+            {
+              timestamp: new Date().toISOString(),
+              action: 'plugin_reject',
+              reason: 'onBeforeMessage returned null',
+            },
+          ],
+        };
+      }
+
       // 1. Search memory for context (non-fatal)
-      const memoryContext = await this.timedStep(
-        () => this.searchMemoryContext(message),
+      const rawMemoryContext = await this.timedStep(
+        () => this.searchMemoryContext(processedMessage),
         (durationMs, result) =>
           onEvent?.({
             type: ConductorEventType.MEMORY_SEARCH,
             content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
             durationMs,
             memoryResults: result?.entries.length ?? 0,
-            memoryQuery: message.content,
+            memoryQuery: processedMessage.content,
             memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
           }),
       );
+
+      // Hook: onAfterMemorySearch — plugins can transform memory results
+      const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
 
       // 2. Dispatch — delegate to specific agent or respond directly
       let responseContent: string;
       let responseAgentId: string | undefined;
 
-      if (message.targetAgentId) {
+      if (processedMessage.targetAgentId) {
         // Delegate to targeted agent
-        onEvent?.({ type: ConductorEventType.DELEGATING, agentId: message.targetAgentId });
-        responseContent = await this.delegateToAgent(message.targetAgentId, message, memoryContext);
-        responseAgentId = message.targetAgentId;
+        onEvent?.({ type: ConductorEventType.DELEGATING, agentId: processedMessage.targetAgentId });
+        responseContent = await this.delegateToAgent(
+          processedMessage.targetAgentId,
+          processedMessage,
+          memoryContext,
+        );
+        responseAgentId = processedMessage.targetAgentId;
         decisions.push({
           timestamp: new Date().toISOString(),
           action: 'delegate',
-          targetAgentId: message.targetAgentId,
-          reason: `Delegated to agent "${message.targetAgentId}"`,
+          targetAgentId: processedMessage.targetAgentId,
+          reason: `Delegated to agent "${processedMessage.targetAgentId}"`,
         });
         onEvent?.({
           type: ConductorEventType.DELEGATION_COMPLETE,
@@ -189,12 +222,24 @@ export class Conductor {
         });
       } else {
         // Conductor responds directly via AI backend
-        responseContent = await this.generateResponse(message, memoryContext, decisions, onEvent);
+        responseContent = await this.generateResponse(
+          processedMessage,
+          memoryContext,
+          decisions,
+          onEvent,
+        );
       }
+
+      // Hook: onAfterResponse — plugins can transform the response
+      responseContent = await this.runAfterResponseHook(
+        responseContent,
+        responseAgentId,
+        decisions,
+      );
 
       // 3. Store conversation in memory (non-fatal)
       await this.timedStep(
-        () => this.storeConversation(message, decisions),
+        () => this.storeConversation(processedMessage, decisions),
         (durationMs) =>
           onEvent?.({
             type: ConductorEventType.MEMORY_STORE,
@@ -205,9 +250,9 @@ export class Conductor {
 
       this.activityLog.record(
         ActivityType.MESSAGE,
-        `Handled message from "${message.senderName}"`,
+        `Handled message from "${processedMessage.senderName}"`,
         undefined,
-        { senderId: message.senderId },
+        { senderId: processedMessage.senderId },
       );
 
       const response: ConductorResponse = {
@@ -301,6 +346,43 @@ export class Conductor {
     this.initialized = false;
   }
 
+  private async runBeforeMessageHook(message: IncomingMessage): Promise<IncomingMessage | null> {
+    if (!this.hookRegistry) return message;
+    const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_MESSAGE, { message });
+    if (hookResult === null || hookResult === undefined) return null;
+    return (hookResult as { message: IncomingMessage }).message ?? message;
+  }
+
+  private async runAfterMemorySearchHook(
+    message: IncomingMessage,
+    memoryContext: MemorySearchResult | null,
+  ): Promise<MemorySearchResult | null> {
+    if (!this.hookRegistry) return memoryContext;
+    const hookResult = await this.hookRegistry.emitWaterfall(HookName.AFTER_MEMORY_SEARCH, {
+      message,
+      memoryResult: memoryContext,
+    });
+    if (hookResult && typeof hookResult === 'object' && 'memoryResult' in hookResult) {
+      return (hookResult as { memoryResult: MemorySearchResult | null }).memoryResult;
+    }
+    return memoryContext;
+  }
+
+  private async runAfterResponseHook(
+    responseContent: string,
+    responseAgentId: string | undefined,
+    decisions: ConductorDecision[],
+  ): Promise<string> {
+    if (!this.hookRegistry) return responseContent;
+    const hookResult = await this.hookRegistry.emitWaterfall(HookName.AFTER_RESPONSE, {
+      response: { content: responseContent, agentId: responseAgentId, decisions },
+    });
+    if (hookResult && typeof hookResult === 'object' && 'response' in hookResult) {
+      return (hookResult as { response: ConductorResponse }).response.content;
+    }
+    return responseContent;
+  }
+
   private async searchMemoryContext(message: IncomingMessage): Promise<MemorySearchResult | null> {
     try {
       return await this.memory.search({
@@ -341,6 +423,18 @@ export class Conductor {
         .map((e) => e.content)
         .join('\n---\n');
       prompt = `<memory-context>\n${contextSnippet}\n</memory-context>\n\nUser message: ${message.content}`;
+    }
+
+    // Hook: onBeforeResponse — plugins can transform the prompt
+    if (this.hookRegistry) {
+      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
+        message,
+        memoryContext,
+        prompt,
+      });
+      if (hookResult && typeof hookResult === 'object' && 'prompt' in hookResult) {
+        prompt = (hookResult as { prompt: string }).prompt;
+      }
     }
 
     try {
@@ -401,13 +495,37 @@ export class Conductor {
       return;
     }
 
+    // Hook: onBeforeMemoryStore — plugins can transform or skip memory storage
+    let content = message.content;
+    let metadata: Record<string, unknown> = { senderName: message.senderName };
+    if (this.hookRegistry) {
+      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_MEMORY_STORE, {
+        content,
+        metadata,
+        agentId: message.senderId,
+        sessionId: message.sessionId,
+      });
+      if (hookResult === null || hookResult === undefined) {
+        decisions.push({
+          timestamp: new Date().toISOString(),
+          action: 'skip_memory',
+          reason: 'Memory store skipped by plugin',
+        });
+        return;
+      }
+      if (typeof hookResult === 'object' && 'content' in hookResult) {
+        content = (hookResult as { content: string }).content;
+        metadata = (hookResult as { metadata: Record<string, unknown> }).metadata ?? metadata;
+      }
+    }
+
     try {
       await this.memory.store({
-        content: message.content,
+        content,
         type: MemoryType.SHORT_TERM,
         agentId: message.senderId,
         sessionId: message.sessionId,
-        metadata: { senderName: message.senderName },
+        metadata,
       });
       decisions.push({
         timestamp: new Date().toISOString(),

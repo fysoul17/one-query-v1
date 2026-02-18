@@ -1,4 +1,4 @@
-import type { AgentId, ConductorDecision } from '@autonomy/shared';
+import type { AgentId, ConductorDecision, HookRegistryInterface } from '@autonomy/shared';
 
 export interface IncomingMessage {
   content: string;
@@ -23,6 +23,8 @@ export interface ConductorOptions {
   maxQueueDepth?: number;
   /** Custom system prompt for the conductor's AI process. */
   systemPrompt?: string;
+  /** Optional hook registry for plugin system integration. */
+  hookRegistry?: HookRegistryInterface;
 }
 
 export const ConductorEventType = {

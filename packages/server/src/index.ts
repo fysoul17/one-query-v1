@@ -15,6 +15,7 @@ import {
 } from '@autonomy/control-plane';
 import { CronManager } from '@autonomy/cron-manager';
 import { createMemory, StubEmbeddingProvider } from '@autonomy/memory';
+import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
 import { DebugEventCategory, DebugEventLevel } from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
 import { parseEnvConfig } from './config.ts';
@@ -132,6 +133,19 @@ async function main() {
     }),
   );
 
+  // Initialize Plugin System
+  const hookRegistry = new HookRegistry();
+  const pluginManager = new PluginManager(hookRegistry);
+  console.log('[server] Plugin system initialized');
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.SYSTEM,
+      level: DebugEventLevel.INFO,
+      source: 'plugin-system.init',
+      message: 'Plugin system initialized',
+    }),
+  );
+
   // Initialize Backend Registry
   const registry = new DefaultBackendRegistry(config.AI_BACKEND);
   registry.register(new ClaudeBackend());
@@ -141,6 +155,7 @@ async function main() {
   const pool = new AgentPool(registry, {
     maxAgents: config.MAX_AGENTS,
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+    hookRegistry,
   });
   console.log('[server] Agent pool created');
   debugBus.emit(
@@ -156,6 +171,7 @@ async function main() {
   const conductor = new Conductor(pool, memory, registry.getDefault(), {
     maxAgents: config.MAX_AGENTS,
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+    hookRegistry,
   });
   await conductor.initialize();
   console.log('[server] Conductor initialized');
@@ -347,6 +363,7 @@ async function main() {
     instanceRegistry.deregister();
     ws.shutdown();
     debugWs.shutdown();
+    await pluginManager.shutdown();
     await cronManager.shutdown();
     await conductor.shutdown();
     await pool.shutdown();
