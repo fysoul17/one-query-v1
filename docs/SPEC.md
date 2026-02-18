@@ -464,10 +464,4 @@ Implement in this sequence.
 | 8    | cron-manager      | CronManager class, workflow executor, server routes, dashboard UI | ✅ Done      |
 | 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose       | ✅ Done      |
 | 10   | memory (advanced) | Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI | ✅ Done      |
-| 11   | control-plane     | Container orchestration, Auth, Billing, Portal                 | ⬜ Optional  |
-
-### Remaining Stubs
-
-These items exist as stubs and will be completed with their parent steps:
-
-- `PUT /api/config` — returns 501 (implement with Step 9 or standalone)
+| 11   | control-plane     | API key auth, usage tracking, quotas, instance registry, settings UI | ✅ Done      |

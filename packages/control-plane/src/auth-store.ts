@@ -141,7 +141,7 @@ export class AuthStore {
     if (!existing) throw new ApiKeyNotFoundError(id);
 
     const sets: string[] = [];
-    const values: unknown[] = [];
+    const values: (string | number | null)[] = [];
 
     if (updates.name !== undefined) {
       sets.push('name = ?');

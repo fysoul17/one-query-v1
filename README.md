@@ -21,7 +21,8 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 - An **Agent Pool** of AI agents with pluggable backends (per-agent backend selection)
 - **Persistent Memory** with vector search (LanceDB) and structured storage (SQLite)
 - A real-time **Cyberpunk Dashboard** with streaming chat, agent management, and debug console
-- **Scheduled tasks** via Cron Manager (planned)
+- **Scheduled tasks** via Cron Manager
+- **Control Plane** with API key auth, usage tracking, quotas, and instance registry
 
 **This is not a product. It's the engine.** Fork it, add your agent definitions and domain data, ship your product.
 
@@ -64,7 +65,7 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 │                        └──────────────────────────────────────────┘  │
 │                                                                      │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────────────────┐  │
-│  │  DebugBus   │  │ ActivityLog  │  │    Cron Manager (planned)  │  │
+│  │  DebugBus   │  │ ActivityLog  │  │       Cron Manager         │  │
 │  └─────────────┘  └──────────────┘  └────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────┘
 
@@ -72,7 +73,7 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 │                  Dashboard (Next.js 16.1)                             │
 │  ┌──────┐ ┌────────┐ ┌──────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ │
 │  │ Home │ │ Agents │ │ Chat │ │ Activity │ │ Memory │ │Automation│ │
-│  │ SSR  │ │  CRUD  │ │  WS  │ │  Debug   │ │ (stub) │ │  (stub)  │ │
+│  │ SSR  │ │  CRUD  │ │  WS  │ │  Debug   │ │Browser │ │  Crons   │ │
 │  └──────┘ └────────┘ └──────┘ └──────────┘ └────────┘ └──────────┘ │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -137,7 +138,7 @@ bun run dev:runtime    # Runtime server on :3000
 bun run dev:dashboard  # Dashboard on :3001
 ```
 
-### Docker (Coming Soon)
+### Docker
 
 ```bash
 docker-compose up
@@ -146,7 +147,7 @@ docker-compose up
 ### Run Tests
 
 ```bash
-bun run test           # All packages (481 tests)
+bun run test           # All packages (624 tests)
 bun run typecheck      # TypeScript checking
 bun run lint           # Biome linting
 ```
@@ -180,6 +181,7 @@ agent-forge/
 │   ├── memory-server/   # Standalone memory sidecar (:3002) — optional
 │   ├── conductor/       # Simple AI agent with memory + delegation
 │   ├── cron-manager/    # Scheduled tasks
+│   ├── control-plane/   # API key auth, usage tracking, quotas, instance registry
 │   └── server/          # Bun.serve HTTP + WebSocket + routes
 ├── dashboard/           # Next.js 16.1 cyberpunk dashboard
 ├── docs/
@@ -199,7 +201,8 @@ agent-forge/
        ├──▶ @autonomy/memory
        │         │
        │         └──▶ @autonomy/memory-server (optional sidecar :3002)
-       └──▶ @autonomy/cron-manager
+       ├──▶ @autonomy/cron-manager
+       └──▶ @autonomy/control-plane (auth, usage, quotas)
                     │
                     ▼
             @autonomy/conductor
@@ -240,18 +243,47 @@ bun run typecheck            # Type checking
 | GET | `/health` | System health + uptime |
 | GET | `/api/agents` | List all agents |
 | POST | `/api/agents` | Create agent |
+| PUT | `/api/agents/:id` | Update agent |
 | DELETE | `/api/agents/:id` | Delete agent |
 | POST | `/api/agents/:id/restart` | Restart agent |
 | GET | `/api/memory/search?q=` | Semantic search |
 | POST | `/api/memory/ingest` | Store to memory |
 | GET | `/api/memory/stats` | Memory statistics |
+| GET | `/api/crons` | List cron jobs |
+| POST | `/api/crons` | Create cron |
+| PUT | `/api/crons/:id` | Update cron |
+| DELETE | `/api/crons/:id` | Delete cron |
+| POST | `/api/crons/:id/trigger` | Trigger cron manually |
 | GET | `/api/activity` | Activity log |
 | GET | `/api/config` | Runtime config |
+| PUT | `/api/config` | Update config |
+| GET | `/api/auth/keys` | List API keys |
+| POST | `/api/auth/keys` | Create API key |
+| PUT | `/api/auth/keys/:id` | Update API key |
+| DELETE | `/api/auth/keys/:id` | Delete API key |
+| GET | `/api/usage/summary` | Usage analytics |
+| GET | `/api/usage/quotas/:keyId` | Get quotas |
+| PUT | `/api/usage/quotas/:keyId` | Update quotas |
+| GET | `/api/instances` | List runtime instances |
 
 ### WebSocket
 
 - **`/ws/chat`** — Chat with streaming responses, conductor status events, agent status broadcasts
 - **`/ws/debug`** — Real-time debug event stream with history replay
+
+### Dashboard Pages
+
+| Path | Description |
+|------|-------------|
+| `/` | Home — system health, agent stats, memory stats, instance status |
+| `/agents` | Agent management — CRUD, status badges, backend selection |
+| `/chat` | Real-time chat with streaming + pipeline visualization |
+| `/memory` | Memory browser — search, filter, file upload, graph visualization |
+| `/automation` | Cron management — create, edit, trigger scheduled tasks |
+| `/activity` | Debug console — live event stream, filters, search |
+| `/settings` | Runtime configuration — AI backend, max agents, etc. |
+| `/settings/keys` | API key management — create, enable, disable, delete |
+| `/settings/usage` | Usage analytics — daily/monthly request tracking |
 
 ---
 
@@ -267,13 +299,16 @@ bun run typecheck            # Type checking
 - [x] **Dashboard** — Cyberpunk UI with chat, agents, debug console
 - [x] **Backend Registry** — Per-agent backend selection, session support
 
-### Next Up
+### Infrastructure (Steps 8-11) ✅
 
 - [x] **Step 8: Cron Manager** — CronManager class, workflow executor, server routes, dashboard Automation page
 - [x] **Step 9: Docker** — Dockerfile.runtime, Dockerfile.dashboard, docker-compose.yaml
 - [x] **Step 10: Advanced Memory** — Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI
+- [x] **Step 11: Control Plane** — API key auth, usage tracking, quotas, instance registry, settings UI
+
+### Extension Points
+
 - [ ] **Channel Adapters** — Telegram, Discord, Slack (extension point)
-- [ ] **Step 11: Control Plane** — Container orchestration, auth, billing (optional, cloud mode)
 
 ---
 
