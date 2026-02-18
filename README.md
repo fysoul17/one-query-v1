@@ -103,7 +103,7 @@ Structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB. Naive R
 Full CRUD for AI agents with serial message queues, idle timeout auto-shutdown, configurable pool limits, session persistence (`--resume` flags), and ownership-based permissions (user-created vs conductor-created agents).
 
 ### Real-time Dashboard
-Cyberpunk-themed Next.js dashboard with glass-morphism cards, neon accents, and scanline effects. SSR for initial load, WebSocket for live updates. Includes streaming chat, agent cards with backend/status badges, and a full debug console.
+Cyberpunk-themed Next.js dashboard with glass-morphism cards, neon accents, and scanline effects. SSR for initial load, WebSocket for live updates. Includes streaming chat, agent cards with backend/status badges, and a full debug console. Optional username/password authentication via env vars — disabled by default for frictionless local dev, one line to enable for shared networks.
 
 ### Observability Built In
 DebugBus (ring buffer + pub/sub) streams events across 5 categories (conductor, agent, memory, websocket, system) to a filterable debug console with pause/resume, search, and JSON expansion.
@@ -265,6 +265,8 @@ bun run typecheck            # Type checking
 | GET | `/api/usage/quotas/:keyId` | Get quotas |
 | PUT | `/api/usage/quotas/:keyId` | Update quotas |
 | GET | `/api/instances` | List runtime instances |
+| POST | `/api/auth/login` | Dashboard login (Next.js) |
+| POST | `/api/auth/logout` | Dashboard logout (Next.js) |
 
 ### WebSocket
 
@@ -283,7 +285,9 @@ bun run typecheck            # Type checking
 | `/activity` | Debug console — live event stream, filters, search |
 | `/settings` | Runtime configuration — AI backend, max agents, etc. |
 | `/settings/keys` | API key management — create, enable, disable, delete |
+| `/sessions` | Session browser — browse, resume, delete conversations |
 | `/settings/usage` | Usage analytics — daily/monthly request tracking |
+| `/login` | Login page — shown when dashboard auth is enabled |
 
 ---
 
@@ -305,6 +309,12 @@ bun run typecheck            # Type checking
 - [x] **Step 9: Docker** — Dockerfile.runtime, Dockerfile.dashboard, docker-compose.yaml
 - [x] **Step 10: Advanced Memory** — Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI
 - [x] **Step 11: Control Plane** — API key auth, usage tracking, quotas, instance registry, settings UI
+
+### Extensibility (Steps 12-14) ✅
+
+- [x] **Step 12: Plugin System** — Event hooks, middleware pipeline, `onMessage`/`onResponse`/`onAgentCreate` hooks
+- [x] **Step 13: Sessions** — Conversation history API, session browse/resume/delete, dashboard sessions UI
+- [x] **Step 14: Dashboard Enhancements** — File upload, dashboard auth (login/logout), live health widget
 
 ### Extension Points
 

@@ -1,13 +1,19 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { updateConfig } from '@/lib/api';
 import type { EnvironmentConfig } from '@autonomy/shared';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { updateConfig } from '@/lib/api';
 
 export function ConfigForm({ config }: { config: EnvironmentConfig }) {
   const router = useRouter();
@@ -15,11 +21,11 @@ export function ConfigForm({ config }: { config: EnvironmentConfig }) {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const [aiBackend, setAiBackend] = useState(config.AI_BACKEND);
+  const [aiBackend, setAiBackend] = useState<string>(config.AI_BACKEND);
   const [maxAgents, setMaxAgents] = useState(String(config.MAX_AGENTS));
   const [idleTimeout, setIdleTimeout] = useState(String(config.IDLE_TIMEOUT_MS));
-  const [vectorProvider, setVectorProvider] = useState(config.VECTOR_PROVIDER);
-  const [logLevel, setLogLevel] = useState(config.LOG_LEVEL);
+  const [vectorProvider, setVectorProvider] = useState<string>(config.VECTOR_PROVIDER);
+  const [logLevel, setLogLevel] = useState<string>(config.LOG_LEVEL);
 
   async function handleSave() {
     setSaving(true);
@@ -112,12 +118,8 @@ export function ConfigForm({ config }: { config: EnvironmentConfig }) {
           </Select>
         </div>
 
-        {error && (
-          <p className="text-xs text-red-400">{error}</p>
-        )}
-        {success && (
-          <p className="text-xs text-green-400">Configuration saved successfully</p>
-        )}
+        {error && <p className="text-xs text-red-400">{error}</p>}
+        {success && <p className="text-xs text-green-400">Configuration saved successfully</p>}
 
         <Button onClick={handleSave} disabled={saving} className="w-full">
           {saving ? 'Saving...' : 'Save Configuration'}

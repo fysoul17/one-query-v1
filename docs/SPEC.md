@@ -138,18 +138,18 @@ SELF-HOSTED (docker-compose up)
 
 ## 3. Tech Stack
 
-| Layer            | Technology                                         | Why                                      |
-| ---------------- | -------------------------------------------------- | ---------------------------------------- |
-| Runtime          | Bun (latest)                                       | Fast, native TypeScript, built-in SQLite |
-| Language         | TypeScript 5+                                      | Type safety                              |
-| Monorepo         | Bun workspaces + Turborepo                         | Build orchestration                      |
-| AI Backend       | claude -p (default)                                | Pluggable: codex, gemini, goose          |
-| Vector DB        | LanceDB (embedded)                                 | 4MB idle, fast ANN, native TS SDK        |
-| Structured DB    | bun:sqlite                                         | Embedded, zero config                    |
-| Dashboard        | Next.js latest (App Router) + Tailwind + shadcn/ui | RSC, standalone output                   |
-| Container        | Docker + docker-compose                            | One-click deploy                         |
-| Linter           | Biome 2.3+                                         | Fast, unified linter + formatter         |
-| Tests            | bun:test                                           | Built-in, fast                           |
+| Layer         | Technology                                         | Why                                      |
+| ------------- | -------------------------------------------------- | ---------------------------------------- |
+| Runtime       | Bun (latest)                                       | Fast, native TypeScript, built-in SQLite |
+| Language      | TypeScript 5+                                      | Type safety                              |
+| Monorepo      | Bun workspaces + Turborepo                         | Build orchestration                      |
+| AI Backend    | claude -p (default)                                | Pluggable: codex, gemini, goose          |
+| Vector DB     | LanceDB (embedded)                                 | 4MB idle, fast ANN, native TS SDK        |
+| Structured DB | bun:sqlite                                         | Embedded, zero config                    |
+| Dashboard     | Next.js latest (App Router) + Tailwind + shadcn/ui | RSC, standalone output                   |
+| Container     | Docker + docker-compose                            | One-click deploy                         |
+| Linter        | Biome 2.3+                                         | Fast, unified linter + formatter         |
+| Tests         | bun:test                                           | Built-in, fast                           |
 
 ---
 
@@ -269,11 +269,11 @@ User sends message with targetAgentId
 
 Each agent can use a different CLI backend. The BackendRegistry manages multiple backends:
 
-| Capability          | Claude Code | Codex CLI | Gemini CLI | Goose    |
-| ------------------- | ----------- | --------- | ---------- | -------- |
-| Streaming           | ✅          | ✅        | ✅         | ✅       |
-| Session Persistence | ✅          | ✅        | ✅         | ✅       |
-| File Access         | ✅          | ✅        | ✅         | ✅       |
+| Capability          | Claude Code | Codex CLI | Gemini CLI | Goose |
+| ------------------- | ----------- | --------- | ---------- | ----- |
+| Streaming           | ✅          | ✅        | ✅         | ✅    |
+| Session Persistence | ✅          | ✅        | ✅         | ✅    |
+| File Access         | ✅          | ✅        | ✅         | ✅    |
 
 ---
 
@@ -281,10 +281,10 @@ Each agent can use a different CLI backend. The BackendRegistry manages multiple
 
 ### Storage Layer
 
-| Store             | Technology                  | Purpose                                       |
-| ----------------- | --------------------------- | --------------------------------------------- |
-| Structured data   | bun:sqlite (embedded)       | Sessions, config, agent registry               |
-| Vector embeddings | LanceDB (embedded, default) | Semantic search, RAG                           |
+| Store             | Technology                  | Purpose                          |
+| ----------------- | --------------------------- | -------------------------------- |
+| Structured data   | bun:sqlite (embedded)       | Sessions, config, agent registry |
+| Vector embeddings | LanceDB (embedded, default) | Semantic search, RAG             |
 
 ### Memory Types
 
@@ -338,8 +338,10 @@ Dashboard Pages:
 │   ├── Resume session    — Continue a previous conversation
 │   └── Delete session    — Remove conversation history
 │
-└── 🔐 Login (planned)     — Dashboard authentication
-    └── Basic auth        — Protect dashboard access
+└── 🔐 Login               — Dashboard authentication (env-var toggle)
+    ├── Username/password  — Via DASHBOARD_USER + DASHBOARD_PASSWORD env vars
+    ├── HMAC session token — Signed cookie, no server-side session store
+    └── Disabled by default — Zero friction for local dev
 ```
 
 ---
@@ -368,25 +370,34 @@ Backend selection, API keys (per provider), default model, idle timeout, max age
 
 ## 10. REST API
 
-| Method   | Path                      | Description                    |
-| -------- | ------------------------- | ------------------------------ |
-| `GET`    | `/health`                 | Health check + system status   |
-| `GET`    | `/api/agents`             | List all agents with status    |
-| `POST`   | `/api/agents`             | Create agent                   |
-| `PUT`    | `/api/agents/:id`         | Update agent                   |
-| `DELETE` | `/api/agents/:id`         | Delete agent                   |
-| `POST`   | `/api/agents/:id/restart` | Restart agent process          |
-| `GET`    | `/api/memory/search`      | Search memory                  |
-| `POST`   | `/api/memory/ingest`      | Ingest text                    |
-| `GET`    | `/api/memory/stats`       | Memory statistics              |
-| `GET`    | `/api/crons`              | List cron jobs                 |
-| `POST`   | `/api/crons`              | Create cron                    |
-| `PUT`    | `/api/crons/:id`          | Update cron                    |
-| `DELETE` | `/api/crons/:id`          | Delete cron                    |
-| `POST`   | `/api/crons/:id/trigger`  | Manually trigger cron          |
-| `GET`    | `/api/activity`           | Activity timeline              |
-| `GET`    | `/api/config`             | Get config (keys redacted)     |
-| `PUT`    | `/api/config`             | Update config                  |
+| Method   | Path                      | Description                  |
+| -------- | ------------------------- | ---------------------------- |
+| `GET`    | `/health`                 | Health check + system status |
+| `GET`    | `/api/agents`             | List all agents with status  |
+| `POST`   | `/api/agents`             | Create agent                 |
+| `PUT`    | `/api/agents/:id`         | Update agent                 |
+| `DELETE` | `/api/agents/:id`         | Delete agent                 |
+| `POST`   | `/api/agents/:id/restart` | Restart agent process        |
+| `GET`    | `/api/memory/search`      | Search memory                |
+| `POST`   | `/api/memory/ingest`      | Ingest text                  |
+| `GET`    | `/api/memory/stats`       | Memory statistics            |
+| `GET`    | `/api/crons`              | List cron jobs               |
+| `POST`   | `/api/crons`              | Create cron                  |
+| `PUT`    | `/api/crons/:id`          | Update cron                  |
+| `DELETE` | `/api/crons/:id`          | Delete cron                  |
+| `POST`   | `/api/crons/:id/trigger`  | Manually trigger cron        |
+| `GET`    | `/api/activity`           | Activity timeline            |
+| `GET`    | `/api/config`             | Get config (keys redacted)   |
+| `PUT`    | `/api/config`             | Update config                |
+
+### Dashboard Auth (Next.js API Routes)
+
+| Method   | Path                      | Description                  |
+| -------- | ------------------------- | ---------------------------- |
+| `POST`   | `/api/auth/login`         | Validate credentials, set session cookie |
+| `POST`   | `/api/auth/logout`        | Clear session cookie         |
+
+These are Next.js API routes (dashboard-side), not runtime routes. Auth is disabled by default — enabled when both `DASHBOARD_USER` and `DASHBOARD_PASSWORD` env vars are set. Session tokens are HMAC-signed cookies (no server-side session store).
 
 ---
 
@@ -410,16 +421,20 @@ Server → Client:
 
 ## 12. Environment Variables
 
-| Variable            | Required  | Default               | Description                             |
-| ------------------- | --------- | --------------------- | --------------------------------------- |
-| `DATA_DIR`          | No        | `./data`              | Data volume path                        |
-| `PORT`              | No        | `3001`                | Runtime server port                     |
-| `RUNTIME_URL`       | Dashboard | `http://localhost:3001` | Runtime API URL                        |
-| `AI_BACKEND`        | No        | `claude`              | CLI backend to use                      |
-| `IDLE_TIMEOUT_MS`   | No        | `300000`              | Agent idle timeout (5 min)              |
-| `MAX_AGENTS`        | No        | `10`                  | Max concurrent agents                   |
-| `VECTOR_PROVIDER`   | No        | `lancedb`             | Vector DB provider                      |
-| `LOG_LEVEL`         | No        | `info`                | Log level                               |
+| Variable          | Required  | Default                 | Description                |
+| ----------------- | --------- | ----------------------- | -------------------------- |
+| `DATA_DIR`        | No        | `./data`                | Data volume path           |
+| `PORT`            | No        | `3001`                  | Runtime server port        |
+| `RUNTIME_URL`     | Dashboard | `http://localhost:3001` | Runtime API URL            |
+| `AI_BACKEND`      | No        | `claude`                | CLI backend to use         |
+| `IDLE_TIMEOUT_MS` | No        | `300000`                | Agent idle timeout (5 min) |
+| `MAX_AGENTS`      | No        | `10`                    | Max concurrent agents      |
+| `VECTOR_PROVIDER` | No        | `lancedb`               | Vector DB provider         |
+| `LOG_LEVEL`       | No        | `info`                  | Log level                  |
+| `DASHBOARD_USER`  | No        | —                       | Dashboard login username (auth disabled if unset) |
+| `DASHBOARD_PASSWORD` | No     | —                       | Dashboard login password (auth disabled if unset) |
+| `DASHBOARD_SECRET` | No       | (uses `DASHBOARD_PASSWORD`) | Separate HMAC signing key for session tokens |
+| `DASHBOARD_SESSION_TTL` | No  | `86400`                 | Session duration in seconds (24h) |
 
 ---
 
@@ -429,24 +444,24 @@ The plugin system (`@autonomy/plugin-system`) provides event hooks and a middlew
 
 ### Core Components
 
-| Component | Purpose |
-|-----------|---------|
-| `HookRegistry` | Central event bus — register handlers for hook points, emit fire-and-forget or waterfall events |
-| `MiddlewarePipeline` | Koa-style `(ctx, next)` middleware chain with priority ordering and short-circuit |
-| `PluginManager` | Plugin lifecycle — load, unload, shutdown; declarative hook registration |
+| Component            | Purpose                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| `HookRegistry`       | Central event bus — register handlers for hook points, emit fire-and-forget or waterfall events |
+| `MiddlewarePipeline` | Koa-style `(ctx, next)` middleware chain with priority ordering and short-circuit               |
+| `PluginManager`      | Plugin lifecycle — load, unload, shutdown; declarative hook registration                        |
 
 ### Hook Points
 
-| Hook Name | Location | Can Modify | Can Reject |
-|-----------|----------|-----------|------------|
-| `onBeforeMessage` | Before memory search | message content | Yes (return null) |
-| `onAfterMemorySearch` | After memory search | memory results | No |
-| `onBeforeResponse` | Before AI call | prompt text | No |
-| `onAfterResponse` | After response generated | response content | No |
-| `onBeforeAgentCreate` | Before agent spawn | agent definition | Yes (return null) |
-| `onAfterAgentCreate` | After agent spawn | observation only | No |
-| `onBeforeAgentDelete` | Before agent stop | — | Yes (return null) |
-| `onBeforeMemoryStore` | Before memory store | content, metadata | Yes (return null) |
+| Hook Name             | Location                 | Can Modify        | Can Reject        |
+| --------------------- | ------------------------ | ----------------- | ----------------- |
+| `onBeforeMessage`     | Before memory search     | message content   | Yes (return null) |
+| `onAfterMemorySearch` | After memory search      | memory results    | No                |
+| `onBeforeResponse`    | Before AI call           | prompt text       | No                |
+| `onAfterResponse`     | After response generated | response content  | No                |
+| `onBeforeAgentCreate` | Before agent spawn       | agent definition  | Yes (return null) |
+| `onAfterAgentCreate`  | After agent spawn        | observation only  | No                |
+| `onBeforeAgentDelete` | Before agent stop        | —                 | Yes (return null) |
+| `onBeforeMemoryStore` | Before memory store      | content, metadata | Yes (return null) |
 
 ### Design Principles
 
@@ -459,13 +474,22 @@ The plugin system (`@autonomy/plugin-system`) provides event hooks and a middlew
 
 ```typescript
 const myPlugin: PluginDefinition = {
-  name: 'my-plugin',
-  version: '1.0.0',
+  name: "my-plugin",
+  version: "1.0.0",
   hooks: [
-    { hookType: HookType.ON_MESSAGE, handler: (data) => { /* transform */ return data; } },
+    {
+      hookType: HookType.ON_MESSAGE,
+      handler: (data) => {
+        /* transform */ return data;
+      },
+    },
   ],
-  initialize: (registry) => { /* optional setup */ },
-  shutdown: () => { /* optional cleanup */ },
+  initialize: (registry) => {
+    /* optional setup */
+  },
+  shutdown: () => {
+    /* optional cleanup */
+  },
 };
 ```
 
@@ -516,22 +540,21 @@ How products customize this template:
 
 Implement in this sequence.
 
-| Step | Package           | What                                                           | Status      |
-| ---- | ----------------- | -------------------------------------------------------------- | ----------- |
-| 1    | Scaffold          | Bun workspace, Turborepo, shared types                         | ✅ Done      |
-| 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend            | ✅ Done      |
-| 3    | memory            | bun:sqlite schema, LanceDB integration, short/long-term, naive RAG | ✅ Done  |
-| 4    | conductor         | Conductor class, agent CRUD, memory integration                | ✅ Done      |
-| 5    | server            | REST API, WebSocket, Bun.serve entry                           | ✅ Done      |
-| 6    | dashboard         | Next.js 16.1, agent management, chat, debug console            | ✅ Done      |
-| 7    | backends          | BackendRegistry, per-agent backend selection, session support   | ✅ Done      |
-| 8    | cron-manager      | CronManager class, workflow executor, server routes, dashboard UI | ✅ Done      |
-| 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose       | ✅ Done      |
-| 10   | memory (advanced) | Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI | ✅ Done      |
-| 11   | control-plane     | API key auth, usage tracking, quotas, instance registry, settings UI | ✅ Done      |
-| 12   | plugin-system     | Event hook system, middleware pipeline, `onMessage`/`onResponse`/`onAgentCreate` hooks | ✅ Done      |
-| 13   | sessions          | Conversation history API, session browse/resume/delete, dashboard sessions UI | 🔲 Planned   |
-| 14   | dashboard-enhance | File upload in memory page, dashboard auth (login), health auto-refresh widget | 🔲 Planned   |
-| 15   | agent-comms       | Direct agent-to-agent messaging, pub/sub channels, collaborative workflows | 🔲 Planned   |
-| 16   | production        | IP rate limiting, structured JSON logging, standardized streaming contract for all backends | 🔲 Planned   |
-| 17   | ci-cd             | GitHub Actions (test → lint → build → docker), E2E integration tests | 🔲 Planned   |
+| Step | Package           | What                                                                                                           | Status     |
+| ---- | ----------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
+| 1    | Scaffold          | Bun workspace, Turborepo, shared types                                                                         | ✅ Done    |
+| 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend                                                            | ✅ Done    |
+| 3    | memory            | bun:sqlite schema, LanceDB integration, short/long-term, naive RAG                                             | ✅ Done    |
+| 4    | conductor         | Conductor class, agent CRUD, memory integration                                                                | ✅ Done    |
+| 5    | server            | REST API, WebSocket, Bun.serve entry                                                                           | ✅ Done    |
+| 6    | dashboard         | Next.js 16.1, agent management, chat, debug console                                                            | ✅ Done    |
+| 7    | backends          | BackendRegistry, per-agent backend selection, session support                                                  | ✅ Done    |
+| 8    | cron-manager      | CronManager class, workflow executor, server routes, dashboard UI                                              | ✅ Done    |
+| 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose                                                       | ✅ Done    |
+| 10   | memory (advanced) | Memory-server sidecar, pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph, memory browser UI | ✅ Done    |
+| 11   | control-plane     | API key auth, usage tracking, quotas, instance registry, settings UI                                           | ✅ Done    |
+| 12   | plugin-system     | Event hook system, middleware pipeline, `onMessage`/`onResponse`/`onAgentCreate` hooks                         | ✅ Done    |
+| 13   | sessions          | Conversation history API, session browse/resume/delete, dashboard sessions UI                                  | ✅ Done    |
+| 14   | dashboard-enhance | File upload in memory page, dashboard auth (login), health auto-refresh widget                                 | ✅ Done    |
+| 15   | production        | IP rate limiting, structured JSON logging, standardized streaming contract for all backends                    | 🔲 Planned |
+| 16   | ci-cd             | GitHub Actions (test → lint → build → docker), E2E integration tests                                           | 🔲 Planned |

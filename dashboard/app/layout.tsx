@@ -1,8 +1,5 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { AppSidebar } from '@/components/layout/app-sidebar';
-import { SidebarProvider } from '@/components/ui/sidebar';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import './globals.css';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
@@ -19,12 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body
         className={`${geist.variable} ${geistMono.variable} font-sans antialiased bg-grid scanlines`}
       >
-        <TooltipProvider>
-          <SidebarProvider>
-            <AppSidebar />
-            <main className="flex-1 overflow-auto">{children}</main>
-          </SidebarProvider>
-        </TooltipProvider>
+        {children}
       </body>
     </html>
   );

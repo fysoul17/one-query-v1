@@ -8,6 +8,7 @@ import {
   History,
   Home,
   Key,
+  LogOut,
   MessageSquare,
   Settings,
   Terminal,
@@ -44,7 +45,7 @@ const adminNav = [
   { href: '/settings/usage', label: 'Usage', icon: BarChart3 },
 ];
 
-export function AppSidebar() {
+export function AppSidebar({ authEnabled }: { authEnabled?: boolean }) {
   return (
     <Sidebar className="border-r border-sidebar-border">
       <SidebarHeader className="px-4 py-4">
@@ -98,6 +99,19 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="px-4 py-3 border-t border-sidebar-border">
+        {authEnabled && (
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+            onClick={async () => {
+              await fetch('/api/auth/logout', { method: 'POST' });
+              window.location.href = '/login';
+            }}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span>Sign out</span>
+          </button>
+        )}
         <p className="text-[10px] text-muted-foreground text-center">Powered by Claude</p>
       </SidebarFooter>
     </Sidebar>
