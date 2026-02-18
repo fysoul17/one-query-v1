@@ -1,4 +1,4 @@
-import type { AIBackend, BackendCapabilities } from '@autonomy/shared';
+import type { AIBackend, BackendCapabilities, StreamEvent } from '@autonomy/shared';
 
 /** Configuration passed to CLIBackend.spawn() to create a process. */
 export interface BackendSpawnConfig {
@@ -18,6 +18,8 @@ export interface BackendSpawnConfig {
 export interface BackendProcess {
   /** Send a message and return the response text. */
   send(message: string): Promise<string>;
+  /** Stream a response as a sequence of events. Optional — not all backends support it. */
+  sendStreaming?(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent>;
   /** Stop the underlying process. Idempotent. */
   stop(): Promise<void>;
   /** Whether the process is currently alive and can receive messages. */

@@ -1,4 +1,4 @@
-import { AIBackend, BACKEND_CAPABILITIES } from '@autonomy/shared';
+import { AIBackend, BACKEND_CAPABILITIES, type StreamEvent } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
 import type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
 
@@ -75,6 +75,81 @@ class ClaudeProcess implements BackendProcess {
     }
 
     return stdout.trim();
+  }
+
+  async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    if (!this._alive) {
+      yield { type: 'error', error: 'Process is not alive' };
+      return;
+    }
+
+    if (signal?.aborted) {
+      yield { type: 'error', error: 'Aborted' };
+      return;
+    }
+
+    const args = this.buildArgs(message);
+    const env = buildSafeEnv();
+
+    this._process = Bun.spawn(['claude', ...args], {
+      cwd: this.config.cwd ?? process.cwd(),
+      env,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const proc = this._process;
+    const stdoutStream = proc.stdout as ReadableStream;
+    const reader = stdoutStream.getReader();
+    const decoder = new TextDecoder();
+
+    // Abort handling: kill the process when signal fires
+    const onAbort = () => {
+      try {
+        if (proc.exitCode === null) proc.kill();
+      } catch {
+        // Ignore kill errors
+      }
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    try {
+      while (true) {
+        if (signal?.aborted) {
+          yield { type: 'error', error: 'Aborted' };
+          return;
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value, { stream: true });
+        if (text) {
+          yield { type: 'chunk', content: text };
+        }
+      }
+
+      // Flush decoder
+      const remaining = decoder.decode();
+      if (remaining) {
+        yield { type: 'chunk', content: remaining };
+      }
+
+      const exitCode = await proc.exited;
+      this._process = null;
+
+      if (exitCode !== 0) {
+        yield { type: 'error', error: `Process exited with code ${exitCode}` };
+      } else {
+        yield { type: 'complete' };
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', error: msg };
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      reader.releaseLock();
+    }
   }
 
   async stop(): Promise<void> {

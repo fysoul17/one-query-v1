@@ -1,5 +1,6 @@
 import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
 import type { MemoryInterface } from '@autonomy/memory';
+import type { StreamEvent } from '@autonomy/shared';
 import {
   type ActivityEntry,
   ActivityType,
@@ -10,6 +11,7 @@ import {
   type ConductorDecision,
   HookName,
   type HookRegistryInterface,
+  Logger,
   type MemorySearchResult,
   MemoryType,
 } from '@autonomy/shared';
@@ -32,6 +34,8 @@ import {
 
 const DEFAULT_MAX_DELEGATION_DEPTH = 5;
 const DEFAULT_MAX_QUEUE_DEPTH = 50;
+
+const conductorLogger = new Logger({ context: { source: 'conductor' } });
 
 const DEFAULT_SYSTEM_PROMPT =
   'You are an AI assistant. Answer the user clearly and helpfully. If memory context is provided, use it to inform your response.';
@@ -115,7 +119,7 @@ export class Conductor {
         this.activityLog.record(ActivityType.MESSAGE, 'Conductor AI process initialized');
       } catch (error) {
         const detail = error instanceof Error ? error.message : 'Unknown error';
-        console.warn(`[conductor] Failed to initialize AI backend: ${detail}`);
+        conductorLogger.warn('Failed to initialize AI backend', { error: detail });
         this.activityLog.record(ActivityType.ERROR, 'AI backend initialization failed');
       }
     }
@@ -150,6 +154,123 @@ export class Conductor {
     }
 
     return this.executeMessage(message, onEvent);
+  }
+
+  async *handleMessageStreaming(
+    message: IncomingMessage,
+    onEvent?: OnConductorEvent,
+  ): AsyncGenerator<StreamEvent> {
+    this.ensureInitialized();
+    this.checkDelegationDepth(message);
+
+    const decisions: ConductorDecision[] = [];
+
+    // Hook: onBeforeMessage
+    const processedMessage = await this.runBeforeMessageHook(message);
+    if (processedMessage === null) {
+      yield { type: 'error', error: 'Message rejected by plugin.' };
+      return;
+    }
+
+    // Memory search
+    const rawMemoryContext = await this.timedStep(
+      () => this.searchMemoryContext(processedMessage),
+      (durationMs, result) =>
+        onEvent?.({
+          type: ConductorEventType.MEMORY_SEARCH,
+          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
+          durationMs,
+          memoryResults: result?.entries.length ?? 0,
+          memoryQuery: processedMessage.content,
+          memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
+        }),
+    );
+    const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
+
+    let accumulatedContent = '';
+
+    if (processedMessage.targetAgentId) {
+      // Delegate to agent — stream from agent pool
+      onEvent?.({ type: ConductorEventType.DELEGATING, agentId: processedMessage.targetAgentId });
+
+      const augmentedMessage = this.buildMemoryAugmentedPrompt(
+        processedMessage.content,
+        memoryContext,
+      );
+
+      try {
+        for await (const event of this.pool.sendMessageStreaming(
+          processedMessage.targetAgentId,
+          augmentedMessage,
+        )) {
+          if (event.type === 'chunk' && event.content) {
+            accumulatedContent += event.content;
+          }
+          yield event;
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        yield { type: 'error', error: msg };
+        return;
+      }
+    } else {
+      // Conductor responds directly
+      if (!this.backendProcess) {
+        yield { type: 'chunk', content: FALLBACK_NO_BACKEND };
+        yield { type: 'complete' };
+        return;
+      }
+
+      onEvent?.({
+        type: ConductorEventType.RESPONDING,
+        content: 'Conductor is responding...',
+        dispatchTarget: 'conductor',
+      });
+
+      let prompt = this.buildMemoryAugmentedPrompt(processedMessage.content, memoryContext);
+
+      // Hook: onBeforeResponse
+      if (this.hookRegistry) {
+        const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
+          message: processedMessage,
+          memoryContext,
+          prompt,
+        });
+        if (hookResult && typeof hookResult === 'object' && 'prompt' in hookResult) {
+          prompt = (hookResult as { prompt: string }).prompt;
+        }
+      }
+
+      try {
+        if (this.backendProcess.sendStreaming) {
+          for await (const event of this.backendProcess.sendStreaming(prompt)) {
+            if (event.type === 'chunk' && event.content) {
+              accumulatedContent += event.content;
+            }
+            yield event;
+          }
+        } else {
+          const result = await this.backendProcess.send(prompt);
+          accumulatedContent = result;
+          yield { type: 'chunk', content: result };
+          yield { type: 'complete' };
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        yield { type: 'error', error: msg };
+        return;
+      }
+    }
+
+    // Hook: onAfterResponse
+    await this.runAfterResponseHook(accumulatedContent, processedMessage.targetAgentId, decisions);
+
+    // Store conversation in memory (non-fatal)
+    try {
+      await this.storeConversation(processedMessage, decisions);
+    } catch {
+      // Memory store failures are non-fatal
+    }
   }
 
   private async executeMessage(
@@ -346,6 +467,18 @@ export class Conductor {
     this.initialized = false;
   }
 
+  private buildMemoryAugmentedPrompt(
+    content: string,
+    memoryContext: MemorySearchResult | null,
+  ): string {
+    if (!memoryContext || memoryContext.entries.length === 0) return content;
+    const contextSnippet = memoryContext.entries
+      .slice(0, 3)
+      .map((e) => e.content)
+      .join('\n---\n');
+    return `<memory-context>\n${contextSnippet}\n</memory-context>\n\nUser message: ${content}`;
+  }
+
   private async runBeforeMessageHook(message: IncomingMessage): Promise<IncomingMessage | null> {
     if (!this.hookRegistry) return message;
     const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_MESSAGE, { message });
@@ -416,14 +549,7 @@ export class Conductor {
       dispatchTarget: 'conductor',
     });
 
-    let prompt = message.content;
-    if (memoryContext && memoryContext.entries.length > 0) {
-      const contextSnippet = memoryContext.entries
-        .slice(0, 3)
-        .map((e) => e.content)
-        .join('\n---\n');
-      prompt = `<memory-context>\n${contextSnippet}\n</memory-context>\n\nUser message: ${message.content}`;
-    }
+    let prompt = this.buildMemoryAugmentedPrompt(message.content, memoryContext);
 
     // Hook: onBeforeResponse — plugins can transform the prompt
     if (this.hookRegistry) {
@@ -463,14 +589,7 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
   ): Promise<string> {
-    let augmentedMessage = message.content;
-    if (memoryContext && memoryContext.entries.length > 0) {
-      const contextSnippet = memoryContext.entries
-        .slice(0, 3)
-        .map((e) => e.content)
-        .join('\n---\n');
-      augmentedMessage = `<memory-context>\n${contextSnippet}\n</memory-context>\n\nUser message: ${message.content}`;
-    }
+    const augmentedMessage = this.buildMemoryAugmentedPrompt(message.content, memoryContext);
 
     try {
       const result = await this.pool.sendMessage(agentId, augmentedMessage);

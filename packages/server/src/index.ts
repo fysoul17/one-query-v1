@@ -16,12 +16,13 @@ import {
 import { CronManager } from '@autonomy/cron-manager';
 import { createMemory, StubEmbeddingProvider } from '@autonomy/memory';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
-import { DebugEventCategory, DebugEventLevel } from '@autonomy/shared';
+import { DebugEventCategory, DebugEventLevel, Logger } from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
 import { parseEnvConfig } from './config.ts';
 import { ConfigManager } from './config-manager.ts';
 import { DebugBus, makeDebugEvent } from './debug-bus.ts';
 import { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
+import { RateLimiter } from './rate-limiter.ts';
 import { Router } from './router.ts';
 import { createActivityRoute } from './routes/activity.ts';
 import { createAgentRoutes } from './routes/agents.ts';
@@ -49,6 +50,7 @@ export {
   jsonResponse,
   parseJsonBody,
 } from './middleware.ts';
+export { RateLimiter, type RateLimiterConfig, type RateLimitResult } from './rate-limiter.ts';
 export { type RouteHandler, type RouteParams, Router } from './router.ts';
 export { createActivityRoute } from './routes/activity.ts';
 export { createAgentRoutes } from './routes/agents.ts';
@@ -75,13 +77,14 @@ type CombinedWSData = (WSData & { type: 'chat' }) | DebugWSData;
 async function main() {
   const startTime = Date.now();
   const config = parseEnvConfig();
+  const logger = new Logger({ level: config.LOG_LEVEL, context: { source: 'server' } });
   const configManager = new ConfigManager(config);
   configManager.initialize();
   const env = typeof Bun !== 'undefined' ? Bun.env : process.env;
   const debugWsEnabled = env.ENABLE_DEBUG_WS !== 'false';
   const debugWsToken = env.DEBUG_WS_TOKEN;
 
-  console.log(`[server] Starting with config: PORT=${config.PORT}, BACKEND=${config.AI_BACKEND}`);
+  logger.info('Server starting', { port: config.PORT, backend: config.AI_BACKEND });
 
   // Initialize DebugBus
   const debugBus = new DebugBus(500);
@@ -115,9 +118,7 @@ async function main() {
     heartbeatIntervalMs: 30_000,
     staleThresholdMs: 90_000,
   });
-  console.log(
-    `[server] Control plane initialized (auth=${config.AUTH_ENABLED ? 'enabled' : 'disabled'})`,
-  );
+  logger.info('Control plane initialized', { auth: config.AUTH_ENABLED });
 
   // Initialize Memory (uses MemoryClient if MEMORY_URL is set, otherwise embedded)
   const memory = createMemory({
@@ -128,7 +129,7 @@ async function main() {
     memoryUrl: config.MEMORY_URL,
   });
   await memory.initialize();
-  console.log('[server] Memory initialized');
+  logger.info('Memory initialized');
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.MEMORY,
@@ -141,7 +142,7 @@ async function main() {
   // Initialize Plugin System
   const hookRegistry = new HookRegistry();
   const pluginManager = new PluginManager(hookRegistry);
-  console.log('[server] Plugin system initialized');
+  logger.info('Plugin system initialized');
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.SYSTEM,
@@ -162,7 +163,10 @@ async function main() {
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
     hookRegistry,
   });
-  console.log('[server] Agent pool created');
+  logger.info('Agent pool created', {
+    maxAgents: config.MAX_AGENTS,
+    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+  });
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.AGENT,
@@ -179,7 +183,7 @@ async function main() {
     hookRegistry,
   });
   await conductor.initialize();
-  console.log('[server] Conductor initialized');
+  logger.info('Conductor initialized');
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.CONDUCTOR,
@@ -192,19 +196,29 @@ async function main() {
   // Initialize CronManager
   const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
   await cronManager.initialize();
-  console.log('[server] CronManager initialized');
+  logger.info('CronManager initialized');
 
   // Register instance
   instanceRegistry.register(config.PORT, '0.0.0');
-  console.log('[server] Instance registered');
+  logger.info('Instance registered');
+
+  // Initialize Rate Limiter
+  const rateLimiter = new RateLimiter({
+    maxRequests: config.RATE_LIMIT_MAX,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    trustProxy: config.TRUST_PROXY,
+  });
+  logger.info('Rate limiter initialized', {
+    maxRequests: config.RATE_LIMIT_MAX,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    trustProxy: config.TRUST_PROXY,
+  });
 
   // Create WebSocket handlers
   const ws = createWebSocketHandler(conductor, debugBus, sessionStore);
   const debugWs = createDebugWebSocketHandler(debugBus);
   if (debugWsEnabled) {
-    console.log(
-      `[server] Debug WebSocket enabled at /ws/debug${debugWsToken ? ' (token-protected)' : ' (no token — use DEBUG_WS_TOKEN for auth)'}`,
-    );
+    logger.info('Debug WebSocket enabled', { path: '/ws/debug', tokenProtected: !!debugWsToken });
   }
 
   // Build HTTP router
@@ -292,6 +306,10 @@ async function main() {
     async fetch(req, server) {
       const url = new URL(req.url);
 
+      // Rate limit check (before auth, applies to all paths except /health)
+      const rlResult = rateLimiter.check(req, server);
+      if (!rlResult.allowed) return rateLimiter.toResponse(rlResult);
+
       // Chat WebSocket upgrade (with auth support via query token)
       if (url.pathname === '/ws/chat') {
         // Auth for WS: check token query param if auth enabled
@@ -335,7 +353,7 @@ async function main() {
       const response = await router.handle(req);
       usageTracker.track(req, response, authResult, performance.now() - start);
 
-      return response;
+      return rateLimiter.addHeaders(response, rlResult);
     },
 
     websocket: {
@@ -363,7 +381,7 @@ async function main() {
     },
   });
 
-  console.log(`[server] Listening on http://localhost:${server.port}`);
+  logger.info('Server listening', { port: server.port, url: `http://localhost:${server.port}` });
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.SYSTEM,
@@ -376,7 +394,7 @@ async function main() {
 
   // Graceful shutdown
   const shutdown = async () => {
-    console.log('[server] Shutting down...');
+    logger.warn('Server shutting down');
     debugBus.emit(
       makeDebugEvent({
         category: DebugEventCategory.SYSTEM,
@@ -395,7 +413,7 @@ async function main() {
     await memory.shutdown();
     controlPlaneDb.close();
     server.stop();
-    console.log('[server] Shutdown complete');
+    logger.info('Shutdown complete');
     process.exit(0);
   };
 
@@ -408,7 +426,10 @@ const isMainModule = typeof Bun !== 'undefined' && Bun.main === import.meta.path
 
 if (isMainModule) {
   main().catch((error) => {
-    console.error('[server] Fatal error:', error);
+    const fatalLogger = new Logger({ level: 'error', context: { source: 'server' } });
+    fatalLogger.error('Fatal error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
     process.exit(1);
   });
 }

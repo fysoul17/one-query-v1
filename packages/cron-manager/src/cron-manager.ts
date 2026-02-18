@@ -1,7 +1,10 @@
 import type { Conductor } from '@autonomy/conductor';
 import type { CronConfig, CronEntry, CronExecutionLog, CronWorkflow } from '@autonomy/shared';
+import { Logger } from '@autonomy/shared';
 import { Cron } from 'croner';
 import { CronNotFoundError, CronNotInitializedError, CronScheduleError } from './errors.ts';
+
+const cronLogger = new Logger({ context: { source: 'cron-manager' } });
 
 export interface CronManagerOptions {
   dataDir?: string;
@@ -164,7 +167,10 @@ export class CronManager {
   private scheduleJob(entry: CronEntry): void {
     const job = new Cron(entry.schedule, { timezone: entry.timezone }, () => {
       this.executeWorkflow(entry).catch((err) => {
-        console.error(`[cron-manager] Scheduled execution failed for "${entry.name}":`, err);
+        cronLogger.error('Scheduled execution failed', {
+          cronName: entry.name,
+          error: err instanceof Error ? err.message : String(err),
+        });
       });
     });
     this.jobs.set(entry.id, job);

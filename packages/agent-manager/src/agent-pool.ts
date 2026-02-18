@@ -3,6 +3,7 @@ import type {
   AgentId,
   AgentRuntimeInfo,
   HookRegistryInterface,
+  StreamEvent,
 } from '@autonomy/shared';
 import { DEFAULTS, HookName } from '@autonomy/shared';
 import { AgentProcess } from './agent-process.ts';
@@ -138,6 +139,18 @@ export class AgentPool {
       throw new AgentNotFoundError(id);
     }
     return agent.sendMessage(message);
+  }
+
+  async *sendMessageStreaming(
+    id: AgentId,
+    message: string,
+    signal?: AbortSignal,
+  ): AsyncGenerator<StreamEvent> {
+    const agent = this.agents.get(id);
+    if (!agent) {
+      throw new AgentNotFoundError(id);
+    }
+    yield* agent.sendMessageStreaming(message, signal);
   }
 
   async shutdown(): Promise<void> {

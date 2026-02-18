@@ -112,7 +112,11 @@ describe('@autonomy/shared exports', () => {
     expect(shared.DEFAULTS.MODE).toBe('standalone');
     expect(shared.DEFAULTS.MEMORY_SERVER_PORT).toBe(7822);
     expect(shared.DEFAULTS.AUTH_ENABLED).toBe(false);
-    expect(Object.keys(shared.DEFAULTS)).toHaveLength(12);
+    expect(shared.DEFAULTS.RATE_LIMIT_MAX).toBe(100);
+    expect(shared.DEFAULTS.RATE_LIMIT_WINDOW_MS).toBe(60_000);
+    expect(shared.DEFAULTS.TRUST_PROXY).toBe(false);
+    expect(shared.DEFAULTS.STREAM_TIMEOUT_MS).toBe(300_000);
+    expect(Object.keys(shared.DEFAULTS)).toHaveLength(16);
   });
 
   test('exports BACKEND_CAPABILITIES', () => {
@@ -146,5 +150,11 @@ describe('@autonomy/shared exports', () => {
     expect(shared.DEBUG_LEVEL_ORDER.info).toBe(1);
     expect(shared.DEBUG_LEVEL_ORDER.warn).toBe(2);
     expect(shared.DEBUG_LEVEL_ORDER.error).toBe(3);
+  });
+
+  test('exports Logger class', () => {
+    expect(shared.Logger).toBeDefined();
+    const logger = new shared.Logger({ level: 'warn' });
+    expect(logger).toBeInstanceOf(shared.Logger);
   });
 });

@@ -42,6 +42,26 @@ export function parseEnvConfig(): EnvironmentConfig {
 
   const authEnabled = env.AUTH_ENABLED === 'true';
 
+  const rateLimitMax = parseIntEnv(
+    env.RATE_LIMIT_MAX,
+    DEFAULTS.RATE_LIMIT_MAX,
+    'RATE_LIMIT_MAX',
+    1,
+  );
+  const rateLimitWindowMs = parseIntEnv(
+    env.RATE_LIMIT_WINDOW_MS,
+    DEFAULTS.RATE_LIMIT_WINDOW_MS,
+    'RATE_LIMIT_WINDOW_MS',
+    1000,
+  );
+  const streamTimeoutMs = parseIntEnv(
+    env.STREAM_TIMEOUT_MS,
+    DEFAULTS.STREAM_TIMEOUT_MS,
+    'STREAM_TIMEOUT_MS',
+    1000,
+  );
+  const trustProxy = env.TRUST_PROXY === 'true';
+
   return {
     ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
     DATA_DIR: env.DATA_DIR ?? DEFAULTS.DATA_DIR,
@@ -57,5 +77,9 @@ export function parseEnvConfig(): EnvironmentConfig {
     MEMORY_URL: env.MEMORY_URL,
     AUTH_ENABLED: authEnabled,
     AUTH_MASTER_KEY: env.AUTH_MASTER_KEY,
+    RATE_LIMIT_MAX: rateLimitMax,
+    RATE_LIMIT_WINDOW_MS: rateLimitWindowMs,
+    TRUST_PROXY: trustProxy,
+    STREAM_TIMEOUT_MS: streamTimeoutMs,
   };
 }

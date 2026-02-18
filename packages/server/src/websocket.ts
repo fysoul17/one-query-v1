@@ -15,6 +15,7 @@ import type {
 import {
   DebugEventCategory,
   DebugEventLevel,
+  Logger,
   MessageRole,
   WSClientMessageType,
   WSServerMessageType,
@@ -26,6 +27,24 @@ import type { SessionStore } from './session-store.ts';
 
 const MAX_WS_MESSAGE_SIZE = 65_536; // 64 KB
 const MAX_WS_CLIENTS = 100;
+const WS_MSG_RATE_LIMIT = 10;
+const WS_MSG_RATE_WINDOW_MS = 60_000;
+
+const wsLogger = new Logger({ context: { source: 'websocket' } });
+
+/** Per-socket message rate limiter. */
+const socketMessageCounters = new Map<string, { count: number; resetAt: number }>();
+
+function checkSocketMessageRate(socketId: string): boolean {
+  const now = Date.now();
+  let entry = socketMessageCounters.get(socketId);
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + WS_MSG_RATE_WINDOW_MS };
+    socketMessageCounters.set(socketId, entry);
+  }
+  entry.count++;
+  return entry.count <= WS_MSG_RATE_LIMIT;
+}
 
 export interface WSData {
   id: string;
@@ -179,7 +198,10 @@ async function handleConductorMessage(
     try {
       sessionStore.addMessage(sessionId, MessageRole.USER, parsed.content ?? '');
     } catch (err) {
-      console.warn(`[ws] Failed to persist user message for session ${sessionId}:`, err);
+      wsLogger.warn('Failed to persist user message', {
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -188,28 +210,41 @@ async function handleConductorMessage(
       sendConductorStatus(ws, event);
       debugBus?.emit(conductorEventToDebug(event));
     };
-    const response = await conductor.handleMessage(incoming, onEvent);
-    const chunk: WSServerChunk = {
-      type: WSServerMessageType.CHUNK,
-      content: response.content,
-      agentId: response.agentId ?? 'conductor',
-    };
-    ws.send(JSON.stringify(chunk));
 
-    const complete: WSServerComplete = { type: WSServerMessageType.COMPLETE };
-    ws.send(JSON.stringify(complete));
+    const agentId = parsed.targetAgent ?? 'conductor';
+    let accumulatedContent = '';
+
+    for await (const event of conductor.handleMessageStreaming(incoming, onEvent)) {
+      if (event.type === 'chunk') {
+        accumulatedContent += event.content ?? '';
+        const chunk: WSServerChunk = {
+          type: WSServerMessageType.CHUNK,
+          content: event.content ?? '',
+          agentId,
+        };
+        ws.send(JSON.stringify(chunk));
+      } else if (event.type === 'complete') {
+        const complete: WSServerComplete = { type: WSServerMessageType.COMPLETE };
+        ws.send(JSON.stringify(complete));
+      } else if (event.type === 'error') {
+        sendWSError(ws, event.error ?? 'Stream error');
+      }
+    }
 
     // Persist assistant message if session tracking is active
-    if (sessionStore && sessionId) {
+    if (sessionStore && sessionId && accumulatedContent) {
       try {
         sessionStore.addMessage(
           sessionId,
           MessageRole.ASSISTANT,
-          response.content,
-          response.agentId,
+          accumulatedContent,
+          parsed.targetAgent,
         );
       } catch (err) {
-        console.warn(`[ws] Failed to persist assistant message for session ${sessionId}:`, err);
+        wsLogger.warn('Failed to persist assistant message', {
+          sessionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -218,13 +253,14 @@ async function handleConductorMessage(
         category: DebugEventCategory.CONDUCTOR,
         level: DebugEventLevel.INFO,
         source: 'conductor.response',
-        message: `Response sent (${response.content.length} chars) via ${response.agentId ?? 'conductor'}`,
-        agentId: response.agentId,
+        message: `Response sent (${accumulatedContent.length} chars) via ${agentId}`,
+        agentId: parsed.targetAgent,
       }),
     );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    sendWSError(ws, msg);
+    wsLogger.error('Error handling conductor message', { error: msg });
+    sendWSError(ws, 'An internal error occurred');
     debugBus?.emit(
       makeDebugEvent({
         category: DebugEventCategory.CONDUCTOR,
@@ -253,7 +289,7 @@ function handleParsedMessage(
     return handleConductorMessage(ws, conductor, parsed, debugBus, sessionStore);
   }
 
-  sendWSError(ws, `Unknown message type: ${(parsed as { type?: string }).type}`);
+  sendWSError(ws, 'Unknown message type');
 }
 
 export function createWebSocketHandler(
@@ -352,6 +388,13 @@ export function createWebSocketHandler(
         return;
       }
 
+      // Per-socket message rate limiting
+      if (!checkSocketMessageRate(ws.data.id)) {
+        sendWSError(ws, 'Message rate limit exceeded');
+        ws.close(1008, 'Message rate limit exceeded');
+        return;
+      }
+
       let parsed: WSClientMessage;
       try {
         parsed = JSON.parse(text) as WSClientMessage;
@@ -365,6 +408,7 @@ export function createWebSocketHandler(
 
     close(ws: ServerWebSocket<WSData>): void {
       clients.delete(ws);
+      socketMessageCounters.delete(ws.data.id);
       if (clients.size === 0) {
         stopStatusBroadcast();
       }

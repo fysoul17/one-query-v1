@@ -41,4 +41,12 @@ export interface EnvironmentConfig {
   AUTH_ENABLED: boolean;
   /** Optional bootstrap admin key for initial setup. */
   AUTH_MASTER_KEY?: string;
+  /** Max requests per rate limit window per IP. */
+  RATE_LIMIT_MAX: number;
+  /** Rate limit window duration in milliseconds. */
+  RATE_LIMIT_WINDOW_MS: number;
+  /** Trust X-Forwarded-For header for IP extraction. */
+  TRUST_PROXY: boolean;
+  /** Max stream duration in milliseconds for AI backend responses. */
+  STREAM_TIMEOUT_MS: number;
 }

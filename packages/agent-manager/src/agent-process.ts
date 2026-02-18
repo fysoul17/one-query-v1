@@ -1,4 +1,4 @@
-import type { AgentDefinition, AgentId, AgentRuntimeInfo } from '@autonomy/shared';
+import type { AgentDefinition, AgentId, AgentRuntimeInfo, StreamEvent } from '@autonomy/shared';
 import { AgentStatus } from '@autonomy/shared';
 import type { BackendProcess, CLIBackend } from './backends/types.ts';
 import { AgentStateError, BackendError } from './errors.ts';
@@ -82,6 +82,42 @@ export class AgentProcess {
     }
 
     return this.execute(message);
+  }
+
+  async *sendMessageStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
+    if (this._status === AgentStatus.STOPPED || this._status === AgentStatus.ERROR) {
+      yield {
+        type: 'error',
+        error: `Cannot send message to agent "${this.id}" (status: ${this._status})`,
+      };
+      return;
+    }
+
+    const bp = this.backendProcess;
+    if (!bp) {
+      yield { type: 'error', error: `No process for agent "${this.id}"` };
+      return;
+    }
+
+    this._status = AgentStatus.BUSY;
+    this.clearIdleTimer();
+
+    try {
+      if (bp.sendStreaming) {
+        yield* bp.sendStreaming(message, signal);
+      } else {
+        // Fallback: wrap non-streaming send as a stream
+        const result = await bp.send(message);
+        yield { type: 'chunk', content: result };
+        yield { type: 'complete' };
+      }
+      this._status = AgentStatus.IDLE;
+      this.resetIdleTimer();
+    } catch (error) {
+      this._status = AgentStatus.ERROR;
+      const msg = error instanceof Error ? error.message : String(error);
+      yield { type: 'error', error: msg };
+    }
   }
 
   async stop(): Promise<void> {

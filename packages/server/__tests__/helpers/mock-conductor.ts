@@ -1,5 +1,5 @@
 import type { ConductorResponse, IncomingMessage } from '@autonomy/conductor';
-import type { ActivityEntry, AgentId, AgentRuntimeInfo } from '@autonomy/shared';
+import type { ActivityEntry, AgentId, AgentRuntimeInfo, StreamEvent } from '@autonomy/shared';
 import { ActivityType, AgentOwner, AgentStatus } from '@autonomy/shared';
 
 let counter = 0;
@@ -28,6 +28,18 @@ export class MockConductor {
       agentId: message.targetAgentId ?? 'conductor',
       decisions: [],
     };
+  }
+
+  async *handleMessageStreaming(
+    message: IncomingMessage,
+  ): AsyncGenerator<StreamEvent> {
+    this.handleMessageCalls.push(message);
+    if (this.shouldThrow) {
+      yield { type: 'error', error: 'Mock conductor error' };
+      return;
+    }
+    yield { type: 'chunk', content: this.responseContent };
+    yield { type: 'complete' };
   }
 
   async createAgent(params: {
