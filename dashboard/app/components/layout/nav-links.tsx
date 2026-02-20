@@ -17,10 +17,18 @@ export function NavLinks({ items }: { items: NavItem[] }) {
   return (
     <>
       {items.map((item) => {
+        const matchesExact = pathname === item.href;
+        const matchesPrefix = item.href !== '/' && pathname.startsWith(`${item.href}/`);
+        const hasMoreSpecificMatch =
+          matchesPrefix &&
+          items.some(
+            (other) =>
+              other.href !== item.href &&
+              other.href.startsWith(`${item.href}/`) &&
+              (pathname === other.href || pathname.startsWith(`${other.href}/`)),
+          );
         const isActive =
-          item.href === '/'
-            ? pathname === '/'
-            : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          item.href === '/' ? pathname === '/' : matchesExact || (matchesPrefix && !hasMoreSpecificMatch);
 
         return (
           <SidebarMenuItem key={item.href}>
