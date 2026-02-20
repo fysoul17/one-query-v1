@@ -76,17 +76,38 @@ export function ChatInterface({
     initialMessages: seedMessages,
   });
 
-  // Auto-scroll to bottom on new messages
-  const messageCount = messages.length;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on message count change
-  useEffect(() => {
+  // Smart scroll: scroll on send always, scroll on incoming only when near bottom
+  const isNearBottomRef = useRef(true);
+  const userSentRef = useRef(false);
+  const SCROLL_THRESHOLD = 100;
+
+  function scrollToBottom() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messageCount]);
+  }
+
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < SCROLL_THRESHOLD;
+  }, []);
+
+  const lastMessage = messages[messages.length - 1];
+  const scrollTrigger = `${messages.length}-${lastMessage?.content?.length ?? 0}`;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional trigger on message count and content change
+  useEffect(() => {
+    if (userSentRef.current) {
+      scrollToBottom();
+      userSentRef.current = false;
+    } else if (isNearBottomRef.current) {
+      scrollToBottom();
+    }
+  }, [scrollTrigger]);
 
   const handleSend = useCallback(
     (content: string) => {
+      userSentRef.current = true;
       sendMessage(content, targetAgent);
     },
     [sendMessage, targetAgent],
@@ -117,6 +138,7 @@ export function ChatInterface({
       {/* Messages */}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         role="log"
         aria-live="polite"
         aria-busy={isProcessing}
