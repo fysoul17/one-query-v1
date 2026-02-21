@@ -20,6 +20,10 @@ const DEFAULT_CONFIG: InstanceRegistryConfig = {
   staleThresholdMs: 90_000,
 };
 
+export type HeartbeatCallback = () =>
+  | { agentCount: number; memoryStatus: string }
+  | Promise<{ agentCount: number; memoryStatus: string }>;
+
 export class InstanceRegistry {
   private db: Database;
   private config: InstanceRegistryConfig;
@@ -50,17 +54,31 @@ export class InstanceRegistry {
   }
 
   /** Register this instance and start heartbeating. */
-  register(port: number, version = '0.0.0'): string {
+  register(port: number, version = '0.0.0', onHeartbeat?: HeartbeatCallback): string {
+    const host = hostname();
+
+    // Clean up stale entries from the same hostname:port (previous restarts)
+    this.db.run('DELETE FROM instances WHERE hostname = ? AND port = ? AND id != ?', [
+      host,
+      port,
+      this.instanceId,
+    ]);
+
     const now = new Date().toISOString();
     this.db.run(
       `INSERT OR REPLACE INTO instances (id, hostname, port, started_at, last_heartbeat, status, version, agent_count, memory_status)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'unknown')`,
-      [this.instanceId, hostname(), port, now, now, InstanceStatus.HEALTHY, version],
+      [this.instanceId, host, port, now, now, InstanceStatus.HEALTHY, version],
     );
 
     // Start heartbeat
-    this.heartbeatTimer = setInterval(() => {
-      this.heartbeat();
+    this.heartbeatTimer = setInterval(async () => {
+      if (onHeartbeat) {
+        const { agentCount, memoryStatus } = await onHeartbeat();
+        this.heartbeat(agentCount, memoryStatus);
+      } else {
+        this.heartbeat();
+      }
     }, this.config.heartbeatIntervalMs);
 
     return this.instanceId;
@@ -82,6 +100,13 @@ export class InstanceRegistry {
       this.heartbeatTimer = null;
     }
     this.db.run('DELETE FROM instances WHERE id = ?', [this.instanceId]);
+  }
+
+  /** Remove a specific instance by ID (cannot remove self). */
+  remove(id: string): boolean {
+    if (id === this.instanceId) return false;
+    const result = this.db.run('DELETE FROM instances WHERE id = ?', [id]);
+    return result.changes > 0;
   }
 
   /** List all instances, marking stale ones as unreachable. */

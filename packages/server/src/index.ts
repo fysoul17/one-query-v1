@@ -218,8 +218,16 @@ async function main() {
   await cronManager.initialize();
   logger.info('CronManager initialized');
 
-  // Register instance
-  instanceRegistry.register(config.PORT, '0.0.0');
+  // Register instance with live heartbeat callback
+  instanceRegistry.register(config.PORT, '0.0.0', async () => {
+    let memoryStatus = 'ok';
+    try {
+      await memory.stats();
+    } catch {
+      memoryStatus = 'error';
+    }
+    return { agentCount: pool.list().length, memoryStatus };
+  });
   logger.info('Instance registered');
 
   // Initialize Rate Limiter
@@ -307,6 +315,7 @@ async function main() {
 
   // Instance routes
   router.get('/api/instances', instanceRoutes.list);
+  router.delete('/api/instances/:id', instanceRoutes.remove);
 
   // Session routes
   router.get('/api/sessions', sessionRoutes.list);

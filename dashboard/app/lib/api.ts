@@ -295,6 +295,12 @@ export async function getInstances(): Promise<InstanceInfo[]> {
   return fetchApi<InstanceInfo[]>('/api/instances');
 }
 
+export async function deleteInstance(id: string): Promise<{ deleted: string }> {
+  return fetchApi<{ deleted: string }>(`/api/instances/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 // --- Sessions ---
 
 export async function getSessions(options?: {

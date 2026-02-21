@@ -1,6 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { InstanceInfo } from '@autonomy/shared';
 import { Server } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { InstanceRow } from './instance-row';
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -20,6 +21,8 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+export { StatusBadge };
+
 export function InstanceStatus({ instances }: { instances: InstanceInfo[] }) {
   return (
     <Card className="glass glass-hover transition-all">
@@ -31,19 +34,9 @@ export function InstanceStatus({ instances }: { instances: InstanceInfo[] }) {
         {instances.length === 0 ? (
           <p className="text-xs text-muted-foreground">No instances registered</p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {instances.map((instance) => (
-              <div key={instance.id} className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground font-mono truncate max-w-[180px]">
-                  {instance.hostname}:{instance.port}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground">
-                    {instance.agentCount} agent{instance.agentCount !== 1 ? 's' : ''}
-                  </span>
-                  <StatusBadge status={instance.status} />
-                </div>
-              </div>
+              <InstanceRow key={instance.id} instance={instance} />
             ))}
           </div>
         )}

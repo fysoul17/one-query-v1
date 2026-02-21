@@ -84,4 +84,79 @@ describe('InstanceRegistry', () => {
     r1.deregister();
     r2.deregister();
   });
+
+  test('remove() deletes another instance by ID', () => {
+    const r1 = new InstanceRegistry(db, { heartbeatIntervalMs: 999999, staleThresholdMs: 90000 });
+    const r2 = new InstanceRegistry(db, { heartbeatIntervalMs: 999999, staleThresholdMs: 90000 });
+
+    r1.register(7820);
+    r2.register(7821);
+
+    // r1 removes r2
+    const removed = r1.remove(r2.id);
+    expect(removed).toBe(true);
+
+    const instances = r1.list();
+    expect(instances.length).toBe(1);
+    expect(instances[0]?.port).toBe(7820);
+
+    r1.deregister();
+    r2.deregister();
+  });
+
+  test('remove() prevents removing self', () => {
+    const registry = new InstanceRegistry(db, {
+      heartbeatIntervalMs: 999999,
+      staleThresholdMs: 90000,
+    });
+    registry.register(7820);
+
+    const removed = registry.remove(registry.id);
+    expect(removed).toBe(false);
+
+    const instances = registry.list();
+    expect(instances.length).toBe(1);
+
+    registry.deregister();
+  });
+
+  test('remove() returns false for non-existent ID', () => {
+    const registry = new InstanceRegistry(db, {
+      heartbeatIntervalMs: 999999,
+      staleThresholdMs: 90000,
+    });
+    registry.register(7820);
+
+    const removed = registry.remove('non-existent-id');
+    expect(removed).toBe(false);
+
+    registry.deregister();
+  });
+
+  test('register() with onHeartbeat callback uses live values', () => {
+    let callCount = 0;
+    const registry = new InstanceRegistry(db, {
+      heartbeatIntervalMs: 50,
+      staleThresholdMs: 90000,
+    });
+
+    registry.register(7820, '0.0.0', () => {
+      callCount++;
+      return { agentCount: 3, memoryStatus: 'ok' };
+    });
+
+    // Wait for at least one heartbeat tick
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(callCount).toBeGreaterThanOrEqual(1);
+
+        const instances = registry.list();
+        expect(instances[0]?.agentCount).toBe(3);
+        expect(instances[0]?.memoryStatus).toBe('ok');
+
+        registry.deregister();
+        resolve();
+      }, 120);
+    });
+  });
 });
