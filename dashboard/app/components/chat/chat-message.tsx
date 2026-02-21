@@ -1,6 +1,9 @@
 import { Bot, Cpu, User } from 'lucide-react';
+import { memo } from 'react';
+import type { TimeWarning } from '@/hooks/use-processing-timer';
 import type { ChatMessage } from '@/hooks/use-websocket';
 import { MarkdownRenderer } from './markdown-renderer';
+import { getPhaseConfig } from './pipeline-constants';
 import { PipelineSummaryBar } from './pipeline-summary-bar';
 import { ProcessingIndicator } from './processing-indicator';
 import { ProcessingProgressStrip } from './processing-progress-strip';
@@ -8,6 +11,8 @@ import { ProcessingProgressStrip } from './processing-progress-strip';
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   showSteps?: boolean;
+  elapsedMs?: number;
+  warning?: TimeWarning;
 }
 
 function AvatarIcon({ isUser, isConductor }: { isUser: boolean; isConductor: boolean }) {
@@ -38,13 +43,15 @@ function getMessageStyles(isUser: boolean, isConductor: boolean) {
   };
 }
 
-function SystemMessage({ message, showSteps }: ChatMessageBubbleProps) {
-  // While processing: show compact progress strip if steps visible, otherwise bouncing dots
+function SystemMessage({ message, showSteps, elapsedMs, warning }: ChatMessageBubbleProps) {
+  // While processing: show compact progress strip if steps visible, otherwise phase-aware indicator
   if (message.isProcessing) {
     if (showSteps && message.pipeline && message.pipeline.length > 0) {
       return <ProcessingProgressStrip phases={message.pipeline} />;
     }
-    return <ProcessingIndicator />;
+    const lastPhase = message.pipeline?.[message.pipeline.length - 1];
+    const phaseText = lastPhase ? getPhaseConfig(lastPhase.phase).friendlyLabel : undefined;
+    return <ProcessingIndicator phaseText={phaseText} elapsedMs={elapsedMs} warning={warning} />;
   }
 
   // Completed system message with pipeline: nothing to show (summary bar is on assistant message)
@@ -64,9 +71,21 @@ function SystemMessage({ message, showSteps }: ChatMessageBubbleProps) {
   );
 }
 
-export function ChatMessageBubble({ message, showSteps }: ChatMessageBubbleProps) {
+export const ChatMessageBubble = memo(function ChatMessageBubble({
+  message,
+  showSteps,
+  elapsedMs,
+  warning,
+}: ChatMessageBubbleProps) {
   if (message.role === 'system') {
-    return <SystemMessage message={message} showSteps={showSteps} />;
+    return (
+      <SystemMessage
+        message={message}
+        showSteps={showSteps}
+        elapsedMs={elapsedMs}
+        warning={warning}
+      />
+    );
   }
 
   const isUser = message.role === 'user';
@@ -91,11 +110,11 @@ export function ChatMessageBubble({ message, showSteps }: ChatMessageBubbleProps
             <span className="inline-block h-4 w-1 animate-pulse bg-primary ml-0.5" />
           )}
         </div>
-        {/* Pipeline summary bar under assistant messages */}
+        {/* Pipeline summary bar — visible when steps are enabled (default: true) */}
         {showSteps && !isUser && message.pipeline && message.pipeline.length > 0 && (
           <PipelineSummaryBar phases={message.pipeline} />
         )}
       </div>
     </div>
   );
-}
+});

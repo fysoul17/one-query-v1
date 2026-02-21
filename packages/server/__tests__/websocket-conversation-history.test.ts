@@ -400,10 +400,9 @@ describe('WebSocket conversation history — edge cases', () => {
       | undefined;
 
     expect(history).toBeDefined();
-    // History should be capped — exact limit TBD, but should not be the full 60 messages.
-    // The most recent messages should be preserved (last N).
-    // A reasonable cap might be 20-50 messages.
-    expect(history!.length).toBeLessThanOrEqual(50);
+    // History should be capped at MAX_HISTORY_MESSAGES (20). With 30 turns (60 messages)
+    // sent before the final message, only the last 20 messages should be included.
+    expect(history!.length).toBeLessThanOrEqual(20);
     expect(history!.length).toBeGreaterThan(0);
 
     // The most recent messages should be preserved (not oldest)

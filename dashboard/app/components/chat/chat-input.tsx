@@ -1,6 +1,6 @@
 'use client';
 
-import { Send } from 'lucide-react';
+import { Send, Square } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { SlashCommand } from '@/hooks/use-backend-options';
@@ -9,12 +9,19 @@ import { SlashAutocomplete } from './slash-autocomplete';
 
 interface ChatInputProps {
   onSend: (content: string) => void;
+  onCancel?: () => void;
   status: ConnectionStatus;
   isProcessing?: boolean;
   slashCommands?: SlashCommand[];
 }
 
-export function ChatInput({ onSend, status, isProcessing, slashCommands = [] }: ChatInputProps) {
+export function ChatInput({
+  onSend,
+  onCancel,
+  status,
+  isProcessing,
+  slashCommands = [],
+}: ChatInputProps) {
   const [value, setValue] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const [autocompleteDismissed, setAutocompleteDismissed] = useState(false);
@@ -144,15 +151,28 @@ export function ChatInput({ onSend, status, isProcessing, slashCommands = [] }: 
           className="w-full resize-none rounded-lg border border-input bg-muted/30 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:glow-cyan focus:outline-none disabled:opacity-50"
         />
       </div>
-      <Button
-        type="submit"
-        size="icon"
-        disabled={disabled}
-        aria-label={isProcessing ? 'Processing, please wait' : 'Send message'}
-        className="shrink-0 glow-cyan"
-      >
-        <Send className="h-4 w-4" />
-      </Button>
+      {isProcessing && onCancel ? (
+        <Button
+          type="button"
+          size="icon"
+          onClick={onCancel}
+          aria-label="Cancel processing"
+          className="shrink-0 border-neon-red/50 text-neon-red hover:bg-neon-red/10"
+          variant="outline"
+        >
+          <Square className="h-4 w-4" />
+        </Button>
+      ) : (
+        <Button
+          type="submit"
+          size="icon"
+          disabled={disabled}
+          aria-label="Send message"
+          className="shrink-0 glow-cyan"
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      )}
     </form>
   );
 }

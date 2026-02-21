@@ -36,6 +36,7 @@ import { createMemoryRoutes } from './routes/memory.ts';
 import { createSessionRoutes } from './routes/sessions.ts';
 import { createUsageRoutes } from './routes/usage.ts';
 import { runSeeds } from './seeds/index.ts';
+import { seedShortsCronJobs } from './seeds/shorts-cron-jobs.ts';
 import { SessionStore } from './session-store.ts';
 import { createTerminalWebSocketHandler, type TerminalWSData } from './terminal-ws.ts';
 import { createWebSocketHandler, type WSData } from './websocket.ts';
@@ -217,6 +218,10 @@ async function main() {
   const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
   await cronManager.initialize();
   logger.info('CronManager initialized');
+
+  // Seed pre-configured cron jobs for YouTube Shorts pipeline (idempotent)
+  await seedShortsCronJobs(cronManager);
+  logger.info('Shorts cron jobs seeded');
 
   // Register instance
   instanceRegistry.register(config.PORT, '0.0.0');

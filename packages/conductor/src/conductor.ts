@@ -649,7 +649,7 @@ export class Conductor {
     try {
       const proc = await this.backend.spawn(spawnConfig);
       this.sessionProcesses.set(sessionId, proc);
-      conductorLogger.info('Session backend spawned', { sessionId, configOverrides });
+      conductorLogger.info('Session backend spawned', { sessionId, configOverrideKeys: configOverrides ? Object.keys(configOverrides) : [] });
       return proc;
     } catch (error) {
       const detail = getErrorDetail(error);

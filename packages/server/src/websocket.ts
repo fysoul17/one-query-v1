@@ -481,6 +481,8 @@ async function handleConductorMessage(
     persistUserMessage(sessionStore, sessionId, parsed.content ?? '');
   }
 
+  const agentId = parsed.targetAgent ?? 'conductor';
+
   // Set up per-session stream buffer so output survives WS disconnects
   let buffer: StreamBuffer | undefined;
   if (sessionId && bufferManager) {
@@ -490,12 +492,10 @@ async function handleConductorMessage(
     }
     // Always remove the old buffer so each new message gets a fresh one
     bufferManager.remove(sessionId);
-    const agentId = parsed.targetAgent ?? 'conductor';
     buffer = bufferManager.getOrCreate(sessionId, agentId);
   }
 
   try {
-    const agentId = parsed.targetAgent ?? 'conductor';
     const result = await streamConductorResponse(
       ws,
       conductor,
@@ -617,6 +617,18 @@ function handleSlashCommand(
     return true;
   }
 
+  // Defense-in-depth: reject values with control characters or excessive length before any
+  // validation or persistence, even if all current options have enumerable values arrays.
+  const MAX_OPTION_VALUE_LENGTH = 256;
+  if (value.length > MAX_OPTION_VALUE_LENGTH) {
+    sendSystemMessage(ws, `Value for **${option.name}** is too long (max ${MAX_OPTION_VALUE_LENGTH} characters).`);
+    return true;
+  }
+  if (/[\n\r\t\0]/.test(value)) {
+    sendSystemMessage(ws, `Invalid value for **${option.name}**: control characters are not allowed.`);
+    return true;
+  }
+
   // Validate value against known values (if enumerable)
   if (option.values && !option.values.includes(value)) {
     sendSystemMessage(
@@ -637,6 +649,9 @@ function handleSlashCommand(
     conductor.invalidateSessionBackend(ws.data.sessionId);
   }
 
+  // COUPLING: This message format is parsed by CONFIG_CONFIRM_RE in
+  // dashboard/app/components/chat/chat-interface.tsx. If this format changes,
+  // the regex in the client must be updated to match.
   sendSystemMessage(ws, `**${option.name}** set to **${value}** for this session.`);
   return true;
 }

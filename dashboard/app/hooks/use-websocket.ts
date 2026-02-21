@@ -53,12 +53,14 @@ export function useWebSocket({
   const accumulatorRef = useRef<{ content: string; agentId: string; id: string } | null>(null);
   const pipelineRef = useRef<PipelinePhase[]>([]);
   const processingIdRef = useRef<string | null>(null);
+  const cancelledRef = useRef(false);
   const onAgentStatusRef = useRef(onAgentStatus);
   onAgentStatusRef.current = onAgentStatus;
   const onSessionInitRef = useRef(onSessionInit);
   onSessionInitRef.current = onSessionInit;
 
   function handleChunk(content: string, agentId: string) {
+    if (cancelledRef.current) return;
     if (!accumulatorRef.current) {
       const id = `msg-${Date.now()}`;
       accumulatorRef.current = { content, agentId, id };
@@ -90,6 +92,7 @@ export function useWebSocket({
   }
 
   function handleComplete() {
+    if (cancelledRef.current) return;
     setIsProcessing(false);
     const finalPipeline = pipelineRef.current.length > 0 ? pipelineRef.current.slice() : undefined;
     if (accumulatorRef.current) {
@@ -142,6 +145,7 @@ export function useWebSocket({
     agentName?: string;
     debug?: ConductorDebugPayload;
   }) {
+    if (cancelledRef.current) return;
     const phase: PipelinePhase = {
       phase: parsed.phase,
       message: parsed.message,
@@ -323,6 +327,8 @@ export function useWebSocket({
   const sendMessage = useCallback(
     (content: string, targetAgent?: string, options?: { silent?: boolean }) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      // Re-arm guard so new responses aren't suppressed after a previous cancel
+      cancelledRef.current = false;
 
       if (!options?.silent) {
         const userMsg: ChatMessage = {
@@ -358,5 +364,24 @@ export function useWebSocket({
     };
   }, [connect]);
 
-  return { status, messages, sendMessage, isProcessing };
+  const cancelProcessing = useCallback(() => {
+    cancelledRef.current = true;
+    setIsProcessing(false);
+    const procId = processingIdRef.current;
+    const errorPipeline = pipelineRef.current.length > 0 ? [...pipelineRef.current] : undefined;
+    accumulatorRef.current = null;
+    processingIdRef.current = null;
+    pipelineRef.current = [];
+    if (procId) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === procId
+            ? { ...m, isProcessing: false, content: 'Request cancelled', pipeline: errorPipeline }
+            : m,
+        ),
+      );
+    }
+  }, []);
+
+  return { status, messages, sendMessage, isProcessing, cancelProcessing };
 }

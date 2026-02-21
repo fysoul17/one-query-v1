@@ -5,6 +5,7 @@ import { Layers, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSlashCommands } from '@/hooks/use-backend-options';
+import { useProcessingTimer } from '@/hooks/use-processing-timer';
 import { useShowSteps } from '@/hooks/use-show-steps';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { AgentSelector } from './agent-selector';
@@ -15,7 +16,12 @@ import { ModelSelector } from './model-selector';
 const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820';
 const WS_BASE = `${RUNTIME_URL.replace(/^http/, 'ws')}/ws/chat`;
 
-/** Regex to parse system confirmations like: **model** set to **opus** for this session. */
+/**
+ * Regex to parse system confirmations like: **model** set to **opus** for this session.
+ * COUPLING: This must match the exact format produced by sendSystemMessage() in
+ * packages/server/src/websocket.ts handleSlashCommand(). If the server message format
+ * changes, this regex must be updated to match.
+ */
 const CONFIG_CONFIRM_RE = /\*\*(\w+)\*\* set to \*\*(.+?)\*\* for this session\./;
 
 interface ChatInterfaceProps {
@@ -79,12 +85,14 @@ export function ChatInterface({
     }
   }, [sessionId]);
 
-  const { status, messages, sendMessage, isProcessing } = useWebSocket({
+  const { status, messages, sendMessage, isProcessing, cancelProcessing } = useWebSocket({
     url: wsUrl,
     onAgentStatus: handleAgentStatus,
     onSessionInit: handleSessionInit,
     initialMessages: seedMessages,
   });
+
+  const { elapsedMs, warning } = useProcessingTimer(isProcessing);
 
   // Watch messages for system confirmations to keep configOverrides in sync
   useEffect(() => {
@@ -201,7 +209,13 @@ export function ChatInterface({
         ) : (
           <div className="space-y-4">
             {messages.map((msg) => (
-              <ChatMessageBubble key={msg.id} message={msg} showSteps={showSteps} />
+              <ChatMessageBubble
+                key={msg.id}
+                message={msg}
+                showSteps={showSteps}
+                elapsedMs={msg.isProcessing ? elapsedMs : undefined}
+                warning={msg.isProcessing ? warning : undefined}
+              />
             ))}
           </div>
         )}
@@ -248,6 +262,7 @@ export function ChatInterface({
       {/* Input */}
       <ChatInput
         onSend={handleSend}
+        onCancel={cancelProcessing}
         status={status}
         isProcessing={isProcessing}
         slashCommands={slashCommands}

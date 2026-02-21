@@ -24,9 +24,13 @@ export function createBackendRoutes(registry: BackendRegistry) {
     },
 
     options: (): Response => {
-      const backend = registry.getDefault();
-      const options = backend.getConfigOptions();
-      return jsonResponse({ backend: backend.name, options });
+      try {
+        const backend = registry.getDefault();
+        const options = backend.getConfigOptions();
+        return jsonResponse({ backend: backend.name, options });
+      } catch (err) {
+        return errorResponse(err);
+      }
     },
 
     updateApiKey: async (req: Request): Promise<Response> => {
