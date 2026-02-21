@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   type AgentDefinition,
   type AgentRuntimeInfo,
   AgentStatus,
+  type AgentStoreInterface,
   type AIBackend,
 } from '@autonomy/shared';
 import { AgentPool } from '../src/agent-pool.ts';
@@ -345,6 +349,220 @@ describe('AgentPool', () => {
       expect(singleBackend.spawnCalls).toHaveLength(1);
 
       await compatPool.shutdown();
+    });
+  });
+
+  describe('store persistence', () => {
+    /** In-memory mock of AgentStoreInterface for testing persistence calls. */
+    class MockStore implements AgentStoreInterface {
+      saved: AgentDefinition[] = [];
+      updated: Array<{ id: string; def: AgentDefinition }> = [];
+      deleted: string[] = [];
+      definitions: AgentDefinition[] = [];
+
+      save(def: AgentDefinition) {
+        this.saved.push(def);
+        this.definitions.push(def);
+      }
+      update(id: string, def: AgentDefinition) {
+        this.updated.push({ id, def });
+      }
+      delete(id: string) {
+        this.deleted.push(id);
+      }
+      getById(id: string) {
+        return this.definitions.find((d) => d.id === id) ?? null;
+      }
+      list() {
+        return this.definitions;
+      }
+      upsertSeed(def: AgentDefinition) {
+        this.saved.push(def);
+        this.definitions.push(def);
+        return true;
+      }
+    }
+
+    test('create() calls store.save()', async () => {
+      const store = new MockStore();
+      const storePool = new AgentPool(backend, { maxAgents: 5, store });
+      const def = makeAgent({ id: 'store-save' });
+      await storePool.create(def);
+
+      expect(store.saved).toHaveLength(1);
+      expect(store.saved[0].id).toBe('store-save');
+
+      await storePool.shutdown();
+    });
+
+    test('update() calls store.update()', async () => {
+      const store = new MockStore();
+      const storePool = new AgentPool(backend, { maxAgents: 5, store });
+      const def = makeAgent({ id: 'store-upd' });
+      await storePool.create(def);
+      await storePool.update('store-upd', { name: 'Updated' });
+
+      expect(store.updated).toHaveLength(1);
+      expect(store.updated[0].id).toBe('store-upd');
+      expect(store.updated[0].def.name).toBe('Updated');
+
+      await storePool.shutdown();
+    });
+
+    test('remove() calls store.delete()', async () => {
+      const store = new MockStore();
+      const storePool = new AgentPool(backend, { maxAgents: 5, store });
+      await storePool.create(makeAgent({ id: 'store-del' }));
+      await storePool.remove('store-del');
+
+      expect(store.deleted).toEqual(['store-del']);
+
+      await storePool.shutdown();
+    });
+
+    test('restore() spawns agents from store', async () => {
+      const store = new MockStore();
+      store.definitions = [
+        makeAgent({ id: 'restored-1', name: 'R1' }),
+        makeAgent({ id: 'restored-2', name: 'R2' }),
+      ];
+
+      const storePool = new AgentPool(backend, { maxAgents: 5, store });
+      await storePool.restore();
+
+      expect(storePool.list()).toHaveLength(2);
+      expect(storePool.get('restored-1')).toBeDefined();
+      expect(storePool.get('restored-2')).toBeDefined();
+
+      await storePool.shutdown();
+    });
+
+    test('restore() skips agents already in pool', async () => {
+      const store = new MockStore();
+      store.definitions = [makeAgent({ id: 'already-there' })];
+
+      const storePool = new AgentPool(backend, { maxAgents: 5, store });
+      await storePool.create(makeAgent({ id: 'already-there' }));
+      await storePool.restore();
+
+      // Should still have exactly one — not duplicated
+      expect(storePool.list()).toHaveLength(1);
+
+      await storePool.shutdown();
+    });
+
+    test('restore() continues on individual agent failure', async () => {
+      const failBackend = new MockBackend();
+      failBackend.setResponses(['ok']);
+
+      const store = new MockStore();
+      store.definitions = [
+        makeAgent({ id: 'good-agent' }),
+        makeAgent({ id: 'bad-agent' }),
+        makeAgent({ id: 'good-agent-2' }),
+      ];
+
+      // Fail on second spawn call
+      let callCount = 0;
+      const origSpawn = failBackend.spawn.bind(failBackend);
+      failBackend.spawn = async (config) => {
+        callCount++;
+        if (callCount === 2) throw new Error('spawn failed');
+        return origSpawn(config);
+      };
+
+      const storePool = new AgentPool(failBackend, { maxAgents: 5, store });
+      await storePool.restore();
+
+      // Two of three should have been restored
+      expect(storePool.list()).toHaveLength(2);
+      expect(storePool.get('good-agent')).toBeDefined();
+      expect(storePool.get('bad-agent')).toBeUndefined();
+      expect(storePool.get('good-agent-2')).toBeDefined();
+
+      await storePool.shutdown();
+    });
+
+    test('pool works without store (backward compat)', async () => {
+      const noStorePool = new AgentPool(backend, { maxAgents: 5 });
+      await noStorePool.create(makeAgent({ id: 'no-store' }));
+      expect(noStorePool.list()).toHaveLength(1);
+      await noStorePool.shutdown();
+    });
+  });
+
+  describe('workspace isolation', () => {
+    let tmpWorkspaceDir: string;
+
+    beforeEach(() => {
+      tmpWorkspaceDir = join(tmpdir(), `agent-workspace-test-${Date.now()}`);
+      mkdirSync(tmpWorkspaceDir, { recursive: true });
+    });
+
+    afterEach(() => {
+      try {
+        rmSync(tmpWorkspaceDir, { recursive: true, force: true });
+      } catch {
+        // cleanup best-effort
+      }
+    });
+
+    test('create() passes cwd from workspace to backend spawn', async () => {
+      const wsPool = new AgentPool(backend, {
+        maxAgents: 5,
+        workspaceDir: tmpWorkspaceDir,
+      });
+      await wsPool.create(makeAgent({ id: 'ws-agent' }));
+
+      expect(backend.spawnCalls).toHaveLength(1);
+      expect(backend.spawnCalls[0].cwd).toBe(join(tmpWorkspaceDir, 'ws-agent'));
+
+      await wsPool.shutdown();
+    });
+
+    test('create() without workspaceDir does not set cwd', async () => {
+      const noWsPool = new AgentPool(backend, { maxAgents: 5 });
+      await noWsPool.create(makeAgent({ id: 'no-ws-agent' }));
+
+      expect(backend.spawnCalls).toHaveLength(1);
+      expect(backend.spawnCalls[0].cwd).toBeUndefined();
+
+      await noWsPool.shutdown();
+    });
+
+    test('rejects path traversal in agentId', async () => {
+      const wsPool = new AgentPool(backend, {
+        maxAgents: 5,
+        workspaceDir: tmpWorkspaceDir,
+      });
+
+      await expect(wsPool.create(makeAgent({ id: '../../etc' }))).rejects.toThrow(
+        'Invalid agentId for workspace',
+      );
+
+      await wsPool.shutdown();
+    });
+  });
+
+  describe('security enforcement', () => {
+    test('canModifyFiles: false passes skipPermissions: false to backend', async () => {
+      const secPool = new AgentPool(backend, { maxAgents: 5 });
+      await secPool.create(makeAgent({ id: 'no-modify', canModifyFiles: false }));
+
+      expect(backend.spawnCalls).toHaveLength(1);
+      expect(backend.spawnCalls[0].skipPermissions).toBe(false);
+
+      await secPool.shutdown();
+    });
+
+    test('canModifyFiles: true passes skipPermissions: true to backend', async () => {
+      const secPool = new AgentPool(backend, { maxAgents: 5 });
+      await secPool.create(makeAgent({ id: 'can-modify', canModifyFiles: true }));
+
+      expect(backend.spawnCalls).toHaveLength(1);
+      expect(backend.spawnCalls[0].skipPermissions).toBe(true);
+
+      await secPool.shutdown();
     });
   });
 });

@@ -5,6 +5,7 @@ import { AgentStateError, BackendError } from './errors.ts';
 
 export interface AgentProcessOptions {
   idleTimeoutMs?: number;
+  cwd?: string;
 }
 
 interface QueuedMessage {
@@ -26,6 +27,7 @@ export class AgentProcess {
   private processing = false;
   /** Session UUID, generated at construction for persistent agents. */
   private _sessionId: string | undefined;
+  private cwd: string | undefined;
   private logger: Logger;
 
   constructor(definition: AgentDefinition, backend: CLIBackend, options?: AgentProcessOptions) {
@@ -33,6 +35,7 @@ export class AgentProcess {
     this.definition = definition;
     this.backend = backend;
     this.idleTimeoutMs = options?.idleTimeoutMs ?? 0;
+    this.cwd = options?.cwd;
     this.logger = new Logger({
       context: { source: 'agent-process', agentId: definition.id, agentName: definition.name },
     });
@@ -59,6 +62,9 @@ export class AgentProcess {
         agentId: this.id,
         systemPrompt: this.definition.systemPrompt,
         tools: this.definition.tools,
+        cwd: this.cwd,
+        // canModifyFiles: true → skip Claude's permission prompts
+        skipPermissions: this.definition.canModifyFiles,
         ...(this._sessionId
           ? {
               sessionId: this._sessionId,

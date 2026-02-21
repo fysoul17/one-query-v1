@@ -1,7 +1,10 @@
+import { mkdirSync } from 'node:fs';
+import { join, resolve, sep } from 'node:path';
 import type {
   AgentDefinition,
   AgentId,
   AgentRuntimeInfo,
+  AgentStoreInterface,
   HookRegistryInterface,
   StreamEvent,
 } from '@autonomy/shared';
@@ -15,6 +18,8 @@ export interface AgentPoolOptions {
   maxAgents?: number;
   idleTimeoutMs?: number;
   hookRegistry?: HookRegistryInterface;
+  store?: AgentStoreInterface;
+  workspaceDir?: string;
 }
 
 export class AgentPool {
@@ -23,6 +28,8 @@ export class AgentPool {
   private maxAgents: number;
   private idleTimeoutMs: number;
   private hookRegistry?: HookRegistryInterface;
+  private store?: AgentStoreInterface;
+  private workspaceDir?: string;
   private logger = new Logger({ context: { source: 'agent-pool' } });
 
   constructor(backend: CLIBackend | BackendRegistry, options?: AgentPoolOptions) {
@@ -30,6 +37,8 @@ export class AgentPool {
     this.maxAgents = options?.maxAgents ?? DEFAULTS.MAX_AGENTS;
     this.idleTimeoutMs = options?.idleTimeoutMs ?? 0;
     this.hookRegistry = options?.hookRegistry;
+    this.store = options?.store;
+    this.workspaceDir = options?.workspaceDir;
   }
 
   async create(definition: AgentDefinition): Promise<AgentProcess> {
@@ -55,11 +64,14 @@ export class AgentPool {
     }
 
     const resolved = this.resolveBackend(processedDef);
+    const cwd = this.ensureWorkspace(processedDef.id);
     const agent = new AgentProcess(processedDef, resolved, {
       idleTimeoutMs: this.idleTimeoutMs,
+      cwd,
     });
     await agent.start();
     this.agents.set(processedDef.id, agent);
+    this.store?.save(processedDef);
     this.logger.info('Agent added to pool', { agentId: processedDef.id, name: processedDef.name });
 
     // Hook: onAfterAgentCreate — observation only
@@ -95,8 +107,10 @@ export class AgentPool {
 
     // Resolve backend (may have changed)
     const resolved = this.resolveBackend(merged);
+    const cwd = this.ensureWorkspace(id);
     const agent = new AgentProcess(merged, resolved, {
       idleTimeoutMs: this.idleTimeoutMs,
+      cwd,
     });
 
     try {
@@ -118,6 +132,7 @@ export class AgentPool {
     }
 
     this.agents.set(id, agent);
+    this.store?.update(id, merged);
     return agent;
   }
 
@@ -137,6 +152,7 @@ export class AgentPool {
 
     await agent.stop();
     this.agents.delete(id);
+    this.store?.delete(id);
     this.logger.info('Agent removed from pool', { agentId: id });
   }
 
@@ -164,6 +180,48 @@ export class AgentPool {
     const stopPromises = [...this.agents.values()].map((a) => a.stop());
     await Promise.all(stopPromises);
     this.agents.clear();
+  }
+
+  async restore(): Promise<void> {
+    if (!this.store) return;
+    const definitions = this.store.list().filter((def) => !this.agents.has(def.id));
+    const results = await Promise.allSettled(
+      definitions.map(async (def) => {
+        const resolved = this.resolveBackend(def);
+        const cwd = this.ensureWorkspace(def.id);
+        const agent = new AgentProcess(def, resolved, {
+          idleTimeoutMs: this.idleTimeoutMs,
+          cwd,
+        });
+        await agent.start();
+        return agent;
+      }),
+    );
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const def = definitions[i];
+      if (result.status === 'fulfilled') {
+        const agent = result.value;
+        this.agents.set(def.id, agent);
+        this.logger.info('Agent restored from store', { agentId: def.id, name: def.name });
+      } else {
+        this.logger.error('Failed to restore agent', {
+          agentId: def.id,
+          error: getErrorDetail(result.reason),
+        });
+      }
+    }
+  }
+
+  private ensureWorkspace(agentId: AgentId): string | undefined {
+    if (!this.workspaceDir) return undefined;
+    const dir = resolve(this.workspaceDir, agentId);
+    // Guard against path traversal (e.g. agentId = "../../etc")
+    if (!dir.startsWith(this.workspaceDir + sep)) {
+      throw new AgentManagerError(`Invalid agentId for workspace: ${agentId}`);
+    }
+    mkdirSync(dir, { recursive: true });
+    return dir;
   }
 
   private resolveBackend(definition: AgentDefinition): CLIBackend {

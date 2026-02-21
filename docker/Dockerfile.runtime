@@ -21,7 +21,7 @@ COPY tsconfig.base.json ./
 COPY packages/ ./packages/
 
 # Create data directory with seed files
-RUN mkdir -p /data/agents /data/memory /data/vectors && \
+RUN mkdir -p /data/agents /data/memory /data/vectors /data/workspaces && \
     chown -R bun:bun /data
 
 COPY --chown=bun:bun data/config.json /data/config.json

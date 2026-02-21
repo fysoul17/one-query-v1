@@ -1,3 +1,4 @@
+export { AgentStore } from './agent-store.ts';
 export type { AuthContext, AuthMiddlewareOptions } from './auth-middleware.ts';
 export { AuthMiddleware, getAuthContext, setAuthContext } from './auth-middleware.ts';
 export { AuthStore } from './auth-store.ts';

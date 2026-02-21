@@ -55,6 +55,7 @@ describe('ClaudeBackend', () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
+        skipPermissions: true,
       });
 
       expect(proc).toBeDefined();
@@ -67,6 +68,7 @@ describe('ClaudeBackend', () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
+        skipPermissions: true,
       });
       expect(proc.alive).toBe(true);
     });
@@ -76,6 +78,7 @@ describe('ClaudeBackend', () => {
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
         tools: ['Read', 'Write', 'Bash'],
+        skipPermissions: true,
       });
       expect(proc).toBeDefined();
       expect(proc.alive).toBe(true);
@@ -86,6 +89,7 @@ describe('ClaudeBackend', () => {
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
         cwd: '/tmp',
+        skipPermissions: true,
       });
       expect(proc).toBeDefined();
     });
@@ -98,6 +102,7 @@ describe('ClaudeBackend', () => {
         const proc = await backend.spawn({
           agentId: 'test-agent',
           systemPrompt: 'You are a test agent. Reply with "ok".',
+          skipPermissions: true,
         });
 
         const response = await proc.send('Hello');
@@ -113,6 +118,7 @@ describe('ClaudeBackend', () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
+        skipPermissions: true,
       });
 
       expect(proc.alive).toBe(true);
@@ -124,6 +130,7 @@ describe('ClaudeBackend', () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
+        skipPermissions: true,
       });
 
       await proc.stop();
@@ -137,6 +144,7 @@ describe('ClaudeBackend', () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'You are a test agent.',
+        skipPermissions: true,
       });
 
       expect(proc.alive).toBe(true);

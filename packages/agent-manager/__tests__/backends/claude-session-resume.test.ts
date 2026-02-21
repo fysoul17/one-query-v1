@@ -15,8 +15,8 @@
  *  4. Edge cases: sessionId in config is ignored, exit code handling, rapid sends
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { ClaudeBackend } from '../../src/backends/claude.ts';
 import type { StreamEvent } from '@autonomy/shared';
+import { ClaudeBackend } from '../../src/backends/claude.ts';
 
 /**
  * Helper to create a mock Bun.spawn that captures args and simulates process behavior.
@@ -226,10 +226,21 @@ describe('ClaudeProcess stateless mode', () => {
       expect(spawnControl.capturedArgs[1]).toContain('-p');
     });
 
-    test('--dangerously-skip-permissions is included by default', async () => {
+    test('--dangerously-skip-permissions is NOT included by default', async () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'Test',
+      });
+
+      await proc.send('Hello');
+      expect(spawnControl.capturedArgs[0]).not.toContain('--dangerously-skip-permissions');
+    });
+
+    test('--dangerously-skip-permissions is included when skipPermissions is true', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'Test',
+        skipPermissions: true,
       });
 
       await proc.send('Hello');
@@ -409,11 +420,7 @@ describe('ClaudeProcess stateless mode', () => {
         systemPrompt: 'Test',
       });
 
-      await Promise.all([
-        proc.send('Msg1'),
-        proc.send('Msg2'),
-        proc.send('Msg3'),
-      ]);
+      await Promise.all([proc.send('Msg1'), proc.send('Msg2'), proc.send('Msg3')]);
 
       for (const args of spawnControl.capturedArgs) {
         expect(args).toContain('--no-session-persistence');

@@ -468,8 +468,8 @@ class ClaudeProcess implements BackendProcess {
     if (this.config.tools && this.config.tools.length > 0) {
       args.push('--allowed-tools', ...this.config.tools);
     }
-    if (this.config.skipPermissions !== false) {
-      // Default: skip permissions (autonomous runtime in Docker sandbox)
+    if (this.config.skipPermissions === true) {
+      // Only skip permissions when explicitly enabled (agent has canModifyFiles: true)
       args.push('--dangerously-skip-permissions');
     }
 

@@ -14,9 +14,14 @@
  *  3. No session_init sent to client, so client can't maintain session across reconnects
  */
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
+import type {
+  AgentPool,
+  BackendProcess,
+  BackendSpawnConfig,
+  CLIBackend,
+} from '@autonomy/agent-manager';
 import type { Memory } from '@autonomy/memory';
-import type { BackendSpawnConfig } from '@autonomy/agent-manager';
+import { AIBackend } from '@autonomy/shared';
 import { Conductor } from '../src/conductor.ts';
 import { makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
@@ -28,7 +33,7 @@ function createTrackingBackend() {
   const processes: BackendProcess[] = [];
 
   const backend: CLIBackend = {
-    name: 'claude' as any,
+    name: AIBackend.CLAUDE,
     capabilities: {
       streaming: true,
       sessionPersistence: true,
@@ -68,7 +73,7 @@ function createMockPool() {
   return {
     create: mock(async () => ({
       id: 'test',
-      definition: {} as any,
+      definition: {} as unknown as import('@autonomy/shared').AgentDefinition,
       toRuntimeInfo: () => ({
         id: 'test',
         name: 'Test',
@@ -112,15 +117,15 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
     await conductor.initialize();
 
     // Simulate: WS handler passes ws.data.id as sessionId for new chats
-    await conductor.handleMessage(
-      makeMessage({ content: 'Hello', sessionId: 'ws-conn-uuid-abc' }),
-    );
+    await conductor.handleMessage(makeMessage({ content: 'Hello', sessionId: 'ws-conn-uuid-abc' }));
 
     // 2 spawns: default (at init) + session-specific for the WS UUID
     const configs = tracking.getSpawnConfigs();
     expect(configs.length).toBe(2);
     expect(configs[0].sessionId).toBeUndefined(); // default process
-    expect(configs[1].sessionId).toBe('ws-conn-uuid-abc'); // ephemeral session
+    // Conductor spawns stateless processes — sessionId is tracked internally,
+    // not passed in the spawn config (CLI session flags are a V2 feature)
+    expect(configs[1].sessionId).toBeUndefined();
   });
 
   test('multiple messages with same ephemeral UUID reuse same process', async () => {
@@ -148,7 +153,7 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
     expect(history[1].processIndex).toBe(1);
   });
 
-  test('BUG: WS reconnect creates new session, loses all context', async () => {
+  test('WS reconnect creates new session process, losing context', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
       memory as unknown as Memory,
@@ -169,17 +174,18 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
     // 3 spawns: default + ws-conn-1 + ws-conn-2 (TWO separate session processes)
     const configs = tracking.getSpawnConfigs();
     expect(configs.length).toBe(3);
-    expect(configs[1].sessionId).toBe('ws-conn-1');
-    expect(configs[2].sessionId).toBe('ws-conn-2');
+    // Conductor spawns stateless processes — sessionId tracked internally, not in config
+    expect(configs[1].sessionId).toBeUndefined();
+    expect(configs[2].sessionId).toBeUndefined();
 
     // Messages go to different processes — context is LOST
     const history = tracking.getSendHistory();
     expect(history[0].processIndex).toBe(1); // ws-conn-1 process
     expect(history[1].processIndex).toBe(2); // ws-conn-2 process (no context from conn-1)
 
-    // BUG PROVEN: The second message is sent to a brand new Claude CLI session
-    // that has no knowledge of the first message. User asked "What is my name?"
-    // but the AI has never seen "My name is Alice".
+    // Known limitation: The second message is sent to a brand new Claude CLI session
+    // that has no knowledge of the first message. Memory-based context retrieval
+    // provides partial continuity.
   });
 
   test('streaming: ephemeral UUID creates per-session process', async () => {
@@ -202,7 +208,8 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
     // Session-specific process was created
     const configs = tracking.getSpawnConfigs();
     expect(configs.length).toBe(2);
-    expect(configs[1].sessionId).toBe('ws-stream-uuid');
+    // Conductor spawns stateless processes — sessionId tracked internally, not in config
+    expect(configs[1].sessionId).toBeUndefined();
   });
 });
 
@@ -279,9 +286,7 @@ describe('Edge cases: session process lifecycle', () => {
     await conductor.initialize();
 
     // Edge case: empty string sessionId
-    await conductor.handleMessage(
-      makeMessage({ content: 'Hello', sessionId: '' }),
-    );
+    await conductor.handleMessage(makeMessage({ content: 'Hello', sessionId: '' }));
 
     // Empty string is falsy, getBackendProcess('') returns default
     expect(tracking.getSpawnConfigs().length).toBe(1);
@@ -297,9 +302,7 @@ describe('Edge cases: session process lifecycle', () => {
     await conductor.initialize();
 
     // New chat: ephemeral UUID
-    await conductor.handleMessage(
-      makeMessage({ content: 'First', sessionId: 'ws-ephemeral-1' }),
-    );
+    await conductor.handleMessage(makeMessage({ content: 'First', sessionId: 'ws-ephemeral-1' }));
 
     // Resumed session: real session ID
     await conductor.handleMessage(
@@ -307,9 +310,7 @@ describe('Edge cases: session process lifecycle', () => {
     );
 
     // Another new chat: different ephemeral UUID
-    await conductor.handleMessage(
-      makeMessage({ content: 'Third', sessionId: 'ws-ephemeral-2' }),
-    );
+    await conductor.handleMessage(makeMessage({ content: 'Third', sessionId: 'ws-ephemeral-2' }));
 
     const history = tracking.getSendHistory();
     expect(history.length).toBe(3);
@@ -331,9 +332,7 @@ describe('Edge cases: session process lifecycle', () => {
     );
     await conductor.initialize();
 
-    await conductor.handleMessage(
-      makeMessage({ content: 'A', sessionId: 'ws-ephemeral' }),
-    );
+    await conductor.handleMessage(makeMessage({ content: 'A', sessionId: 'ws-ephemeral' }));
 
     await conductor.shutdown();
 

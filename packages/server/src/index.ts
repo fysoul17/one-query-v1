@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { AgentPool, ClaudeBackend, DefaultBackendRegistry } from '@autonomy/agent-manager';
 import { Conductor } from '@autonomy/conductor';
 import {
+  AgentStore,
   AuthMiddleware,
   AuthStore,
   InstanceRegistry,
@@ -111,6 +112,7 @@ async function main() {
   controlPlaneDb.exec('PRAGMA journal_mode = WAL;');
   const authStore = new AuthStore(controlPlaneDb);
   const sessionStore = new SessionStore(controlPlaneDb);
+  const agentStore = new AgentStore(controlPlaneDb);
   const usageStore = new UsageStore(controlPlaneDb);
   const authMiddleware = new AuthMiddleware(authStore, {
     enabled: config.AUTH_ENABLED,
@@ -174,10 +176,14 @@ async function main() {
   // Future: registry.register(new GooseBackend()), etc.
 
   // Initialize Agent Pool (with registry for per-agent backend selection)
+  const workspaceDir = join(config.DATA_DIR, 'workspaces');
+  mkdirSync(workspaceDir, { recursive: true });
   const pool = new AgentPool(registry, {
     maxAgents: config.MAX_AGENTS,
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
     hookRegistry,
+    store: agentStore,
+    workspaceDir,
   });
   logger.info('Agent pool created', {
     maxAgents: config.MAX_AGENTS,
@@ -191,6 +197,10 @@ async function main() {
       message: `Agent pool created (max=${config.MAX_AGENTS}, idleTimeout=${config.IDLE_TIMEOUT_MS}ms)`,
     }),
   );
+
+  // Restore persisted agents from SQLite
+  await pool.restore();
+  logger.info('Persisted agents restored');
 
   // Initialize Conductor (with default backend for direct AI responses)
   const conductor = new Conductor(pool, memory, registry.getDefault(), {
@@ -210,7 +220,7 @@ async function main() {
   );
 
   // Seed pre-configured agents (idempotent)
-  await runSeeds(pool);
+  await runSeeds(pool, agentStore);
   logger.info('Agent seeds applied');
 
   // Initialize CronManager

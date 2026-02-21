@@ -33,6 +33,15 @@ export interface AgentRegistry {
   agents: AgentRegistryEntry[];
 }
 
+export interface AgentStoreInterface {
+  save(definition: AgentDefinition): void;
+  update(id: AgentId, definition: AgentDefinition): void;
+  delete(id: AgentId): void;
+  getById(id: AgentId): AgentDefinition | null;
+  list(): AgentDefinition[];
+  upsertSeed(definition: AgentDefinition): boolean;
+}
+
 export interface AgentRuntimeInfo {
   id: AgentId;
   name: string;
