@@ -8,6 +8,9 @@ import type {
 } from '@autonomy/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+/** Maximum characters stored per tool's accumulated input before truncation. */
+const MAX_INPUT_BYTES = 10_240;
+
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export interface PipelinePhase {
@@ -172,7 +175,6 @@ export function useWebSocket({
         // Accumulate directly — no flush here (one render per tool_input would be expensive).
         // The accumulated input is captured on the next flush (tool_complete or a flush triggered
         // by an immutable update to the agent's toolCalls array).
-        const MAX_INPUT_BYTES = 10_240;
         if (tool.accumulatedInput.length < MAX_INPUT_BYTES) {
           tool.accumulatedInput += parsed.inputDelta;
           if (tool.accumulatedInput.length > MAX_INPUT_BYTES) {
@@ -593,27 +595,32 @@ export function useWebSocket({
     }
 
     const procId = processingIdRef.current;
+    const accumId = accumulatorRef.current?.id;
     const errorPipeline = pipelineRef.current.length > 0 ? [...pipelineRef.current] : undefined;
     const cancelFeed = agentActivitiesRef.current.size > 0 ? buildActivityFeed(false) : undefined;
     accumulatorRef.current = null;
     processingIdRef.current = null;
     pipelineRef.current = [];
     clearActivityRefs();
-    if (procId) {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === procId
-            ? {
-                ...m,
-                isProcessing: false,
-                content: 'Request cancelled',
-                pipeline: errorPipeline,
-                activityFeed: cancelFeed,
-              }
-            : m,
-        ),
-      );
-    }
+    setMessages((prev) =>
+      prev.map((m) => {
+        // Update the system/processing placeholder (if still present)
+        if (procId && m.id === procId) {
+          return {
+            ...m,
+            isProcessing: false,
+            content: 'Request cancelled',
+            pipeline: errorPipeline,
+            activityFeed: cancelFeed,
+          };
+        }
+        // Stop the streaming cursor on a mid-stream assistant message
+        if (accumId && m.id === accumId && m.streaming) {
+          return { ...m, streaming: false, activityFeed: cancelFeed };
+        }
+        return m;
+      }),
+    );
   }, []);
 
   return { status, messages, sendMessage, isProcessing, cancelProcessing };

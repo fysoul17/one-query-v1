@@ -48,24 +48,18 @@ function SystemMessage({ message, showSteps, elapsedMs, warning }: ChatMessageBu
   const hasActivity = message.activityFeed && message.activityFeed.totalSteps > 0;
   const hasPipeline = message.pipeline && message.pipeline.length > 0;
 
-  // While processing: show live activity feed if we have steps data, otherwise fallback
+  // While processing: show live activity feed if agent steps exist, otherwise fallback
   if (message.isProcessing) {
-    if (showSteps && (hasActivity || hasPipeline)) {
+    if (showSteps && hasActivity) {
       return (
         <LiveActivityFeed
           phases={message.pipeline ?? []}
-          feed={
-            message.activityFeed ?? {
-              agents: [],
-              totalSteps: 0,
-              totalDurationMs: 0,
-              isActive: true,
-            }
-          }
+          feed={message.activityFeed!}
           isLive={true}
         />
       );
     }
+    // Pipeline phases exist but no agent steps yet — show the simpler progress strip
     if (showSteps && hasPipeline) {
       return <ProcessingProgressStrip phases={message.pipeline ?? []} />;
     }

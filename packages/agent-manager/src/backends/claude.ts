@@ -243,33 +243,36 @@ class ClaudeProcess implements BackendProcess {
         if (streamDone) break;
       }
 
-      // Flush decoder
-      const remaining = decoder.decode();
-      if (!streamDone && remaining) {
+      // Flush decoder — may produce final bytes if stream ended mid-multibyte-sequence
+      const decoderRemainder = decoder.decode();
+      if (decoderRemainder) lineBuffer += decoderRemainder;
+
+      // Process any buffered content that didn't end with a newline (common when stream
+      // ends without a trailing '\n', e.g. raw text or single-line output from mocks).
+      if (!streamDone && lineBuffer.trim()) {
+        const trimmed = lineBuffer.trim();
+        lineBuffer = '';
         if (rawTextMode) {
           hasContent = true;
-          yield { type: 'chunk', content: remaining };
+          yield { type: 'chunk', content: trimmed };
         } else {
-          const trimmed = remaining.trim();
-          if (trimmed) {
-            try {
-              const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-              const events = this.parseStreamJsonEvent(
-                parsed,
-                textProgress,
-                thinkingProgress,
-                activeTools,
-              );
-              for (const event of events) {
-                if (event.type === 'chunk') hasContent = true;
-                if (event.type === 'complete' || event.type === 'error') streamDone = true;
-                yield event;
-              }
-            } catch {
-              if (!hasContent) {
-                hasContent = true;
-                yield { type: 'chunk', content: trimmed };
-              }
+          try {
+            const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+            const events = this.parseStreamJsonEvent(
+              parsed,
+              textProgress,
+              thinkingProgress,
+              activeTools,
+            );
+            for (const event of events) {
+              if (event.type === 'chunk') hasContent = true;
+              if (event.type === 'complete' || event.type === 'error') streamDone = true;
+              yield event;
+            }
+          } catch {
+            if (!hasContent) {
+              hasContent = true;
+              yield { type: 'chunk', content: trimmed };
             }
           }
         }
