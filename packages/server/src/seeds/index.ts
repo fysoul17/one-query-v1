@@ -3,6 +3,10 @@
 import type { AgentPool } from '@autonomy/agent-manager';
 import { Logger } from '@autonomy/shared';
 import { seedYoutubeShortsAgent } from './youtube-shorts-agent.ts';
+import { seedShortsEditor } from './shorts-editor.ts';
+import { seedShortsHookOptimizer } from './shorts-hook-optimizer.ts';
+import { seedShortsSeoSpecialist } from './shorts-seo-specialist.ts';
+import { seedShortsTrendResearcher } from './shorts-trend-researcher.ts';
 
 const logger = new Logger({ context: { source: 'seeds' } });
 
@@ -13,7 +17,15 @@ const logger = new Logger({ context: { source: 'seeds' } });
 export async function runSeeds(pool: AgentPool): Promise<void> {
   logger.info('Running agent seeds...');
 
-  const seeds = [seedYoutubeShortsAgent];
+  const seeds = [
+    // Core YouTube Shorts script generator
+    seedYoutubeShortsAgent,
+    // Multi-agent team: YouTube Shorts pipeline
+    seedShortsTrendResearcher,
+    seedShortsHookOptimizer,
+    seedShortsEditor,
+    seedShortsSeoSpecialist,
+  ];
 
   for (const seed of seeds) {
     try {
