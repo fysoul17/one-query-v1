@@ -94,7 +94,7 @@ The Conductor is a simple AI agent: it searches memory for context, then either 
 ## Features
 
 ### Pluggable AI Backends
-Swap AI providers without changing code. Any CLI tool that reads stdin and writes stdout works. `claude -p` is the default. Codex CLI, Gemini CLI, and Goose slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry.
+Swap AI providers without changing code. Any CLI tool that reads stdin and writes stdout works. `claude -p` is the default. Codex CLI, Gemini CLI, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry.
 
 ### Persistent Dual-Storage Memory
 Structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB. Naive RAG engine: embed query, vector search, hydrate from SQLite. Memory persists across sessions and agent restarts.
@@ -136,7 +136,7 @@ IP-based rate limiting (configurable window + max), structured JSON logging with
 
 ```bash
 # Clone
-git clone https://github.com/your-org/agent-forge.git
+git clone https://github.com/fysoul17/agent-forge.git
 cd agent-forge
 
 # Install dependencies
@@ -173,7 +173,7 @@ docker compose -f docker/docker-compose.yaml down
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_BACKEND` | `claude` | AI backend (`claude`, `codex`, `gemini`, `goose`) |
+| `AI_BACKEND` | `claude` | AI backend (`claude`, `codex`, `gemini`, `ollama`) |
 | `MAX_AGENTS` | `10` | Maximum concurrent agents |
 | `LOG_LEVEL` | `info` | Log level (`debug`, `info`, `warn`, `error`) |
 | `DASHBOARD_USER` | *(empty)* | Set with `DASHBOARD_PASSWORD` to enable dashboard auth |
