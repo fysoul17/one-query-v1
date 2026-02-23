@@ -23,12 +23,19 @@ export interface TerminalWSData {
  * Each entry maps a backend name to the CLI args passed to the PTY bridge.
  * This is the ONLY place that determines what commands can be spawned —
  * arbitrary backend names are rejected.
+ *
+ * Claude uses the REPL with auto-injected `/login` command. This stores
+ * the OAuth token in Claude's config file (persistent across restarts),
+ * unlike `setup-token` which only prints the token for env var usage.
  */
 export const LOGIN_COMMANDS: Record<string, string[]> = {
-  claude: ['claude', 'setup-token'],
+  claude: ['claude'],
   codex: ['codex', 'login', '--device-auth'],
   gemini: ['gemini', 'auth', 'login'],
 };
+
+/** Delay (ms) before auto-injecting `/login` into the Claude REPL. */
+const CLAUDE_LOGIN_INJECT_DELAY_MS = 2000;
 
 /**
  * Env vars allowlisted for the PTY login process.
@@ -77,6 +84,10 @@ export function buildPtyEnv(): Record<string, string> {
 interface PtySession {
   proc: ReturnType<typeof Bun.spawn>;
   alive: boolean;
+  /** Whether gracefullyExitRepl has been called (prevents double-invocation). */
+  exiting?: boolean;
+  /** Timer for polling auth status (Claude backend). */
+  authPollTimer?: ReturnType<typeof setTimeout>;
 }
 
 const sessions = new Map<string, PtySession>();
@@ -141,6 +152,86 @@ async function handleProcessExit(
   }
 }
 
+/** Interval (ms) between auth status polls for auto-close detection. */
+const AUTH_POLL_INTERVAL_MS = 3000;
+
+/** Grace period (ms) after sending /exit before force-killing the REPL. */
+const REPL_EXIT_GRACE_MS = 1500;
+
+/**
+ * Gracefully exit the Claude REPL: send `/exit`, then force-kill after grace period.
+ * The REPL's natural exit triggers handleProcessExit → ws.close() → frontend success.
+ */
+function gracefullyExitRepl(session: PtySession, sessionId: string): void {
+  if (!session.alive || session.exiting) return;
+  session.exiting = true;
+
+  // Stop polling
+  if (session.authPollTimer) {
+    clearTimeout(session.authPollTimer);
+    session.authPollTimer = undefined;
+  }
+
+  try {
+    session.proc.stdin.write('/exit\r');
+    session.proc.stdin.flush();
+  } catch {
+    // stdin already closed
+  }
+
+  // Safety net: force-kill if /exit doesn't cause the process to exit in time
+  setTimeout(() => {
+    if (!session.alive) return;
+    session.alive = false;
+    try {
+      session.proc.kill();
+    } catch {
+      // Already exited
+    }
+    sessions.delete(sessionId);
+  }, REPL_EXIT_GRACE_MS);
+}
+
+/**
+ * Poll `claude auth status --json` to detect login completion.
+ * Once loggedIn flips to true, auto-exit the REPL so the terminal closes cleanly.
+ *
+ * Uses self-scheduling setTimeout (not setInterval) to prevent overlapping polls
+ * when the auth status command takes longer than the poll interval.
+ */
+function startAuthStatusPoll(
+  ws: ServerWebSocket<TerminalWSData>,
+  session: PtySession,
+  sessionId: string,
+  env: Record<string, string>,
+): void {
+  async function poll() {
+    if (!session.alive) return;
+    try {
+      const proc = Bun.spawn(['claude', 'auth', 'status', '--json'], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env,
+      });
+      const text = await new Response(proc.stdout).text();
+      await proc.exited;
+      const status = JSON.parse(text);
+      if (status.loggedIn === true || status.authenticated === true) {
+        sendAnsiMessage(ws, '\r\n\x1b[32m✓ Login detected — closing terminal…\x1b[0m\r\n');
+        gracefullyExitRepl(session, sessionId);
+        return;
+      }
+    } catch {
+      // Ignore poll errors (CLI not found, JSON parse failure, etc.)
+    }
+    // Schedule next poll only after the current one completes
+    if (session.alive) {
+      session.authPollTimer = setTimeout(poll, AUTH_POLL_INTERVAL_MS);
+    }
+  }
+  session.authPollTimer = setTimeout(poll, AUTH_POLL_INTERVAL_MS);
+}
+
 /** Set a hard timeout that kills the PTY session after PTY_TIMEOUT_MS. */
 function setupPtyTimeout(
   ws: ServerWebSocket<TerminalWSData>,
@@ -150,6 +241,10 @@ function setupPtyTimeout(
   setTimeout(() => {
     if (!session.alive) return;
     session.alive = false;
+    if (session.authPollTimer) {
+      clearTimeout(session.authPollTimer);
+      session.authPollTimer = undefined;
+    }
     try {
       session.proc.kill();
     } catch {
@@ -203,6 +298,22 @@ export function createTerminalWebSocketHandler() {
 
         // Hard timeout
         setupPtyTimeout(ws, session, sessionId);
+
+        // Auto-inject /login command into the Claude REPL after it initializes,
+        // then poll auth status to auto-close when login completes.
+        if (backend === 'claude') {
+          setTimeout(() => {
+            if (!session.alive) return;
+            try {
+              session.proc.stdin.write('/login\r');
+              session.proc.stdin.flush();
+            } catch {
+              // stdin closed
+            }
+            // Start polling auth status after /login is injected
+            startAuthStatusPoll(ws, session, sessionId, env);
+          }, CLAUDE_LOGIN_INJECT_DELAY_MS);
+        }
       },
 
       message(ws: ServerWebSocket<TerminalWSData>, raw: string | Buffer) {
@@ -220,19 +331,34 @@ export function createTerminalWebSocketHandler() {
 
       close(ws: ServerWebSocket<TerminalWSData>) {
         const session = sessions.get(ws.data.id);
-        if (session) {
+        if (!session) return;
+
+        const { backend, id: sessionId } = ws.data;
+
+        // Stop auth polling if active
+        if (session.authPollTimer) {
+          clearTimeout(session.authPollTimer);
+          session.authPollTimer = undefined;
+        }
+
+        // For the Claude REPL, send /exit first so it can flush config writes
+        // (e.g. OAuth token saved by /login), then force-kill after a grace period.
+        if (backend === 'claude') {
+          gracefullyExitRepl(session, sessionId);
+        } else {
           session.alive = false;
+          sessions.delete(sessionId);
           try {
             session.proc.kill();
           } catch {
             // Ignore
           }
-          try {
-            session.proc.stdin.end();
-          } catch {
-            // Ignore
-          }
-          sessions.delete(ws.data.id);
+        }
+
+        try {
+          session.proc.stdin.end();
+        } catch {
+          // Ignore
         }
       },
     },

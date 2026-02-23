@@ -24,9 +24,9 @@ const BACKEND_LOGIN_CONFIG: Record<
   { command: string; label: string; hint: string; trustedDomains: string[] }
 > = {
   claude: {
-    command: 'claude setup-token',
+    command: 'claude /login',
     label: 'Claude',
-    hint: 'Click the link above to log in, then paste the code into the terminal.',
+    hint: 'Click the link above to log in, then paste the code into the terminal. The terminal closes automatically when login is detected.',
     trustedDomains: [
       'console.anthropic.com',
       'anthropic.com',
@@ -311,9 +311,10 @@ export function CliLoginTerminal({
     setState('running');
   }, [doLogoutFirst, isAuthenticated]);
 
-  const handleCancel = useCallback(() => {
-    setState('cancelled');
-  }, []);
+  const handleClose = useCallback(() => {
+    setState(authUrl ? 'success' : 'cancelled');
+    onComplete?.();
+  }, [authUrl, onComplete]);
 
   if (state === 'idle') {
     return (
@@ -364,7 +365,9 @@ export function CliLoginTerminal({
         </div>
       )}
       {state === 'cancelled' && (
-        <output className="block text-xs text-muted-foreground">Login cancelled.</output>
+        <output className="block text-xs text-muted-foreground">
+          Login cancelled before completion.
+        </output>
       )}
 
       {/* Action buttons */}
@@ -373,11 +376,11 @@ export function CliLoginTerminal({
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 text-xs text-red-400 hover:text-red-300"
-            onClick={handleCancel}
+            className={`flex-1 text-xs ${authUrl ? '' : 'text-red-400 hover:text-red-300'}`}
+            onClick={handleClose}
           >
             <Square className="mr-1 h-3 w-3" />
-            Cancel
+            {authUrl ? 'Done' : 'Cancel'}
           </Button>
         ) : (
           <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={handleStart}>

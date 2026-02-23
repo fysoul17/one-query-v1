@@ -150,8 +150,8 @@ describe('buildPtyEnv', () => {
 // ---------------------------------------------------------------------------
 
 describe('LOGIN_COMMANDS', () => {
-  test('maps claude to correct command', () => {
-    expect(LOGIN_COMMANDS.claude).toEqual(['claude', 'setup-token']);
+  test('maps claude to REPL (login injected server-side)', () => {
+    expect(LOGIN_COMMANDS.claude).toEqual(['claude']);
   });
 
   test('maps codex to correct command', () => {
@@ -274,6 +274,29 @@ describe('Terminal WS handler', () => {
       handler.close(asWS(ws));
 
       // Sending a message after close should be a no-op (session removed)
+      handler.message(asWS(ws), 'should-be-ignored');
+    });
+
+    test('sends /exit to claude REPL before killing for graceful shutdown', async () => {
+      const ws = new MockTerminalWebSocket('claude');
+      handler.open(asWS(ws));
+
+      // Close triggers graceful exit — /exit is sent, then kill after 500ms
+      handler.close(asWS(ws));
+
+      // Session should be removed immediately
+      handler.message(asWS(ws), 'should-be-ignored');
+
+      // Wait for the 500ms grace period kill to fire
+      await new Promise((r) => setTimeout(r, 600));
+    });
+
+    test('kills non-claude backends immediately on close', () => {
+      const ws = new MockTerminalWebSocket('codex');
+      handler.open(asWS(ws));
+      handler.close(asWS(ws));
+
+      // Session should be removed immediately
       handler.message(asWS(ws), 'should-be-ignored');
     });
   });

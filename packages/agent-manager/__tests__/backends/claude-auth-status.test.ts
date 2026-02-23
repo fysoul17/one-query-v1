@@ -52,7 +52,7 @@ const AUTH_NOT_LOGGED_IN = JSON.stringify({
  * Returns a mock function whose calls can be inspected.
  */
 function createAuthStatusMockSpawn(stdout: string, exitCode = 0) {
-  return mock((...args: unknown[]) => {
+  return mock((..._args: unknown[]) => {
     return {
       stdout: new ReadableStream({
         start(controller) {
@@ -66,19 +66,6 @@ function createAuthStatusMockSpawn(stdout: string, exitCode = 0) {
         },
       }),
       exited: Promise.resolve(exitCode),
-      exitCode: null,
-      kill: mock(() => {}),
-    };
-  });
-}
-
-/** Create a mock spawn that never resolves (simulates timeout). */
-function createHangingMockSpawn() {
-  return mock((..._args: unknown[]) => {
-    return {
-      stdout: new ReadableStream({ start() { /* never closes */ } }),
-      stderr: new ReadableStream({ start(c) { c.close(); } }),
-      exited: new Promise<number>(() => { /* never resolves */ }),
       exitCode: null,
       kill: mock(() => {}),
     };
@@ -434,6 +421,7 @@ describe('ClaudeBackend.getStatus() — auth detection', () => {
       // @ts-expect-error — mocking Bun.which for testing
       Bun.which = mock(() => null);
       delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       process.env.CLAUDE_SOME_VAR = 'test';
 
       const status = await backend.getStatus();
@@ -449,6 +437,7 @@ describe('ClaudeBackend.getStatus() — auth detection', () => {
       // @ts-expect-error — mocking Bun.spawn for testing
       Bun.spawn = createAuthStatusMockSpawn(AUTH_NOT_LOGGED_IN, 0);
       delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
       process.env.CLAUDE_SOME_VAR = 'test';
 
       const status = await backend.getStatus();
@@ -504,7 +493,6 @@ describe('ClaudeBackend.getStatus() — auth detection', () => {
       Bun.spawn = mock((...args: unknown[]) => {
         const cmd = args[0] as string[];
         const isAuthStatus = cmd.includes('auth') && cmd.includes('status');
-        const isLogout = cmd.includes('auth') && cmd.includes('logout');
         callCount++;
 
         // First auth status check: logged in
