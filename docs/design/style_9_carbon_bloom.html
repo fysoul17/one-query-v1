@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Hub - Carbon Bloom</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Satoshi:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    /* Concept: carbon_bloom
+       Spectrum: L[1] C[2] T[5] D[5] E[3] Th[1] Sh[4]
+       Extremes: Extreme Dense layout, Extreme Dark theme, Extreme Layered depth, Display typography */
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface-2: #181818;
+      --surface-3: #222222;
+      --text: #e8e8e8;
+      --text-muted: #666666;
+      --bloom: #22c55e;
+      --bloom-soft: rgba(34, 197, 94, 0.15);
+      --bloom-glow: rgba(34, 197, 94, 0.3);
+      --border: #2a2a2a;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Familjen Grotesk", sans-serif;
+      font-weight: 400;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    /* Layered background */
+    .layer-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% -10%, var(--bloom-soft) 0%, transparent 50%),
+        linear-gradient(180deg, var(--bg) 0%, #050505 100%);
+      pointer-events: none;
+    }
+
+    /* Dense Header */
+    .header {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 32px;
+      align-items: center;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      opacity: 0;
+      animation: fadeIn 0.5s ease 0.1s forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      background: var(--bloom);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-mark svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--bg);
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .logo-text {
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .nav {
+      display: flex;
+      gap: 4px;
+    }
+
+    .nav a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+      background: var(--surface-2);
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--text-muted);
+    }
+
+    .btn-bloom {
+      background: var(--bloom);
+      color: var(--bg);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .btn-bloom:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px var(--bloom-glow);
+    }
+
+    /* Bento Grid Layout */
+    .main {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      grid-auto-rows: minmax(80px, auto);
+      gap: 16px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .card.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .card:hover {
+      border-color: var(--surface-3);
+    }
+
+    .card-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    /* Hero Card */
+    .hero-card {
+      grid-column: span 8;
+      grid-row: span 4;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bloom-soft);
+      color: var(--bloom);
+      padding: 6px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 500;
+      width: fit-content;
+      margin-bottom: 24px;
+    }
+
+    .hero-badge-dot {
+      width: 6px;
+      height: 6px;
+      background: var(--bloom);
+      border-radius: 50%;
+      animation: blink 2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .hero-title {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 20px;
+    }
+
+    .hero-title .bloom {
+      color: var(--bloom);
+    }
+
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 500px;
+      margin-bottom: 32px;
+    }
+
+    .hero-cta {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn-large {
+      background: var(--bloom);
+      color: var(--bg);
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .btn-large:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px var(--bloom-glow);
+    }
+
+    .btn-large-outline {
+      background: transparent;
+      color: var(--text);
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: all 0.2s ease;
+    }
+
+    .btn-large-outline:hover {
+      border-color: var(--text-muted);
+      background: var(--surface-2);
+    }
+
+    /* Chat Preview Card */
+    .chat-card {
+      grid-column: span 4;
+      grid-row: span 4;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-messages {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .msg {
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .msg.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .msg-user {
+      background: var(--surface-2);
+      align-self: flex-end;
+      max-width: 85%;
+      border-radius: 10px 10px 4px 10px;
+    }
+
+    .msg-ai {
+      background: var(--surface-3);
+      align-self: flex-start;
+      max-width: 85%;
+      border-radius: 10px 10px 10px 4px;
+    }
+
+    .msg-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bloom-soft);
+      color: var(--bloom);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      margin-top: 8px;
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-input input {
+      flex: 1;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+    }
+
+    .chat-input input:focus {
+      border-color: var(--bloom);
+    }
+
+    .chat-send {
+      width: 44px;
+      height: 44px;
+      background: var(--bloom);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .chat-send:hover {
+      box-shadow: 0 4px 12px var(--bloom-glow);
+    }
+
+    .chat-send svg {
+      width: 18px;
+      height: 18px;
+      stroke: var(--bg);
+      fill: none;
+    }
+
+    /* Feature Cards */
+    .feature-card {
+      grid-column: span 3;
+      grid-row: span 2;
+    }
+
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--surface-3);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+
+    .feature-icon svg {
+      width: 20px;
+      height: 20px;
+      stroke: var(--bloom);
+      stroke-width: 1.5;
+      fill: none;
+    }
+
+    .feature-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Stats Card */
+    .stats-card {
+      grid-column: span 6;
+      grid-row: span 2;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .stat-item {
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--bloom);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    /* Connectors Card */
+    .connectors-card {
+      grid-column: span 6;
+      grid-row: span 2;
+    }
+
+    .connectors-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .connector-chip {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .connector-chip:hover {
+      border-color: var(--bloom);
+      background: var(--bloom-soft);
+    }
+
+    .connector-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--bloom);
+      border-radius: 50%;
+    }
+
+    /* CTA Card */
+    .cta-card {
+      grid-column: span 12;
+      grid-row: span 2;
+      background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .cta-card::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, var(--bloom-soft) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .cta-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .cta-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .cta-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .cta-actions {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Footer */
+    .footer {
+      padding: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    .footer-copy {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .hero-card {
+        grid-column: span 12;
+      }
+      .chat-card {
+        grid-column: span 12;
+        grid-row: span 3;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        grid-template-columns: auto auto;
+        gap: 16px;
+      }
+      .nav {
+        display: none;
+      }
+      .main {
+        padding: 16px;
+        gap: 12px;
+      }
+      .hero-title {
+        font-size: 32px;
+      }
+      .feature-card,
+      .stats-card,
+      .connectors-card {
+        grid-column: span 12;
+      }
+      .stats-card {
+        grid-template-columns: repeat(3, 1fr);
+      }
+      .stat-value {
+        font-size: 28px;
+      }
+      .cta-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 24px;
+      }
+      .footer {
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layer-bg"></div>
+
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      </div>
+      <span class="logo-text">Knowledge Hub</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Features</a>
+      <a href="#">Connectors</a>
+      <a href="#">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#">Changelog</a>
+    </nav>
+    <div class="header-actions">
+      <a href="#" class="btn-ghost">Sign In</a>
+      <a href="#" class="btn-bloom">Get Started</a>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="card hero-card">
+      <div class="hero-badge">
+        <span class="hero-badge-dot"></span>
+        AI-Powered Knowledge Discovery
+      </div>
+      <h1 class="hero-title">
+        Find answers,<br>not <span class="bloom">documents</span>
+      </h1>
+      <p class="hero-desc">
+        Connect your data sources once, then ask questions in natural language.
+        Get synthesized answers with verifiable sources.
+      </p>
+      <div class="hero-cta">
+        <a href="#" class="btn-large">Start Free Trial</a>
+        <a href="#" class="btn-large-outline">View Demo</a>
+      </div>
+    </div>
+
+    <div class="card chat-card">
+      <div class="card-label">Live Preview</div>
+      <div class="chat-messages">
+        <div class="msg msg-user">What was our revenue last quarter?</div>
+        <div class="msg msg-ai">
+          Based on the Q1 financial report, revenue was <strong>$2.4M</strong>, representing a 23% increase from the previous quarter.
+          <div class="msg-source">Q1-Report.pdf, page 4</div>
+        </div>
+      </div>
+      <div class="chat-input">
+        <input type="text" placeholder="Ask anything...">
+        <button class="chat-send">
+          <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="card feature-card">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      </div>
+      <h3 class="feature-title">Vector Search</h3>
+      <p class="feature-desc">Semantic understanding of documents. Find content by meaning, not keywords.</p>
+    </div>
+
+    <div class="card feature-card">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      </div>
+      <h3 class="feature-title">Code Intelligence</h3>
+      <p class="feature-desc">AST-aware parsing for source code. Search functions and classes with context.</p>
+    </div>
+
+    <div class="card feature-card">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><path d="M14.5 9.5l3-3M9.5 14.5l-3 3"/></svg>
+      </div>
+      <h3 class="feature-title">Knowledge Graph</h3>
+      <p class="feature-desc">Extract entities and relationships. Navigate connections between concepts.</p>
+    </div>
+
+    <div class="card feature-card">
+      <div class="feature-icon">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      </div>
+      <h3 class="feature-title">Live Database</h3>
+      <p class="feature-desc">Natural language to SQL. Query databases directly without code.</p>
+    </div>
+
+    <div class="card stats-card">
+      <div class="stat-item">
+        <div class="stat-value">50+</div>
+        <div class="stat-label">Data Sources</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">100+</div>
+        <div class="stat-label">Languages</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value">&lt;2s</div>
+        <div class="stat-label">Response</div>
+      </div>
+    </div>
+
+    <div class="card connectors-card">
+      <div class="card-label">Integrations</div>
+      <div class="connectors-grid">
+        <div class="connector-chip"><span class="connector-dot"></span>Notion</div>
+        <div class="connector-chip"><span class="connector-dot"></span>Slack</div>
+        <div class="connector-chip"><span class="connector-dot"></span>PostgreSQL</div>
+        <div class="connector-chip"><span class="connector-dot"></span>MySQL</div>
+        <div class="connector-chip"><span class="connector-dot"></span>Google Drive</div>
+        <div class="connector-chip"><span class="connector-dot"></span>GitHub</div>
+        <div class="connector-chip"><span class="connector-dot"></span>Confluence</div>
+        <div class="connector-chip"><span class="connector-dot"></span>Jira</div>
+      </div>
+    </div>
+
+    <div class="card cta-card">
+      <div class="cta-content">
+        <h2 class="cta-title">Ready to unify your knowledge?</h2>
+        <p class="cta-desc">Start with 50 documents free. No credit card required.</p>
+      </div>
+      <div class="cta-actions">
+        <a href="#" class="btn-large">Get Started Free</a>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-copy">2026 Knowledge Hub. All rights reserved.</div>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+      <a href="#">Status</a>
+    </div>
+  </footer>
+
+  <script>
+    // Staggered card reveal
+    const cards = document.querySelectorAll('.card');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    cards.forEach((card, i) => {
+      card.style.transitionDelay = `${i * 0.08}s`;
+      observer.observe(card);
+    });
+
+    // Chat message animation
+    setTimeout(() => {
+      document.querySelectorAll('.msg').forEach((msg, i) => {
+        setTimeout(() => msg.classList.add('visible'), i * 500 + 500);
+      });
+    }, 600);
+  </script>
+</body>
+</html>

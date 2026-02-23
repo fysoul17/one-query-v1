@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Hub - Sand Prism</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Work+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* Concept: sand_prism
+       Spectrum: L[2] C[4] T[5] D[1] E[3] Th[5] Sh[1]
+       Extremes: Extreme Light theme, Extreme Angular shapes, Extreme Flat depth, Display typography, Dense layout */
+
+    :root {
+      --bg: #f8f5f0;
+      --surface: #ffffff;
+      --text: #1a1816;
+      --text-muted: #6d6560;
+      --sand: #c4a77d;
+      --prism-1: #ff6b35;
+      --prism-2: #4ecdc4;
+      --prism-3: #ffe66d;
+      --border: #e5dfd6;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Work Sans", sans-serif;
+      font-weight: 400;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Subtle grain texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%' height='100%' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 40px;
+      border-bottom: 2px solid var(--text);
+      opacity: 0;
+      animation: slideDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-mark {
+      width: 40px;
+      height: 40px;
+      background: var(--text);
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-text {
+      font-family: "Anton", sans-serif;
+      font-size: 24px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .nav {
+      display: flex;
+      gap: 32px;
+      align-items: center;
+    }
+
+    .nav a {
+      color: var(--text);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: opacity 0.3s ease;
+    }
+
+    .nav a:hover {
+      opacity: 0.6;
+    }
+
+    .btn-angular {
+      background: var(--text);
+      color: var(--bg);
+      padding: 12px 28px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-decoration: none;
+      clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+      transition: all 0.3s ease;
+    }
+
+    .btn-angular:hover {
+      background: var(--prism-1);
+    }
+
+    /* Hero */
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: calc(100vh - 90px);
+      border-bottom: 2px solid var(--text);
+    }
+
+    .hero-content {
+      padding: 80px 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 2px solid var(--text);
+    }
+
+    .hero-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: var(--prism-1);
+      margin-bottom: 24px;
+      opacity: 0;
+      animation: fadeIn 0.6s ease 0.2s forwards;
+    }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+
+    .hero-title {
+      font-family: "Anton", sans-serif;
+      font-size: 80px;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(40px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .hero-title .accent {
+      color: var(--prism-1);
+    }
+
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 400px;
+      margin-bottom: 40px;
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      padding: 12px 28px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      text-decoration: none;
+      border: 2px solid var(--text);
+      clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+      transition: all 0.3s ease;
+    }
+
+    .btn-outline:hover {
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .hero-visual {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--sand) 0%, #e8d5b7 100%);
+    }
+
+    .prism-shapes {
+      position: absolute;
+      inset: 0;
+    }
+
+    .prism {
+      position: absolute;
+      opacity: 0;
+      animation: prismIn 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .prism-1 {
+      width: 300px;
+      height: 300px;
+      background: var(--prism-1);
+      clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+      top: 10%;
+      right: 10%;
+      animation-delay: 0.4s;
+    }
+
+    .prism-2 {
+      width: 200px;
+      height: 200px;
+      background: var(--prism-2);
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      bottom: 20%;
+      left: 15%;
+      animation-delay: 0.6s;
+    }
+
+    .prism-3 {
+      width: 150px;
+      height: 150px;
+      background: var(--prism-3);
+      clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
+      top: 40%;
+      right: 30%;
+      animation-delay: 0.8s;
+    }
+
+    @keyframes prismIn {
+      from {
+        opacity: 0;
+        transform: scale(0.8) rotate(-10deg);
+      }
+      to {
+        opacity: 0.9;
+        transform: scale(1) rotate(0deg);
+      }
+    }
+
+    .hero-chat {
+      position: absolute;
+      bottom: 40px;
+      left: 40px;
+      right: 40px;
+      background: var(--surface);
+      border: 2px solid var(--text);
+      padding: 24px;
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 1s forwards;
+    }
+
+    .chat-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .chat-query {
+      font-size: 15px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .chat-response {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .chat-source {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--prism-3);
+      color: var(--text);
+      padding: 4px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 12px;
+      clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+    }
+
+    /* Features Grid */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      border-bottom: 2px solid var(--text);
+    }
+
+    .feature-cell {
+      padding: 48px 32px;
+      border-right: 2px solid var(--text);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .feature-cell.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .feature-cell:last-child {
+      border-right: none;
+    }
+
+    .feature-cell:hover {
+      background: var(--surface);
+    }
+
+    .feature-icon {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 20px;
+    }
+
+    .feature-icon.vector {
+      background: var(--prism-1);
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    }
+
+    .feature-icon.code {
+      background: var(--prism-2);
+      clip-path: polygon(25% 0%, 100% 0%, 75% 100%, 0% 100%);
+    }
+
+    .feature-icon.graph {
+      background: var(--prism-3);
+      clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+    }
+
+    .feature-icon.sql {
+      background: var(--sand);
+      clip-path: polygon(0 0, 100% 0, 100% 75%, 75% 100%, 0 100%);
+    }
+
+    .feature-title {
+      font-family: "Anton", sans-serif;
+      font-size: 18px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      background: var(--text);
+      color: var(--bg);
+    }
+
+    .stat-cell {
+      padding: 40px 32px;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .stat-cell:last-child {
+      border-right: none;
+    }
+
+    .stat-value {
+      font-family: "Anton", sans-serif;
+      font-size: 48px;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      opacity: 0.6;
+    }
+
+    /* Connectors */
+    .connectors {
+      padding: 80px 40px;
+      border-bottom: 2px solid var(--text);
+    }
+
+    .connectors-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      margin-bottom: 48px;
+    }
+
+    .connectors-title {
+      font-family: "Anton", sans-serif;
+      font-size: 48px;
+      text-transform: uppercase;
+    }
+
+    .connectors-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+    }
+
+    .connectors-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 2px;
+      background: var(--text);
+      border: 2px solid var(--text);
+    }
+
+    .connector-item {
+      background: var(--bg);
+      padding: 32px 24px;
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .connector-item:hover {
+      background: var(--surface);
+    }
+
+    .connector-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 12px;
+      background: var(--border);
+      border-radius: 8px;
+    }
+
+    .connector-name {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* CTA */
+    .cta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 400px;
+    }
+
+    .cta-content {
+      padding: 80px 60px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 2px solid var(--text);
+    }
+
+    .cta-title {
+      font-family: "Anton", sans-serif;
+      font-size: 56px;
+      text-transform: uppercase;
+      line-height: 0.95;
+      margin-bottom: 24px;
+    }
+
+    .cta-desc {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+      max-width: 400px;
+    }
+
+    .cta-visual {
+      background: linear-gradient(135deg, var(--prism-1) 0%, var(--prism-2) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cta-badge {
+      background: var(--surface);
+      padding: 32px 48px;
+      text-align: center;
+      border: 2px solid var(--text);
+    }
+
+    .badge-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .badge-value {
+      font-family: "Anton", sans-serif;
+      font-size: 64px;
+      line-height: 1;
+    }
+
+    .badge-unit {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    /* Footer */
+    .footer {
+      padding: 32px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 2px solid var(--text);
+    }
+
+    .footer-copy {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 32px;
+    }
+
+    .footer-links a {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      text-decoration: none;
+      transition: opacity 0.3s ease;
+    }
+
+    .footer-links a:hover {
+      opacity: 0.6;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .hero-content {
+        border-right: none;
+        border-bottom: 2px solid var(--text);
+      }
+      .hero-visual {
+        min-height: 400px;
+      }
+      .features {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .feature-cell:nth-child(2) {
+        border-right: none;
+      }
+      .feature-cell:nth-child(3),
+      .feature-cell:nth-child(4) {
+        border-top: 2px solid var(--text);
+      }
+      .connectors-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .header {
+        padding: 16px 24px;
+      }
+      .nav {
+        display: none;
+      }
+      .hero-content {
+        padding: 48px 24px;
+      }
+      .hero-title {
+        font-size: 48px;
+      }
+      .features {
+        grid-template-columns: 1fr;
+      }
+      .feature-cell {
+        border-right: none;
+        border-bottom: 2px solid var(--text);
+      }
+      .feature-cell:last-child {
+        border-bottom: none;
+      }
+      .stats-bar {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .stat-cell:nth-child(2) {
+        border-right: none;
+      }
+      .stat-cell:nth-child(3),
+      .stat-cell:nth-child(4) {
+        border-top: 1px solid rgba(255,255,255,0.1);
+      }
+      .connectors {
+        padding: 48px 24px;
+      }
+      .connectors-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .cta {
+        grid-template-columns: 1fr;
+      }
+      .cta-content {
+        border-right: none;
+      }
+      .cta-visual {
+        min-height: 200px;
+      }
+      .cta-title {
+        font-size: 36px;
+      }
+      .footer {
+        padding: 24px;
+        flex-direction: column;
+        gap: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">
+      <div class="logo-mark"></div>
+      <span class="logo-text">Knowledge Hub</span>
+    </div>
+    <nav class="nav">
+      <a href="#">Features</a>
+      <a href="#">Connectors</a>
+      <a href="#">Pricing</a>
+      <a href="#">Docs</a>
+      <a href="#" class="btn-angular">Get Started</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <div class="hero-label">AI-Powered Knowledge Discovery</div>
+      <h1 class="hero-title">
+        Ask Questions<br>
+        <span class="accent">Get Answers</span>
+      </h1>
+      <p class="hero-desc">
+        Connect your scattered data sources and let AI synthesize knowledge.
+        Stop searching, start asking.
+      </p>
+      <div class="hero-actions">
+        <a href="#" class="btn-angular">Start Free</a>
+        <a href="#" class="btn-outline">Watch Demo</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="prism-shapes">
+        <div class="prism prism-1"></div>
+        <div class="prism prism-2"></div>
+        <div class="prism prism-3"></div>
+      </div>
+      <div class="hero-chat">
+        <div class="chat-label">Sample Query</div>
+        <div class="chat-query">What was our revenue last quarter?</div>
+        <div class="chat-response">
+          Based on the Q1 financial report, revenue was <strong>$2.4M</strong>,
+          representing a 23% increase from the previous quarter.
+        </div>
+        <div class="chat-source">Q1-Report.pdf, page 4</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feature-cell">
+      <div class="feature-icon vector"></div>
+      <h3 class="feature-title">Vector Search</h3>
+      <p class="feature-desc">Semantic understanding of documents. Find content by meaning, not just keywords.</p>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon code"></div>
+      <h3 class="feature-title">Code Intel</h3>
+      <p class="feature-desc">AST-aware parsing for source code. Search functions, classes, and methods with context.</p>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon graph"></div>
+      <h3 class="feature-title">Knowledge Graph</h3>
+      <p class="feature-desc">Extract entities and relationships. Navigate connections between concepts.</p>
+    </div>
+    <div class="feature-cell">
+      <div class="feature-icon sql"></div>
+      <h3 class="feature-title">Live SQL</h3>
+      <p class="feature-desc">Natural language to SQL. Query databases directly without writing code.</p>
+    </div>
+  </section>
+
+  <section class="stats-bar">
+    <div class="stat-cell">
+      <div class="stat-value">50+</div>
+      <div class="stat-label">Data Sources</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-value">100+</div>
+      <div class="stat-label">Languages</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-value">&lt;2s</div>
+      <div class="stat-label">Response Time</div>
+    </div>
+    <div class="stat-cell">
+      <div class="stat-value">99.9%</div>
+      <div class="stat-label">Uptime SLA</div>
+    </div>
+  </section>
+
+  <section class="connectors scroll-reveal">
+    <div class="connectors-header">
+      <h2 class="connectors-title">Connect Everything</h2>
+      <span class="connectors-label">Supported Integrations</span>
+    </div>
+    <div class="connectors-grid">
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">Notion</div>
+      </div>
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">Slack</div>
+      </div>
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">PostgreSQL</div>
+      </div>
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">MySQL</div>
+      </div>
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">Google Drive</div>
+      </div>
+      <div class="connector-item">
+        <div class="connector-icon"></div>
+        <div class="connector-name">GitHub</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="cta-content">
+      <h2 class="cta-title">Ready to Unify Your Knowledge?</h2>
+      <p class="cta-desc">
+        Start with 50 documents free. No credit card required.
+        Experience the power of unified knowledge in minutes.
+      </p>
+      <a href="#" class="btn-angular">Get Started Free</a>
+    </div>
+    <div class="cta-visual">
+      <div class="cta-badge">
+        <div class="badge-label">Free Tier</div>
+        <div class="badge-value">50</div>
+        <div class="badge-unit">Documents</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-copy">2026 Knowledge Hub</div>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="#">Contact</a>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll-triggered animations for feature cells
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.feature-cell, .scroll-reveal').forEach((el, i) => {
+      el.style.transitionDelay = `${i * 0.1}s`;
+      observer.observe(el);
+    });
+  </script>
+</body>
+</html>

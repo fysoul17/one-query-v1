@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Hub - Frost Ember</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* Concept: frost_ember
+       Spectrum: L[3] C[4] T[3] D[3] E[2] Th[2] Sh[5]
+       Extremes: Curved shapes, Dark-ish theme */
+
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-glass: rgba(30, 41, 59, 0.6);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --frost: #38bdf8;
+      --ember: #f97316;
+      --ember-glow: rgba(249, 115, 22, 0.3);
+      --frost-glow: rgba(56, 189, 248, 0.2);
+      --border: rgba(148, 163, 184, 0.1);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: "Sora", sans-serif;
+      font-weight: 300;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Gradient background */
+    .bg-gradient {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 20%, var(--frost-glow) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, var(--ember-glow) 0%, transparent 50%);
+      pointer-events: none;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    /* Navigation */
+    nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 32px 0;
+      opacity: 0;
+      animation: fadeIn 0.8s ease 0.1s forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+      font-size: 18px;
+    }
+
+    .logo-mark {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, var(--frost), var(--ember));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-mark svg {
+      width: 22px;
+      height: 22px;
+      fill: white;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: color 0.3s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text);
+    }
+
+    .nav-cta {
+      background: linear-gradient(135deg, var(--frost), var(--ember));
+      padding: 12px 24px;
+      border-radius: 100px;
+      color: white;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 400;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .nav-cta:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px var(--ember-glow);
+    }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 100px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+      align-items: center;
+    }
+
+    .hero-content {
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: 100px;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 32px;
+    }
+
+    .hero-badge span {
+      background: linear-gradient(90deg, var(--frost), var(--ember));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 600;
+    }
+
+    h1 {
+      font-size: 54px;
+      font-weight: 600;
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      margin-bottom: 24px;
+    }
+
+    h1 .gradient {
+      background: linear-gradient(90deg, var(--frost), var(--ember));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-description {
+      font-size: 17px;
+      line-height: 1.7;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+      max-width: 480px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--ember), #ea580c);
+      color: white;
+      padding: 16px 32px;
+      border-radius: 100px;
+      font-size: 15px;
+      font-weight: 400;
+      text-decoration: none;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 12px 32px var(--ember-glow);
+    }
+
+    .btn-secondary {
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 16px 32px;
+      border-radius: 100px;
+      font-size: 15px;
+      font-weight: 400;
+      text-decoration: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-secondary:hover {
+      background: var(--surface);
+      border-color: var(--text-muted);
+    }
+
+    /* Hero Visual */
+    .hero-visual {
+      opacity: 0;
+      animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s forwards;
+    }
+
+    .glass-card {
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .glass-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    }
+
+    .chat-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .chat-title {
+      font-weight: 600;
+      font-size: 15px;
+    }
+
+    .chat-sources {
+      display: flex;
+      gap: 8px;
+    }
+
+    .source-pill {
+      background: var(--bg);
+      padding: 6px 12px;
+      border-radius: 100px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .chat-messages {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .message {
+      padding: 16px 20px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .message-user {
+      background: linear-gradient(135deg, var(--ember), #ea580c);
+      color: white;
+      margin-left: 48px;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-ai {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      margin-right: 48px;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-citation {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--frost-glow);
+      color: var(--frost);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-left: 4px;
+    }
+
+    .chat-input-wrapper {
+      display: flex;
+      gap: 12px;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 14px 20px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.3s ease;
+    }
+
+    .chat-input:focus {
+      border-color: var(--frost);
+    }
+
+    .chat-send {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--frost), var(--ember));
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .chat-send:hover {
+      transform: scale(1.1);
+    }
+
+    .chat-send svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    /* Features */
+    .features {
+      padding: 100px 0;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: 64px;
+    }
+
+    .section-label {
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, var(--frost), var(--ember));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 40px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .feature-card {
+      background: var(--surface-glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .feature-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.4);
+    }
+
+    .feature-icon {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, var(--frost-glow), var(--ember-glow));
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .feature-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: var(--text);
+      fill: none;
+      stroke-width: 1.5;
+    }
+
+    .feature-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .feature-description {
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--text-muted);
+    }
+
+    /* Scroll reveal */
+    .scroll-reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+
+    .scroll-reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .hero { grid-template-columns: 1fr; gap: 60px; }
+      h1 { font-size: 42px; }
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .container { padding: 0 24px; }
+      h1 { font-size: 32px; }
+      .nav-links { display: none; }
+      .hero-actions { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-gradient"></div>
+
+  <div class="container">
+    <nav>
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        Knowledge Hub
+      </div>
+      <ul class="nav-links">
+        <li><a href="#">Product</a></li>
+        <li><a href="#">Pricing</a></li>
+        <li><a href="#">Resources</a></li>
+        <li><a href="#" class="nav-cta">Get Started</a></li>
+      </ul>
+    </nav>
+
+    <section class="hero">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span>New</span> GraphRAG now available
+        </div>
+        <h1>Your data speaks.<br><span class="gradient">We translate.</span></h1>
+        <p class="hero-description">Connect databases, documents, and SaaS tools. Ask questions in natural language. Get synthesized answers with verifiable sources.</p>
+        <div class="hero-actions">
+          <a href="#" class="btn-primary">Start Free Trial</a>
+          <a href="#" class="btn-secondary">View Demo</a>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="glass-card">
+          <div class="chat-header">
+            <span class="chat-title">Revenue Analysis</span>
+            <div class="chat-sources">
+              <span class="source-pill">PostgreSQL</span>
+              <span class="source-pill">Notion</span>
+            </div>
+          </div>
+          <div class="chat-messages">
+            <div class="message message-user">What drove our Q4 revenue growth?</div>
+            <div class="message message-ai">
+              Based on the analytics database, Q4 revenue grew 23% YoY, primarily driven by enterprise tier upgrades (+$2.1M) and new customer acquisition (+$1.4M).
+              <span class="message-citation">3 sources</span>
+            </div>
+          </div>
+          <div class="chat-input-wrapper">
+            <input type="text" class="chat-input" placeholder="Ask about your data...">
+            <button class="chat-send">
+              <svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="section-header scroll-reveal">
+        <div class="section-label">Capabilities</div>
+        <h2 class="section-title">Multiple RAG strategies, one interface</h2>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <h3 class="feature-title">VectorRAG</h3>
+          <p class="feature-description">Semantic search across documents. PDFs, DOCX, and plain text chunked and embedded for instant retrieval.</p>
+        </div>
+
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3 class="feature-title">CodeRAG</h3>
+          <p class="feature-description">AST-aware code search. Find functions, classes, and methods with Tree-sitter parsing.</p>
+        </div>
+
+        <div class="feature-card scroll-reveal">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          </div>
+          <h3 class="feature-title">GraphRAG</h3>
+          <p class="feature-description">Entity extraction and relationship mapping. Multi-hop reasoning across your knowledge graph.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry, index) => {
+        if (entry.isIntersecting) {
+          setTimeout(() => {
+            entry.target.classList.add('visible');
+          }, index * 100);
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.scroll-reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>
