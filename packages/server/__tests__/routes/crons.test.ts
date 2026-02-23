@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CronManager } from '@autonomy/cron-manager';
-import type { CronEntry, CronEntryWithStatus, CronExecutionLog, CronWorkflow } from '@autonomy/shared';
+import type {
+  CronEntry,
+  CronEntryWithStatus,
+  CronExecutionLog,
+  CronWorkflow,
+} from '@autonomy/shared';
 import { BadRequestError, NotFoundError } from '../../src/errors.ts';
 import { createCronRoutes } from '../../src/routes/crons.ts';
 
@@ -299,7 +304,9 @@ describe('Cron routes', () => {
       const cron = cronManager.addCron();
 
       // Trigger to create an execution log
-      const triggerReq = new Request(`http://localhost/api/crons/${cron.id}/trigger`, { method: 'POST' });
+      const triggerReq = new Request(`http://localhost/api/crons/${cron.id}/trigger`, {
+        method: 'POST',
+      });
       await routes.trigger(triggerReq, { id: cron.id });
 
       const res = await routes.list();
@@ -363,6 +370,33 @@ describe('Cron routes', () => {
 
       expect(body.success).toBe(true);
       expect(body.data).toEqual([]);
+    });
+
+    test('throws BadRequestError for non-numeric limit', async () => {
+      const req = new Request('http://localhost/api/crons/logs?limit=abc');
+      await expect(routes.logs(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('throws BadRequestError for zero limit', async () => {
+      const req = new Request('http://localhost/api/crons/logs?limit=0');
+      await expect(routes.logs(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('throws BadRequestError for negative limit', async () => {
+      const req = new Request('http://localhost/api/crons/logs?limit=-5');
+      await expect(routes.logs(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('caps limit at 200', async () => {
+      const cron = cronManager.addCron();
+      await cronManager.trigger(cron.id);
+
+      const req = new Request('http://localhost/api/crons/logs?limit=999');
+      const res = await routes.logs(req);
+      const body = await res.json();
+
+      expect(body.success).toBe(true);
+      expect(body.data.length).toBe(1);
     });
   });
 });
