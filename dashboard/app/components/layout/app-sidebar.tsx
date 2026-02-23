@@ -25,8 +25,6 @@ import {
   SidebarHeader,
   SidebarMenu,
 } from '@/components/ui/sidebar';
-import { useCustomPages } from '@/hooks/use-custom-pages';
-import { resolveIcon } from '@/lib/icon-map';
 import { BackendStatusChip } from './backend-status-chip';
 import { NavLinks } from './nav-links';
 
@@ -51,8 +49,6 @@ const adminNav = [
 ];
 
 export function AppSidebar({ authEnabled }: { authEnabled?: boolean }) {
-  const { grouped } = useCustomPages();
-
   return (
     <Sidebar className="border-r border-sidebar-border">
       <SidebarHeader className="px-4 py-4">
@@ -103,25 +99,6 @@ export function AppSidebar({ authEnabled }: { authEnabled?: boolean }) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {Object.entries(grouped).map(([groupName, pages]) => (
-          <SidebarGroup key={groupName}>
-            <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground">
-              {groupName}
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <NavLinks
-                  items={pages.map((p) => ({
-                    href: `/x/${p.slug}`,
-                    label: p.title,
-                    icon: resolveIcon(p.icon),
-                  }))}
-                />
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
       </SidebarContent>
 
       <SidebarFooter className="px-4 py-3 border-t border-sidebar-border">

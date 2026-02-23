@@ -14,7 +14,6 @@ import type {
   MemoryEntry,
   MemorySearchResult,
   MemoryStats,
-  PageDefinition,
   PlatformConfig,
   SessionDetail,
   SessionListResponse,
@@ -180,11 +179,4 @@ export async function getSessions(): Promise<SessionListResponse> {
 
 export async function getSessionDetail(id: string): Promise<SessionDetail> {
   return fetchApi<SessionDetail>(`/api/sessions/${id}`);
-}
-
-// --- Custom Pages ---
-
-export async function getCustomPagesSSR(status?: string): Promise<PageDefinition[]> {
-  const params = status ? `?status=${encodeURIComponent(status)}` : '';
-  return fetchApi<PageDefinition[]>(`/api/pages${params}`);
 }
