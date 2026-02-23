@@ -315,6 +315,7 @@ async function main() {
   router.get('/api/memory/stats', memoryRoutes.stats);
 
   router.get('/api/crons', cronRoutes.list);
+  router.get('/api/crons/logs', cronRoutes.logs);
   router.post('/api/crons', cronRoutes.create);
   router.put('/api/crons/:id', cronRoutes.update);
   router.delete('/api/crons/:id', cronRoutes.remove);

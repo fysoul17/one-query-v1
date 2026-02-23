@@ -7,8 +7,18 @@ import type { RouteParams } from '../router.ts';
 export function createCronRoutes(cronManager: CronManager) {
   return {
     list: async (): Promise<Response> => {
-      const crons = cronManager.list();
+      const crons = cronManager.getStatus();
       return jsonResponse(crons);
+    },
+
+    logs: async (req: Request): Promise<Response> => {
+      const url = new URL(req.url);
+      const cronId = url.searchParams.get('cronId') ?? undefined;
+      const limitParam = url.searchParams.get('limit');
+      const limit = limitParam ? Number.parseInt(limitParam, 10) : 50;
+
+      const logs = cronManager.getExecutionLogs(cronId, limit);
+      return jsonResponse(logs);
     },
 
     create: async (req: Request): Promise<Response> => {

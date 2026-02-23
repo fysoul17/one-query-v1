@@ -463,6 +463,100 @@ describe('CronManager', () => {
     });
   });
 
+  describe('getNextRun', () => {
+    test('returns Date for enabled cron with scheduled job', async () => {
+      const cron = await manager.create({
+        name: 'next-run-test',
+        schedule: '0 * * * *',
+        workflow: { steps: [{ agentId: 'a1', task: 't1' }], output: 'last' },
+      });
+
+      const nextRun = manager.getNextRun(cron.id);
+      expect(nextRun).toBeInstanceOf(Date);
+      expect(nextRun!.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    test('returns null for disabled cron (no scheduled job)', async () => {
+      const cron = await manager.create({
+        name: 'disabled-next',
+        schedule: '0 * * * *',
+        enabled: false,
+        workflow: { steps: [{ agentId: 'a1', task: 't1' }], output: 'last' },
+      });
+
+      const nextRun = manager.getNextRun(cron.id);
+      expect(nextRun).toBeNull();
+    });
+
+    test('returns null for non-existent id', () => {
+      expect(manager.getNextRun('nonexistent')).toBeNull();
+    });
+  });
+
+  describe('getStatus', () => {
+    test('returns enriched entries with nextRunAt', async () => {
+      await manager.create({
+        name: 'status-enabled',
+        schedule: '0 * * * *',
+        enabled: true,
+        workflow: { steps: [{ agentId: 'a1', task: 't1' }], output: 'last' },
+      });
+      await manager.create({
+        name: 'status-disabled',
+        schedule: '0 */2 * * *',
+        enabled: false,
+        workflow: { steps: [{ agentId: 'a2', task: 't2' }], output: 'last' },
+      });
+
+      const status = manager.getStatus();
+      expect(status.length).toBe(2);
+
+      const enabled = status.find((s) => s.name === 'status-enabled');
+      const disabled = status.find((s) => s.name === 'status-disabled');
+
+      expect(enabled?.nextRunAt).toBeDefined();
+      expect(enabled?.nextRunAt).not.toBeNull();
+      expect(disabled?.nextRunAt).toBeNull();
+    });
+
+    test('includes lastExecution when logs exist', async () => {
+      const cron = await manager.create({
+        name: 'status-logs',
+        schedule: '0 * * * *',
+        workflow: { steps: [{ agentId: 'a1', task: 't1' }], output: 'last' },
+      });
+
+      // Before trigger — no lastExecution
+      let status = manager.getStatus();
+      expect(status[0]?.lastExecution).toBeNull();
+
+      // After trigger — has lastExecution
+      await manager.trigger(cron.id);
+      status = manager.getStatus();
+      expect(status[0]?.lastExecution).toBeDefined();
+      expect(status[0]?.lastExecution?.success).toBe(true);
+      expect(status[0]?.lastExecution?.cronId).toBe(cron.id);
+    });
+
+    test('lastExecution shows most recent log', async () => {
+      conductor.shouldThrow = false;
+      const cron = await manager.create({
+        name: 'multi-exec',
+        schedule: '0 * * * *',
+        workflow: { steps: [{ agentId: 'a1', task: 't1' }], output: 'last' },
+      });
+
+      await manager.trigger(cron.id);
+
+      // Second trigger fails
+      conductor.shouldThrow = true;
+      await manager.trigger(cron.id);
+
+      const status = manager.getStatus();
+      expect(status[0]?.lastExecution?.success).toBe(false);
+    });
+  });
+
   describe('shutdown', () => {
     test('shutdown stops all jobs', async () => {
       await manager.create({

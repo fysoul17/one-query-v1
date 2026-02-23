@@ -6,7 +6,7 @@ import type {
   BackendConfigOption,
   BackendStatusResponse,
   CreateAgentRequest,
-  CronEntry,
+  CronEntryWithStatus,
   EnvironmentConfig,
   GraphNode,
   HealthCheckResponse,
@@ -92,8 +92,8 @@ export async function restartAgent(id: string): Promise<AgentRuntimeInfo> {
   });
 }
 
-export async function getCrons(): Promise<CronEntry[]> {
-  return fetchApi<CronEntry[]>('/api/crons');
+export async function getCrons(): Promise<CronEntryWithStatus[]> {
+  return fetchApi<CronEntryWithStatus[]>('/api/crons');
 }
 
 // Memory server API (uses MEMORY_URL if set, falls back to RUNTIME_URL)

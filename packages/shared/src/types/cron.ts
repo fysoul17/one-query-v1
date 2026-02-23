@@ -33,3 +33,8 @@ export interface CronExecutionLog {
   success: boolean;
   error?: string;
 }
+
+export interface CronEntryWithStatus extends CronEntry {
+  nextRunAt: string | null;
+  lastExecution: CronExecutionLog | null;
+}

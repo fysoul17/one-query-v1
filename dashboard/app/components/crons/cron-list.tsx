@@ -1,8 +1,8 @@
-import type { CronEntry } from '@autonomy/shared';
+import type { CronEntryWithStatus } from '@autonomy/shared';
 import { CronCard } from './cron-card';
 
 interface CronListProps {
-  crons: CronEntry[];
+  crons: CronEntryWithStatus[];
 }
 
 export function CronList({ crons }: CronListProps) {

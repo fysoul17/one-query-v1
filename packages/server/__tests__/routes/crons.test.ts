@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import type { CronManager } from '@autonomy/cron-manager';
-import type { CronEntry, CronExecutionLog, CronWorkflow } from '@autonomy/shared';
+import type { CronEntry, CronEntryWithStatus, CronExecutionLog, CronWorkflow } from '@autonomy/shared';
 import { BadRequestError, NotFoundError } from '../../src/errors.ts';
 import { createCronRoutes } from '../../src/routes/crons.ts';
 
@@ -8,6 +8,7 @@ let idCounter = 0;
 
 class MockCronManager {
   private crons: CronEntry[] = [];
+  private executionLogs: CronExecutionLog[] = [];
 
   list(): CronEntry[] {
     return this.crons;
@@ -62,12 +63,39 @@ class MockCronManager {
   }
 
   async trigger(id: string): Promise<CronExecutionLog> {
-    return {
+    const log: CronExecutionLog = {
       cronId: id,
       executedAt: new Date().toISOString(),
       result: 'Mock execution result',
       success: true,
     };
+    this.executionLogs.push(log);
+    return log;
+  }
+
+  getExecutionLogs(cronId?: string, limit?: number): CronExecutionLog[] {
+    let logs = this.executionLogs;
+    if (cronId) {
+      logs = logs.filter((l) => l.cronId === cronId);
+    }
+    if (limit) {
+      logs = logs.slice(-limit);
+    }
+    return logs;
+  }
+
+  getNextRun(id: string): Date | null {
+    const cron = this.crons.find((c) => c.id === id);
+    if (cron?.enabled) return new Date(Date.now() + 3600000);
+    return null;
+  }
+
+  getStatus(): CronEntryWithStatus[] {
+    return this.crons.map((cron) => ({
+      ...cron,
+      nextRunAt: cron.enabled ? new Date(Date.now() + 3600000).toISOString() : null,
+      lastExecution: this.executionLogs.filter((l) => l.cronId === cron.id).at(-1) ?? null,
+    }));
   }
 
   addCron(overrides?: Partial<CronEntry>): CronEntry {
@@ -247,6 +275,94 @@ describe('Cron routes', () => {
     test('throws NotFoundError for non-existent cron', async () => {
       const req = new Request('http://localhost/api/crons/nope/trigger', { method: 'POST' });
       await expect(routes.trigger(req, { id: 'nope' })).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  describe('GET /api/crons (list with status)', () => {
+    test('returns nextRunAt for enabled crons', async () => {
+      cronManager.addCron({ name: 'enabled-cron', enabled: true });
+      cronManager.addCron({ name: 'disabled-cron', enabled: false });
+
+      const res = await routes.list();
+      const body = await res.json();
+
+      expect(body.data.length).toBe(2);
+      const enabled = body.data.find((c: CronEntryWithStatus) => c.name === 'enabled-cron');
+      const disabled = body.data.find((c: CronEntryWithStatus) => c.name === 'disabled-cron');
+
+      expect(enabled.nextRunAt).toBeDefined();
+      expect(enabled.nextRunAt).not.toBeNull();
+      expect(disabled.nextRunAt).toBeNull();
+    });
+
+    test('includes lastExecution when available', async () => {
+      const cron = cronManager.addCron();
+
+      // Trigger to create an execution log
+      const triggerReq = new Request(`http://localhost/api/crons/${cron.id}/trigger`, { method: 'POST' });
+      await routes.trigger(triggerReq, { id: cron.id });
+
+      const res = await routes.list();
+      const body = await res.json();
+
+      expect(body.data[0].lastExecution).toBeDefined();
+      expect(body.data[0].lastExecution.success).toBe(true);
+    });
+  });
+
+  describe('GET /api/crons/logs', () => {
+    test('returns all logs when no filter', async () => {
+      const c1 = cronManager.addCron({ name: 'c1' });
+      const c2 = cronManager.addCron({ name: 'c2' });
+
+      await cronManager.trigger(c1.id);
+      await cronManager.trigger(c2.id);
+
+      const req = new Request('http://localhost/api/crons/logs');
+      const res = await routes.logs(req);
+      const body = await res.json();
+
+      expect(body.success).toBe(true);
+      expect(body.data.length).toBe(2);
+    });
+
+    test('filters by cronId', async () => {
+      const c1 = cronManager.addCron({ name: 'c1' });
+      const c2 = cronManager.addCron({ name: 'c2' });
+
+      await cronManager.trigger(c1.id);
+      await cronManager.trigger(c2.id);
+      await cronManager.trigger(c1.id);
+
+      const req = new Request(`http://localhost/api/crons/logs?cronId=${c1.id}`);
+      const res = await routes.logs(req);
+      const body = await res.json();
+
+      expect(body.data.length).toBe(2);
+      expect(body.data.every((l: CronExecutionLog) => l.cronId === c1.id)).toBe(true);
+    });
+
+    test('respects limit parameter', async () => {
+      const cron = cronManager.addCron();
+
+      await cronManager.trigger(cron.id);
+      await cronManager.trigger(cron.id);
+      await cronManager.trigger(cron.id);
+
+      const req = new Request('http://localhost/api/crons/logs?limit=2');
+      const res = await routes.logs(req);
+      const body = await res.json();
+
+      expect(body.data.length).toBe(2);
+    });
+
+    test('returns empty array when no logs', async () => {
+      const req = new Request('http://localhost/api/crons/logs');
+      const res = await routes.logs(req);
+      const body = await res.json();
+
+      expect(body.success).toBe(true);
+      expect(body.data).toEqual([]);
     });
   });
 });
