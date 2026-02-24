@@ -31,6 +31,10 @@ export class MockBackendProcess implements BackendProcess {
     return this._alive;
   }
 
+  get nativeSessionId(): string | undefined {
+    return undefined;
+  }
+
   async send(message: string): Promise<string> {
     if (!this._alive) {
       throw new Error('Process is not alive');

@@ -51,6 +51,8 @@ class GeminiProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
+  private _nativeSessionId: string | undefined;
+  private _firstCallDone = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -58,6 +60,10 @@ class GeminiProcess implements BackendProcess {
 
   get alive(): boolean {
     return this._alive;
+  }
+
+  get nativeSessionId(): string | undefined {
+    return this._nativeSessionId;
   }
 
   async send(message: string): Promise<string> {
@@ -90,7 +96,20 @@ class GeminiProcess implements BackendProcess {
       throw new BackendError('gemini', `Process exited with code ${exitCode}`);
     }
 
-    return stdout.trim();
+    this._firstCallDone = true;
+
+    // Try to parse session_id from JSON output
+    const trimmed = stdout.trim();
+    try {
+      const parsed = JSON.parse(trimmed) as { session_id?: string };
+      if (parsed.session_id) {
+        this._nativeSessionId = parsed.session_id;
+      }
+    } catch {
+      // Not JSON — that's fine, return as plain text
+    }
+
+    return trimmed;
   }
 
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -124,6 +143,12 @@ class GeminiProcess implements BackendProcess {
   }
 
   private buildArgs(message: string): string[] {
+    // Session resume: subsequent calls use `--resume <sessionId> -p <message>`
+    if (this._nativeSessionId) {
+      return ['--resume', this._nativeSessionId, '-p', message];
+    }
+
+    // First call: include full config flags
     const args: string[] = ['-p', message];
 
     if (this.config.model) {

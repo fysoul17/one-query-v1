@@ -31,7 +31,7 @@ const BACKEND_OPTIONS = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini', label: 'Gemini' },
-  { value: 'ollama', label: 'Ollama' },
+  { value: 'pi', label: 'Pi' },
 ] as const;
 
 export function CreateAgentDialog() {
@@ -76,7 +76,7 @@ export function CreateAgentDialog() {
         canDelegateToAgents,
         persistent,
         ...(backend !== BACKEND_DEFAULT
-          ? { backend: backend as 'claude' | 'codex' | 'gemini' | 'ollama' }
+          ? { backend: backend as 'claude' | 'codex' | 'gemini' | 'pi' }
           : {}),
       });
       setOpen(false);

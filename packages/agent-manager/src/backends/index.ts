@@ -2,7 +2,7 @@ import type { AIBackend } from '@autonomy/shared';
 import { ClaudeBackend } from './claude.ts';
 import { CodexBackend } from './codex.ts';
 import { GeminiBackend } from './gemini.ts';
-import { OllamaBackend } from './ollama.ts';
+import { PiBackend } from './pi.ts';
 import { DefaultBackendRegistry } from './registry.ts';
 import type { CLIBackend } from './types.ts';
 
@@ -11,7 +11,7 @@ const defaultRegistry = new DefaultBackendRegistry('claude' as AIBackend);
 defaultRegistry.register(new ClaudeBackend());
 defaultRegistry.register(new CodexBackend());
 defaultRegistry.register(new GeminiBackend());
-defaultRegistry.register(new OllamaBackend());
+defaultRegistry.register(new PiBackend());
 
 export function registerBackend(backend: CLIBackend): void {
   defaultRegistry.register(backend);
@@ -25,6 +25,6 @@ export type { BackendConfigOption } from '@autonomy/shared';
 export { ClaudeBackend } from './claude.ts';
 export { CodexBackend } from './codex.ts';
 export { GeminiBackend } from './gemini.ts';
-export { OllamaBackend } from './ollama.ts';
+export { PiBackend } from './pi.ts';
 export { type BackendRegistry, DefaultBackendRegistry } from './registry.ts';
 export type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
