@@ -347,11 +347,11 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
     const routes = createBackendRoutes(registry);
     const res = await routes.updateApiKey(
       makePerBackendRequest({ apiKey: 'some-key-12345678901234' }),
-      'ollama',
+      'unknown-backend',
     );
     const envelope = await parseResponse(res);
     expect(envelope.success).toBe(false);
-    expect(envelope.error).toContain('ollama');
+    expect(envelope.error).toContain('unknown-backend');
   });
 });
 

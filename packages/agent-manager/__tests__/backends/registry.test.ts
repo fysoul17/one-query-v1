@@ -54,7 +54,7 @@ describe('DefaultBackendRegistry', () => {
 
     test('returns false for unregistered backend', () => {
       const registry = makeRegistry();
-      expect(registry.has('ollama' as AIBackend)).toBe(false);
+      expect(registry.has('pi' as AIBackend)).toBe(false);
     });
   });
 

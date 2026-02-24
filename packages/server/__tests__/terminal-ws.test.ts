@@ -190,7 +190,7 @@ describe('LOGIN_COMMANDS', () => {
   });
 
   test('returns undefined for unknown backends', () => {
-    expect(LOGIN_COMMANDS.ollama).toBeUndefined();
+    expect(LOGIN_COMMANDS.unknown_backend).toBeUndefined();
     expect(LOGIN_COMMANDS.unknown).toBeUndefined();
   });
 
@@ -703,10 +703,10 @@ describe('Security invariants', () => {
     }
   });
 
-  test('only exactly 3 backends are allowed', () => {
+  test('only exactly 4 backends are allowed', () => {
     const allowedBackends = Object.keys(LOGIN_COMMANDS);
-    expect(allowedBackends).toHaveLength(3);
-    expect(allowedBackends.sort()).toEqual(['claude', 'codex', 'gemini']);
+    expect(allowedBackends).toHaveLength(4);
+    expect(allowedBackends.sort()).toEqual(['claude', 'codex', 'gemini', 'pi']);
   });
 
   test('LOGIN_COMMANDS values only contain safe CLI args', () => {

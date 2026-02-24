@@ -383,52 +383,12 @@ function CliNotAuthenticatedActions({
   );
 }
 
-// ---- Ollama: no auth, show server status ----
-
-function OllamaStatusSection({ backend }: { backend: BackendStatus }) {
-  if (backend.available && backend.configured) {
-    return (
-      <div className="flex items-center gap-2 border-t border-border/50 pt-3">
-        <span className="h-2 w-2 rounded-full bg-neon-green" />
-        <span className="text-xs text-muted-foreground">Server: Connected</span>
-      </div>
-    );
-  }
-  if (backend.available && !backend.configured) {
-    return (
-      <div className="space-y-1 border-t border-border/50 pt-3">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-neon-amber" />
-          <span className="text-xs text-neon-amber">Server: Connected</span>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          No models installed. Run: <code className="text-foreground/70">ollama pull llama3.2</code>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-1 border-t border-border/50 pt-3">
-      <div className="flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-red-400" />
-        <span className="text-xs text-red-400">Server: Unreachable</span>
-      </div>
-      {backend.error && <div className="text-xs text-muted-foreground">{backend.error}</div>}
-    </div>
-  );
-}
-
 // ---- Main dispatcher ----
 
 /** Backends that support CLI subscription login. */
 const CLI_LOGIN_BACKENDS = new Set(['claude', 'codex', 'gemini']);
 
 export function AuthActions({ backend, onAuthChange }: AuthActionsProps) {
-  // Ollama: no auth needed, show server status
-  if (backend.name === 'ollama') {
-    return <OllamaStatusSection backend={backend} />;
-  }
-
   // CLI-capable backends (Claude, Codex, Gemini): full flow (CLI login + API key fallback)
   if (CLI_LOGIN_BACKENDS.has(backend.name)) {
     if (backend.authMode === 'api_key') {

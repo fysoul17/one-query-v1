@@ -25,8 +25,8 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CODEX_API_KEY=${CODEX_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-}
+      - PI_API_KEY=${PI_API_KEY:-}
+      - PI_MODEL=${PI_MODEL:-}
       - XDG_CONFIG_HOME=/data/cli-config
       - CLAUDE_CONFIG_DIR=/data/cli-config/claude
       - CODEX_HOME=/data/cli-config/codex
@@ -101,23 +101,10 @@ services:
     profiles:
       - full
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    restart: unless-stopped
-    profiles:
-      - ollama
-      - full
-
 volumes:
   agent-data:
     driver: local
   memory-data:
     driver: local
   neo4j-data:
-    driver: local
-  ollama-data:
     driver: local

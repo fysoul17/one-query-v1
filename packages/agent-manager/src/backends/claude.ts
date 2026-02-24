@@ -82,6 +82,8 @@ class ClaudeProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
+  private _nativeSessionId: string | undefined;
+  private _firstCallDone = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -89,6 +91,10 @@ class ClaudeProcess implements BackendProcess {
 
   get alive(): boolean {
     return this._alive;
+  }
+
+  get nativeSessionId(): string | undefined {
+    return this._nativeSessionId;
   }
 
   async send(message: string): Promise<string> {
@@ -121,7 +127,24 @@ class ClaudeProcess implements BackendProcess {
       throw new BackendError('claude', `Process exited with code ${exitCode}`);
     }
 
-    return stdout.trim();
+    this._firstCallDone = true;
+
+    // Parse JSON output to extract session_id and result text
+    const trimmed = stdout.trim();
+    try {
+      const parsed = JSON.parse(trimmed) as {
+        session_id?: string;
+        result?: string;
+      };
+      if (parsed.session_id) {
+        this._nativeSessionId = parsed.session_id;
+        claudeLogger.debug('Captured native session ID', { sessionId: parsed.session_id });
+      }
+      return (typeof parsed.result === 'string' ? parsed.result : trimmed).trim();
+    } catch {
+      // Fallback: if output isn't JSON, return as plain text
+      return trimmed;
+    }
   }
 
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -421,6 +444,14 @@ class ClaudeProcess implements BackendProcess {
       }
 
       case 'result': {
+        // Capture native session ID from result event for session resume
+        if (typeof parsed.session_id === 'string' && parsed.session_id) {
+          this._nativeSessionId = parsed.session_id;
+          this._firstCallDone = true;
+          claudeLogger.debug('Captured native session ID from stream', {
+            sessionId: parsed.session_id,
+          });
+        }
         const isError =
           parsed.is_error === true ||
           parsed.subtype === 'error_max_turns' ||
@@ -460,41 +491,43 @@ class ClaudeProcess implements BackendProcess {
   }
 
   private buildArgsInternal(message: string, streaming: boolean): string[] {
-    const args: string[] = ['-p', message];
+    const args: string[] = [];
 
-    if (this.config.systemPrompt) {
-      args.push('--system-prompt', this.config.systemPrompt);
-    }
-    if (this.config.tools && this.config.tools.length > 0) {
-      args.push('--allowed-tools', ...this.config.tools);
-    }
-    if (this.config.skipPermissions === true) {
-      // Only skip permissions when explicitly enabled (agent has canModifyFiles: true)
-      args.push('--dangerously-skip-permissions');
+    // Session resume: if we have a native session ID from a previous call, resume it.
+    // This lets Claude maintain conversation context natively without re-injecting history.
+    if (this._nativeSessionId) {
+      args.push('--resume', this._nativeSessionId, '-p', message);
+    } else {
+      args.push('-p', message);
     }
 
-    // Model override from config options
-    if (this.config.model) {
-      args.push('--model', this.config.model);
-    }
-
-    // Extra CLI flags from config options (e.g., { '--effort': 'high' })
-    if (this.config.extraFlags) {
-      for (const [flag, value] of Object.entries(this.config.extraFlags)) {
-        args.push(flag, value);
+    // Only pass system prompt and config on first call — session stores it after that
+    if (!this._firstCallDone) {
+      if (this.config.systemPrompt) {
+        args.push('--system-prompt', this.config.systemPrompt);
+      }
+      if (this.config.tools && this.config.tools.length > 0) {
+        args.push('--allowed-tools', ...this.config.tools);
+      }
+      if (this.config.skipPermissions === true) {
+        args.push('--dangerously-skip-permissions');
+      }
+      if (this.config.model) {
+        args.push('--model', this.config.model);
+      }
+      if (this.config.extraFlags) {
+        for (const [flag, value] of Object.entries(this.config.extraFlags)) {
+          args.push(flag, value);
+        }
       }
     }
 
-    // Stateless mode: each CLI call is independent (no --session-id/--resume).
-    // Multi-turn context is handled by the conductor's memory system, not CLI sessions.
-    // The -p flag runs in single-shot mode which doesn't reliably persist sessions,
-    // causing --resume to fail on subsequent calls.
-    args.push('--no-session-persistence');
-
-    // Structured NDJSON output for streaming — enables tool_use/thinking event parsing.
-    // --verbose is required by the CLI when combining --print (-p) with --output-format=stream-json.
+    // Structured output: JSON for non-streaming (to capture session_id),
+    // stream-json for streaming (NDJSON events including session_id in result).
     if (streaming) {
       args.push('--verbose', '--output-format', 'stream-json');
+    } else {
+      args.push('--output-format', 'json');
     }
 
     return args;

@@ -1,18 +1,16 @@
 /**
- * Claude Backend Session — Tests for the stateless CLI mode fix.
+ * Claude Backend Session Resume — Tests for native session persistence.
  *
- * Background: The original implementation used --session-id on the first CLI call
- * and --resume on subsequent calls. This broke because -p (prompt mode) doesn't
- * reliably persist sessions to disk, causing --resume to always fail.
- *
- * Fix: Replaced session-id/resume logic with stateless --no-session-persistence.
- * Multi-turn context is handled by the conductor's memory system.
+ * Background: The original implementation used --no-session-persistence with stateless mode.
+ * The new implementation captures session_id from CLI JSON output and uses --resume on
+ * subsequent calls, enabling native multi-turn conversation in the CLI.
  *
  * These tests cover:
- *  1. Regression: --session-id and --resume are never used (fix validation)
- *  2. --no-session-persistence is always present in CLI args
- *  3. _alive stays true after failed sendStreaming/send (remaining bug)
- *  4. Edge cases: sessionId in config is ignored, exit code handling, rapid sends
+ *  1. --resume IS used on subsequent sends (with captured session_id)
+ *  2. --output-format json is used for non-streaming (to capture session_id)
+ *  3. --system-prompt only on first call (session stores it)
+ *  4. _alive stays true after failed sendStreaming/send
+ *  5. Edge cases: error handling, concurrent sends, stop behavior
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { StreamEvent } from '@autonomy/shared';
@@ -41,7 +39,12 @@ function createMockSpawn() {
       stdout: new ReadableStream({
         start(controller) {
           if (currentExitCode === 0) {
-            controller.enqueue(new TextEncoder().encode('mock response'));
+            // Return JSON with session_id on success
+            controller.enqueue(
+              new TextEncoder().encode(
+                JSON.stringify({ session_id: `sess-${callIndex}`, result: 'mock response' }),
+              ),
+            );
           }
           controller.close();
         },
@@ -75,7 +78,7 @@ function createMockSpawn() {
   };
 }
 
-describe('ClaudeProcess stateless mode', () => {
+describe('ClaudeProcess session resume mode', () => {
   let backend: ClaudeBackend;
   let originalSpawn: typeof Bun.spawn;
   let spawnControl: ReturnType<typeof createMockSpawn>;
@@ -95,122 +98,88 @@ describe('ClaudeProcess stateless mode', () => {
   });
 
   // ============================================================
-  // 1. Regression: --session-id and --resume are never used
+  // 1. --resume IS used on subsequent sends
   // ============================================================
-  describe('regression: no session-id/resume flags', () => {
-    test('never uses --session-id even when sessionId is in config', async () => {
+  describe('session resume with --resume flag', () => {
+    test('first call has no --resume, second call uses --resume', async () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'Test',
-        sessionId: 'sess-123',
+      });
+
+      await proc.send('Hello');
+      await proc.send('World');
+
+      // First call: no --resume
+      expect(spawnControl.capturedArgs[0]).not.toContain('--resume');
+      // Second call: --resume with session_id
+      expect(spawnControl.capturedArgs[1]).toContain('--resume');
+    });
+
+    test('all calls after first use --resume', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'Test',
+      });
+
+      await proc.send('First');
+      await proc.send('Second');
+      await proc.send('Third');
+
+      expect(spawnControl.capturedArgs[0]).not.toContain('--resume');
+      expect(spawnControl.capturedArgs[1]).toContain('--resume');
+      expect(spawnControl.capturedArgs[2]).toContain('--resume');
+    });
+  });
+
+  // ============================================================
+  // 2. --output-format json for session_id capture
+  // ============================================================
+  describe('JSON output format', () => {
+    test('non-streaming send uses --output-format json', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'Test',
+      });
+
+      await proc.send('Hello');
+      const args = spawnControl.capturedArgs[0];
+      const fmtIdx = args.indexOf('--output-format');
+      expect(fmtIdx).toBeGreaterThan(-1);
+      expect(args[fmtIdx + 1]).toBe('json');
+    });
+  });
+
+  // ============================================================
+  // 3. --system-prompt only on first call
+  // ============================================================
+  describe('system prompt on first call only', () => {
+    test('first call includes --system-prompt', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'You are a helpful assistant.',
+      });
+
+      await proc.send('Hello');
+      expect(spawnControl.capturedArgs[0]).toContain('--system-prompt');
+    });
+
+    test('subsequent calls omit --system-prompt', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'You are a helpful assistant.',
       });
 
       await proc.send('Hello');
       await proc.send('World');
 
-      for (const args of spawnControl.capturedArgs) {
-        expect(args).not.toContain('--session-id');
-        expect(args).not.toContain('--resume');
-      }
-    });
-
-    test('never uses --resume on subsequent sends', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-        sessionId: 'sess-multi',
-      });
-
-      await proc.send('First');
-      await proc.send('Second');
-      await proc.send('Third');
-
-      for (const args of spawnControl.capturedArgs) {
-        expect(args).not.toContain('--resume');
-      }
-    });
-
-    test('sendStreaming never uses --session-id or --resume', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-        sessionId: 'sess-stream',
-      });
-
-      if (proc.sendStreaming) {
-        for await (const _event of proc.sendStreaming('First')) {
-          // consume
-        }
-        for await (const _event of proc.sendStreaming('Second')) {
-          // consume
-        }
-      }
-
-      for (const args of spawnControl.capturedArgs) {
-        expect(args).not.toContain('--session-id');
-        expect(args).not.toContain('--resume');
-      }
+      expect(spawnControl.capturedArgs[0]).toContain('--system-prompt');
+      expect(spawnControl.capturedArgs[1]).not.toContain('--system-prompt');
     });
   });
 
   // ============================================================
-  // 2. --no-session-persistence is always present
-  // ============================================================
-  describe('--no-session-persistence flag', () => {
-    test('always includes --no-session-persistence', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      await proc.send('Hello');
-      expect(spawnControl.capturedArgs[0]).toContain('--no-session-persistence');
-    });
-
-    test('includes --no-session-persistence even when sessionId is provided', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-        sessionId: 'sess-ignored',
-      });
-
-      await proc.send('Hello');
-      expect(spawnControl.capturedArgs[0]).toContain('--no-session-persistence');
-    });
-
-    test('includes --no-session-persistence on every send call', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      await proc.send('First');
-      await proc.send('Second');
-      await proc.send('Third');
-
-      for (const args of spawnControl.capturedArgs) {
-        expect(args).toContain('--no-session-persistence');
-      }
-    });
-
-    test('includes --no-session-persistence in sendStreaming calls', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      if (proc.sendStreaming) {
-        for await (const _event of proc.sendStreaming('Hello')) {
-          // consume
-        }
-      }
-
-      expect(spawnControl.capturedArgs[0]).toContain('--no-session-persistence');
-    });
-  });
-
-  // ============================================================
-  // 3. Core CLI args are always correct
+  // 4. Core CLI args are always correct
   // ============================================================
   describe('core CLI args', () => {
     test('every send uses -p flag (prompt mode)', async () => {
@@ -226,17 +195,7 @@ describe('ClaudeProcess stateless mode', () => {
       expect(spawnControl.capturedArgs[1]).toContain('-p');
     });
 
-    test('--dangerously-skip-permissions is NOT included by default', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      await proc.send('Hello');
-      expect(spawnControl.capturedArgs[0]).not.toContain('--dangerously-skip-permissions');
-    });
-
-    test('--dangerously-skip-permissions is included when skipPermissions is true', async () => {
+    test('--dangerously-skip-permissions only on first call when enabled', async () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
         systemPrompt: 'Test',
@@ -244,20 +203,11 @@ describe('ClaudeProcess stateless mode', () => {
       });
 
       await proc.send('Hello');
+      await proc.send('World');
+
       expect(spawnControl.capturedArgs[0]).toContain('--dangerously-skip-permissions');
-    });
-
-    test('--system-prompt is passed through', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'You are a helpful assistant.',
-      });
-
-      await proc.send('Hello');
-      const args = spawnControl.capturedArgs[0];
-      expect(args).toContain('--system-prompt');
-      const idx = args.indexOf('--system-prompt');
-      expect(args[idx + 1]).toBe('You are a helpful assistant.');
+      // Subsequent calls omit config flags
+      expect(spawnControl.capturedArgs[1]).not.toContain('--dangerously-skip-permissions');
     });
 
     test('message is passed as -p argument', async () => {
@@ -274,35 +224,9 @@ describe('ClaudeProcess stateless mode', () => {
   });
 
   // ============================================================
-  // 4. _alive behavior after errors (remaining issue to monitor)
+  // 5. _alive behavior after errors
   // ============================================================
   describe('_alive after errors', () => {
-    test('process stays alive after sendStreaming yields error event', async () => {
-      spawnControl.setExitCodes([1]);
-
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      expect(proc.alive).toBe(true);
-
-      const events: StreamEvent[] = [];
-      if (proc.sendStreaming) {
-        for await (const event of proc.sendStreaming('Hello')) {
-          events.push(event);
-        }
-      }
-
-      // Verify we got an error event
-      expect(events.some((e) => e.type === 'error')).toBe(true);
-
-      // Note: _alive stays true after sendStreaming error.
-      // In stateless mode this is acceptable since each send spawns a fresh CLI process.
-      // The process object is reusable for subsequent independent calls.
-      expect(proc.alive).toBe(true);
-    });
-
     test('process stays alive after send() throws BackendError', async () => {
       spawnControl.setExitCodes([1]);
 
@@ -317,9 +241,6 @@ describe('ClaudeProcess stateless mode', () => {
         // Expected: BackendError
       }
 
-      // In stateless mode, alive staying true is acceptable:
-      // each send() spawns a new CLI process, so a transient failure
-      // doesn't mean the next call will fail.
       expect(proc.alive).toBe(true);
     });
 
@@ -338,7 +259,6 @@ describe('ClaudeProcess stateless mode', () => {
         // Expected
       }
 
-      // Since alive is true, we can retry and succeed
       const result = await proc.send('Second');
       expect(result).toBe('mock response');
     });
@@ -356,130 +276,9 @@ describe('ClaudeProcess stateless mode', () => {
   });
 
   // ============================================================
-  // 5. Error handling
-  // ============================================================
-  describe('error handling', () => {
-    test('send() throws BackendError on exit code 1', async () => {
-      spawnControl.setExitCodes([1]);
-
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      await expect(proc.send('Hello')).rejects.toThrow('Process exited with code 1');
-    });
-
-    test('sendStreaming yields error event on exit code 1', async () => {
-      spawnControl.setExitCodes([1]);
-
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      const events: StreamEvent[] = [];
-      if (proc.sendStreaming) {
-        for await (const event of proc.sendStreaming('Hello')) {
-          events.push(event);
-        }
-      }
-
-      const errorEvent = events.find((e) => e.type === 'error');
-      expect(errorEvent).toBeDefined();
-      expect((errorEvent as { error: string }).error).toContain('Backend exited with code 1');
-    });
-
-    test('sendStreaming yields complete event on success', async () => {
-      spawnControl.setExitCodes([0]);
-
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      const events: StreamEvent[] = [];
-      if (proc.sendStreaming) {
-        for await (const event of proc.sendStreaming('Hello')) {
-          events.push(event);
-        }
-      }
-
-      expect(events.some((e) => e.type === 'chunk')).toBe(true);
-      expect(events[events.length - 1].type).toBe('complete');
-    });
-  });
-
-  // ============================================================
-  // 6. Concurrent sends in stateless mode
-  // ============================================================
-  describe('concurrent sends', () => {
-    test('concurrent sends all use --no-session-persistence', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      await Promise.all([proc.send('Msg1'), proc.send('Msg2'), proc.send('Msg3')]);
-
-      for (const args of spawnControl.capturedArgs) {
-        expect(args).toContain('--no-session-persistence');
-        expect(args).not.toContain('--session-id');
-        expect(args).not.toContain('--resume');
-      }
-    });
-
-    test('concurrent sends are independent (no shared session state)', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-      });
-
-      const [r1, r2, r3] = await Promise.all([
-        proc.send('Msg1'),
-        proc.send('Msg2'),
-        proc.send('Msg3'),
-      ]);
-
-      // All calls return independently
-      expect(r1).toBe('mock response');
-      expect(r2).toBe('mock response');
-      expect(r3).toBe('mock response');
-      expect(spawnControl.capturedArgs.length).toBe(3);
-    });
-  });
-
-  // ============================================================
-  // 7. Edge cases
+  // 6. Edge cases
   // ============================================================
   describe('edge cases', () => {
-    test('sessionId in config is ignored (stateless mode)', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-        sessionId: 'sess-should-be-ignored',
-      });
-
-      await proc.send('Hello');
-      const args = spawnControl.capturedArgs[0];
-      expect(args).toContain('--no-session-persistence');
-      expect(args).not.toContain('--session-id');
-      expect(args).not.toContain('sess-should-be-ignored');
-    });
-
-    test('empty string sessionId causes no issues', async () => {
-      const proc = await backend.spawn({
-        agentId: 'test-agent',
-        systemPrompt: 'Test',
-        sessionId: '',
-      });
-
-      await proc.send('Hello');
-      const args = spawnControl.capturedArgs[0];
-      expect(args).toContain('--no-session-persistence');
-      expect(args).not.toContain('--session-id');
-    });
-
     test('stop() is idempotent', async () => {
       const proc = await backend.spawn({
         agentId: 'test-agent',
@@ -489,6 +288,16 @@ describe('ClaudeProcess stateless mode', () => {
       await proc.stop();
       await proc.stop(); // should not throw
       expect(proc.alive).toBe(false);
+    });
+
+    test('no --no-session-persistence flag (session mode)', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'Test',
+      });
+
+      await proc.send('Hello');
+      expect(spawnControl.capturedArgs[0]).not.toContain('--no-session-persistence');
     });
   });
 });

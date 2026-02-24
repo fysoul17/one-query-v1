@@ -23,8 +23,8 @@ const backendStyles: Record<string, { label: string; color: string; badgeClass: 
     color: 'text-neon-cyan',
     badgeClass: 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20',
   },
-  ollama: {
-    label: 'Ollama',
+  pi: {
+    label: 'Pi',
     color: 'text-neon-amber',
     badgeClass: 'bg-neon-amber/10 text-neon-amber border-neon-amber/20',
   },
@@ -73,16 +73,14 @@ function AuthInfo({ backend }: { backend: BackendStatus }) {
       </div>
     );
   }
-  // Ollama: no auth needed, show connection info
-  if (backend.name === 'ollama') {
-    if (backend.available) {
-      return (
-        <div className="text-xs text-muted-foreground">
-          <span className="text-foreground/70">Auth:</span> None required (local server)
-        </div>
-      );
+  // Pi: API key based auth
+  if (backend.name === 'pi') {
+    if (!backend.available) {
+      return <div className="text-xs text-red-400">{backend.error ?? 'CLI not installed'}</div>;
     }
-    return <div className="text-xs text-red-400">{backend.error ?? 'Server unreachable'}</div>;
+    if (!backend.configured) {
+      return <div className="text-xs text-neon-amber">No API key configured</div>;
+    }
   }
   if (!backend.available) {
     return <div className="text-xs text-red-400">{backend.error ?? 'CLI not installed'}</div>;
