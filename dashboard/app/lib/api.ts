@@ -10,6 +10,7 @@ import type {
   CreateCronRequest,
   CreateSessionRequest,
   CronEntry,
+  CronEntryWithStatus,
   CronExecutionLog,
   EnvironmentConfig,
   GraphNode,
@@ -116,8 +117,8 @@ export async function getConfig(): Promise<PlatformConfig> {
   return fetchApi<PlatformConfig>('/api/config');
 }
 
-export async function getCrons(): Promise<CronEntry[]> {
-  return fetchApi<CronEntry[]>('/api/crons');
+export async function getCrons(): Promise<CronEntryWithStatus[]> {
+  return fetchApi<CronEntryWithStatus[]>('/api/crons');
 }
 
 export async function createCron(data: CreateCronRequest): Promise<CronEntry> {
@@ -144,6 +145,14 @@ export async function triggerCron(id: string): Promise<CronExecutionLog> {
   return fetchApi<CronExecutionLog>(`/api/crons/${id}/trigger`, {
     method: 'POST',
   });
+}
+
+export async function getCronLogs(cronId?: string, limit?: number): Promise<CronExecutionLog[]> {
+  const params = new URLSearchParams();
+  if (cronId) params.set('cronId', cronId);
+  if (limit) params.set('limit', String(limit));
+  const qs = params.toString();
+  return fetchApi<CronExecutionLog[]>(`/api/crons/logs${qs ? `?${qs}` : ''}`);
 }
 
 // Advanced memory API

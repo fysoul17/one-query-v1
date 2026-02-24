@@ -55,6 +55,7 @@ function createTrackingBackend() {
         }),
         stop: mock(async () => {}),
         alive: true,
+        nativeSessionId: undefined,
       };
       processes.push(proc);
       return proc;

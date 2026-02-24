@@ -49,10 +49,10 @@ export interface EnvironmentConfig {
   TRUST_PROXY: boolean;
   /** Max stream duration in milliseconds for AI backend responses. */
   STREAM_TIMEOUT_MS: number;
-  /** Ollama server URL (default: http://localhost:11434). */
-  OLLAMA_URL?: string;
-  /** Default Ollama model (default: llama3.2). */
-  OLLAMA_MODEL?: string;
+  /** API key for Pi CLI (multi-provider gateway). */
+  PI_API_KEY?: string;
+  /** Default Pi model (e.g., openai/gpt-4.1, anthropic/claude-sonnet). */
+  PI_MODEL?: string;
   /** API key for OpenAI Codex CLI. */
   CODEX_API_KEY?: string;
   /** API key for Google Gemini CLI. */

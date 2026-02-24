@@ -1,5 +1,11 @@
 import type { Conductor } from '@autonomy/conductor';
-import type { CronConfig, CronEntry, CronExecutionLog, CronWorkflow } from '@autonomy/shared';
+import type {
+  CronConfig,
+  CronEntry,
+  CronEntryWithStatus,
+  CronExecutionLog,
+  CronWorkflow,
+} from '@autonomy/shared';
 import { Logger } from '@autonomy/shared';
 import { Cron } from 'croner';
 import { CronNotFoundError, CronNotInitializedError, CronScheduleError } from './errors.ts';
@@ -162,6 +168,26 @@ export class CronManager {
       logs = logs.slice(-limit);
     }
     return logs;
+  }
+
+  getNextRun(id: string): Date | null {
+    const job = this.jobs.get(id);
+    if (!job) return null;
+    return job.nextRun() ?? null;
+  }
+
+  getStatus(): CronEntryWithStatus[] {
+    this.ensureInitialized();
+    return this.crons.map((cron) => {
+      const nextRun = this.getNextRun(cron.id);
+      const cronLogs = this.getExecutionLogs(cron.id);
+      const lastExecution = cronLogs.at(-1) ?? null;
+      return {
+        ...cron,
+        nextRunAt: nextRun ? nextRun.toISOString() : null,
+        lastExecution,
+      };
+    });
   }
 
   private scheduleJob(entry: CronEntry): void {

@@ -51,6 +51,8 @@ class CodexProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
+  private _nativeSessionId: string | undefined;
+  private _firstCallDone = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -58,6 +60,10 @@ class CodexProcess implements BackendProcess {
 
   get alive(): boolean {
     return this._alive;
+  }
+
+  get nativeSessionId(): string | undefined {
+    return this._nativeSessionId;
   }
 
   async send(message: string): Promise<string> {
@@ -90,7 +96,20 @@ class CodexProcess implements BackendProcess {
       throw new BackendError('codex', `Process exited with code ${exitCode}`);
     }
 
-    return stdout.trim();
+    this._firstCallDone = true;
+
+    // Try to parse session_id from JSON output
+    const trimmed = stdout.trim();
+    try {
+      const parsed = JSON.parse(trimmed) as { session_id?: string };
+      if (parsed.session_id) {
+        this._nativeSessionId = parsed.session_id;
+      }
+    } catch {
+      // Not JSON — that's fine, return as plain text
+    }
+
+    return trimmed;
   }
 
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -124,7 +143,13 @@ class CodexProcess implements BackendProcess {
   }
 
   private buildArgs(message: string): string[] {
-    const args: string[] = ['-q', message];
+    // Session resume: subsequent calls use `exec resume <sessionId> <message>`
+    if (this._nativeSessionId) {
+      return ['exec', 'resume', this._nativeSessionId, message];
+    }
+
+    // First call: `exec <message>` with config flags
+    const args: string[] = ['exec', message];
 
     if (this.config.model) {
       args.push('--model', this.config.model);

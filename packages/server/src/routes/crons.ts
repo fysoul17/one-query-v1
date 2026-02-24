@@ -7,8 +7,25 @@ import type { RouteParams } from '../router.ts';
 export function createCronRoutes(cronManager: CronManager) {
   return {
     list: async (): Promise<Response> => {
-      const crons = cronManager.list();
+      const crons = cronManager.getStatus();
       return jsonResponse(crons);
+    },
+
+    logs: async (req: Request): Promise<Response> => {
+      const url = new URL(req.url);
+      const cronId = url.searchParams.get('cronId') ?? undefined;
+      const limitParam = url.searchParams.get('limit');
+      let limit = 50;
+      if (limitParam) {
+        const parsed = Number.parseInt(limitParam, 10);
+        if (Number.isNaN(parsed) || parsed < 1) {
+          throw new BadRequestError('limit must be a positive integer');
+        }
+        limit = Math.min(parsed, 200);
+      }
+
+      const logs = cronManager.getExecutionLogs(cronId, limit);
+      return jsonResponse(logs);
     },
 
     create: async (req: Request): Promise<Response> => {

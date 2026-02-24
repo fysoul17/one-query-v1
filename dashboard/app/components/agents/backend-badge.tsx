@@ -15,8 +15,8 @@ const backendConfig: Record<string, { label: string; className: string }> = {
     label: 'Gemini',
     className: 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/20',
   },
-  ollama: {
-    label: 'Ollama',
+  pi: {
+    label: 'Pi',
     className: 'bg-neon-amber/10 text-neon-amber border-neon-amber/20',
   },
 };

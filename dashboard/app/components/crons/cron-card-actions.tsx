@@ -1,9 +1,9 @@
 'use client';
 
-import type { CronEntry } from '@autonomy/shared';
-import { MoreVertical, Pause, Play, Trash2, Zap } from 'lucide-react';
+import type { CronEntryWithStatus } from '@autonomy/shared';
+import { FileText, MoreVertical, Pause, Play, Trash2, Zap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,40 +22,54 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { deleteCron, triggerCron, updateCron } from '@/lib/api';
+import { CronLogsDialog } from './cron-logs-dialog';
 
-export function CronCardActions({ cron }: { cron: CronEntry }) {
+export function CronCardActions({ cron }: { cron: CronEntryWithStatus }) {
   const router = useRouter();
   const [showDelete, setShowDelete] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
-  async function handleTrigger() {
+  // Auto-clear success message
+  useEffect(() => {
+    if (!success) return;
+    const timer = setTimeout(() => setSuccess(''), 3000);
+    return () => clearTimeout(timer);
+  }, [success]);
+
+  const handleTrigger = useCallback(async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       await triggerCron(cron.id);
+      setSuccess('Triggered successfully');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trigger');
     } finally {
       setLoading(false);
     }
-  }
+  }, [cron.id, router]);
 
-  async function handleToggle() {
+  const handleToggle = useCallback(async () => {
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
       await updateCron(cron.id, { enabled: !cron.enabled });
+      setSuccess(cron.enabled ? 'Disabled' : 'Enabled');
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to toggle');
     } finally {
       setLoading(false);
     }
-  }
+  }, [cron.id, cron.enabled, router]);
 
-  async function handleDelete() {
+  const handleDelete = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -67,13 +81,18 @@ export function CronCardActions({ cron }: { cron: CronEntry }) {
       setLoading(false);
       setShowDelete(false);
     }
-  }
+  }, [cron.id, router]);
 
   return (
     <>
       {error && (
         <p className="absolute -bottom-5 left-0 right-0 truncate text-[10px] text-neon-red">
           {error}
+        </p>
+      )}
+      {success && (
+        <p className="absolute -bottom-5 left-0 right-0 truncate text-[10px] text-neon-green">
+          {success}
         </p>
       )}
       <DropdownMenu>
@@ -105,6 +124,10 @@ export function CronCardActions({ cron }: { cron: CronEntry }) {
               </>
             )}
           </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setShowLogs(true)}>
+            <FileText className="mr-2 h-4 w-4" />
+            View Logs
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setShowDelete(true)}
             disabled={loading}
@@ -133,6 +156,13 @@ export function CronCardActions({ cron }: { cron: CronEntry }) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <CronLogsDialog
+        cronId={cron.id}
+        cronName={cron.name}
+        open={showLogs}
+        onOpenChange={setShowLogs}
+      />
     </>
   );
 }

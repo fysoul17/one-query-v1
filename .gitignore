@@ -5,6 +5,11 @@ dist/
 *.tsbuildinfo
 .env
 .env.local
-data/
+data/*
+!data/config.json
+!data/crons.json
+!data/agents
+data/agents/*
+!data/agents/registry.json
 **/secrets.json
 bun.lock

@@ -34,6 +34,8 @@ export interface BackendProcess {
   stop(): Promise<void>;
   /** Whether the process is currently alive and can receive messages. */
   readonly alive: boolean;
+  /** Native session ID from the CLI backend (captured after first call). */
+  readonly nativeSessionId: string | undefined;
 }
 
 /** Pluggable CLI backend for spawning AI agent processes. */

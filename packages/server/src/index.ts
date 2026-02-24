@@ -8,7 +8,7 @@ import {
   CodexBackend,
   DefaultBackendRegistry,
   GeminiBackend,
-  OllamaBackend,
+  PiBackend,
 } from '@autonomy/agent-manager';
 import { Conductor } from '@autonomy/conductor';
 import {
@@ -120,7 +120,7 @@ async function main() {
     mkdirSync(config.DATA_DIR, { recursive: true });
   }
   // Ensure CLI config directories exist (for existing Docker volumes that predate this change)
-  for (const subdir of ['claude', 'codex', 'gemini']) {
+  for (const subdir of ['claude', 'codex', 'gemini', 'pi']) {
     const cliConfigDir = join(config.DATA_DIR, 'cli-config', subdir);
     if (!existsSync(cliConfigDir)) {
       mkdirSync(cliConfigDir, { recursive: true });
@@ -193,7 +193,7 @@ async function main() {
   registry.register(new ClaudeBackend());
   registry.register(new CodexBackend());
   registry.register(new GeminiBackend());
-  registry.register(new OllamaBackend());
+  registry.register(new PiBackend());
 
   // Initialize Agent Pool (with registry for per-agent backend selection)
   const workspaceDir = join(config.DATA_DIR, 'workspaces');
@@ -315,6 +315,7 @@ async function main() {
   router.get('/api/memory/stats', memoryRoutes.stats);
 
   router.get('/api/crons', cronRoutes.list);
+  router.get('/api/crons/logs', cronRoutes.logs);
   router.post('/api/crons', cronRoutes.create);
   router.put('/api/crons/:id', cronRoutes.update);
   router.delete('/api/crons/:id', cronRoutes.remove);

@@ -61,6 +61,7 @@ function createMockBackend() {
     }),
     stop: mock(async () => {}),
     alive: true,
+    nativeSessionId: undefined,
   };
 
   const backend: CLIBackend = {

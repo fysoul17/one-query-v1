@@ -65,7 +65,7 @@ export function ConfigForm({ config }: { config: EnvironmentConfig }) {
               <SelectItem value="claude">Claude</SelectItem>
               <SelectItem value="codex">Codex</SelectItem>
               <SelectItem value="gemini">Gemini</SelectItem>
-              <SelectItem value="ollama">Ollama</SelectItem>
+              <SelectItem value="pi">Pi</SelectItem>
             </SelectContent>
           </Select>
         </div>

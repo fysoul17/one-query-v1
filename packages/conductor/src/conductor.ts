@@ -199,23 +199,6 @@ export class Conductor {
     );
     const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
 
-    // Emit context_inject event so the debug console can show conversation history stats.
-    const history = processedMessage.conversationHistory;
-    if (history && history.length > 0) {
-      const historyChars = history.reduce((sum, m) => sum + m.content.length, 0);
-      onEvent?.({
-        type: ConductorEventType.CONTEXT_INJECT,
-        content: `Injected ${history.length} history messages (${historyChars} chars)`,
-        historyTurnCount: history.length,
-        historyChars,
-      });
-      conductorLogger.debug('Conversation history injected', {
-        sessionId: processedMessage.sessionId,
-        historyTurnCount: history.length,
-        historyChars,
-      });
-    }
-
     let accumulatedContent = '';
 
     if (processedMessage.targetAgentId) {
@@ -363,18 +346,6 @@ export class Conductor {
 
       // Hook: onAfterMemorySearch — plugins can transform memory results
       const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
-
-      // Emit context_inject event for monitoring if conversation history is present.
-      const execHistory = processedMessage.conversationHistory;
-      if (execHistory && execHistory.length > 0) {
-        const historyChars = execHistory.reduce((sum, m) => sum + m.content.length, 0);
-        onEvent?.({
-          type: ConductorEventType.CONTEXT_INJECT,
-          content: `Injected ${execHistory.length} history messages (${historyChars} chars)`,
-          historyTurnCount: execHistory.length,
-          historyChars,
-        });
-      }
 
       // 2. Dispatch — delegate to specific agent or respond directly
       let responseContent: string;
@@ -689,17 +660,11 @@ export class Conductor {
   ): string {
     let prompt = message.content;
 
-    // Inject ordered conversation history (short-term context for current session).
-    // History comes first so Claude sees the conversation flow before any long-term memory.
-    const history = message.conversationHistory;
-    if (history && history.length > 0) {
-      const formatted = history
-        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-        .join('\n\n');
-      prompt = `<conversation-history>\n${formatted}\n</conversation-history>\n\nUser message: ${prompt}`;
-    }
+    // Conversation history is no longer injected here — native session resume
+    // in each CLI backend (Claude --resume, Codex exec resume, Gemini --resume,
+    // Pi RPC mode) handles multi-turn context natively.
 
-    // Layer on RAG memory (long-term knowledge across sessions, complementary to history).
+    // Layer on RAG memory (long-term knowledge across sessions).
     if (memoryContext && memoryContext.entries.length > 0) {
       const contextSnippet = memoryContext.entries
         .slice(0, 3)

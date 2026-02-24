@@ -32,6 +32,7 @@ export const LOGIN_COMMANDS: Record<string, string[]> = {
   claude: ['claude'],
   codex: ['codex', 'login', '--device-auth'],
   gemini: ['gemini', 'auth', 'login'],
+  pi: ['pi', 'auth', 'login'],
 };
 
 /** Delay (ms) before auto-injecting `/login` into the Claude REPL. */

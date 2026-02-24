@@ -1,8 +1,8 @@
 /**
- * Claude Backend Session — Tests for ClaudeBackend session handling.
+ * Claude Backend Session — Tests for ClaudeBackend session resume handling.
  *
- * Current state: Stateless mode — each send() spawns an independent CLI invocation with
- * --no-session-persistence. No --session-id or --resume flags are used.
+ * Current state: Session-persistent mode — first send() captures a session_id from
+ * JSON output, subsequent sends use --resume <id> to continue the conversation natively.
  *
  * NOTE: These test the buildArgs() logic by examining what gets passed to Bun.spawn.
  * We use the real ClaudeBackend but mock Bun.spawn via spyOn to capture args.
@@ -26,11 +26,15 @@ describe('ClaudeBackend session flags', () => {
     Bun.spawn = mock((...args: unknown[]) => {
       const cmd = args[0] as string[];
       capturedArgs.push(cmd);
-      // Return a fake process object
+      // Return a fake process with JSON output containing session_id
       return {
         stdout: new ReadableStream({
           start(controller) {
-            controller.enqueue(new TextEncoder().encode('mock response'));
+            controller.enqueue(
+              new TextEncoder().encode(
+                JSON.stringify({ session_id: 'sess-abc-001', result: 'mock response' }),
+              ),
+            );
             controller.close();
           },
         }),
@@ -50,28 +54,27 @@ describe('ClaudeBackend session flags', () => {
     Bun.spawn = originalSpawn;
   });
 
-  describe('stateless mode (current behavior)', () => {
-    test('does not pass --session-id even when sessionId is in config', async () => {
+  describe('session resume mode', () => {
+    test('first call uses -p without --resume', async () => {
       const config: BackendSpawnConfig = {
         agentId: 'session-agent',
         systemPrompt: 'Test',
-        sessionId: 'sess-abc-123',
       };
 
       const proc = await backend.spawn(config);
       await proc.send('Hello');
 
       const args = capturedArgs[0] as string[];
-      // Stateless mode: --no-session-persistence is used, no --session-id
-      expect(args).not.toContain('--session-id');
-      expect(args).toContain('--no-session-persistence');
+      expect(args).toContain('-p');
+      expect(args).not.toContain('--resume');
+      // No --no-session-persistence in session mode
+      expect(args).not.toContain('--no-session-persistence');
     });
 
-    test('does not pass --resume on subsequent sends', async () => {
+    test('second call uses --resume with captured session_id', async () => {
       const config: BackendSpawnConfig = {
         agentId: 'resume-agent',
         systemPrompt: 'Test',
-        sessionId: 'sess-resume-456',
       };
 
       const proc = await backend.spawn(config);
@@ -80,19 +83,34 @@ describe('ClaudeBackend session flags', () => {
       await proc.send('Second message');
 
       expect(capturedArgs.length).toBe(2);
-      // Neither call should have --resume in stateless mode
+      // First call: no --resume
       expect(capturedArgs[0]).not.toContain('--resume');
-      expect(capturedArgs[1]).not.toContain('--resume');
-      // Both should have --no-session-persistence
-      expect(capturedArgs[0]).toContain('--no-session-persistence');
-      expect(capturedArgs[1]).toContain('--no-session-persistence');
+      // Second call: --resume with the session_id
+      expect(capturedArgs[1]).toContain('--resume');
+      expect(capturedArgs[1]).toContain('sess-abc-001');
+    });
+
+    test('first call includes --system-prompt, subsequent calls do not', async () => {
+      const config: BackendSpawnConfig = {
+        agentId: 'resume-agent',
+        systemPrompt: 'You are a helper',
+      };
+
+      const proc = await backend.spawn(config);
+      await proc.send('First');
+      await proc.send('Second');
+
+      // First call has system prompt
+      expect(capturedArgs[0]).toContain('--system-prompt');
+      // Second call omits it (session stores it)
+      expect(capturedArgs[1]).not.toContain('--system-prompt');
     });
   });
 
-  describe('--no-session-persistence flag', () => {
-    test('passes --no-session-persistence for all agents', async () => {
+  describe('--output-format json for send()', () => {
+    test('non-streaming send uses --output-format json', async () => {
       const config: BackendSpawnConfig = {
-        agentId: 'ephemeral-agent',
+        agentId: 'json-agent',
         systemPrompt: 'Test',
       };
 
@@ -100,24 +118,28 @@ describe('ClaudeBackend session flags', () => {
       await proc.send('Hello');
 
       const args = capturedArgs[0] as string[];
-      expect(args).toContain('--no-session-persistence');
-      expect(args).not.toContain('--session-id');
+      expect(args).toContain('--output-format');
+      const fmtIdx = args.indexOf('--output-format');
+      expect(args[fmtIdx + 1]).toBe('json');
     });
   });
 
-  describe('no session flags when not configured', () => {
-    test('omits --session-id and --resume when sessionId is undefined', async () => {
-      const config: BackendSpawnConfig = {
-        agentId: 'no-session-agent',
+  describe('nativeSessionId getter', () => {
+    test('nativeSessionId is undefined before first send', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
         systemPrompt: 'Test',
-      };
+      });
+      expect(proc.nativeSessionId).toBeUndefined();
+    });
 
-      const proc = await backend.spawn(config);
+    test('nativeSessionId is set after first send', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test-agent',
+        systemPrompt: 'Test',
+      });
       await proc.send('Hello');
-
-      const args = capturedArgs[0] as string[];
-      expect(args).not.toContain('--session-id');
-      expect(args).not.toContain('--resume');
+      expect(proc.nativeSessionId).toBe('sess-abc-001');
     });
   });
 });
