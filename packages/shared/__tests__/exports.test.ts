@@ -45,11 +45,19 @@ describe('@autonomy/shared exports', () => {
     expect(shared.MemoryType).toBeDefined();
     expect(shared.MemoryType.SHORT_TERM).toBe('short-term');
     expect(shared.MemoryType.LONG_TERM).toBe('long-term');
+    expect(shared.MemoryType.WORKING).toBe('working');
+    expect(shared.MemoryType.EPISODIC).toBe('episodic');
+    expect(shared.MemoryType.SUMMARY).toBe('summary');
+    expect(Object.keys(shared.MemoryType)).toHaveLength(5);
   });
 
   test('exports RAGStrategy enum', () => {
     expect(shared.RAGStrategy).toBeDefined();
     expect(shared.RAGStrategy.NAIVE).toBe('naive');
+    expect(shared.RAGStrategy.GRAPH).toBe('graph');
+    expect(shared.RAGStrategy.AGENTIC).toBe('agentic');
+    expect(shared.RAGStrategy.HYBRID).toBe('hybrid');
+    expect(Object.keys(shared.RAGStrategy)).toHaveLength(4);
   });
 
   test('exports VectorProvider enum', () => {

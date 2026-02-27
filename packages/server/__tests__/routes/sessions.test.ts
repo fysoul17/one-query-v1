@@ -4,7 +4,7 @@ import type { MemoryInterface } from '@pyx-memory/client';
 import { BadRequestError, NotFoundError } from '../../src/errors.ts';
 import { createSessionRoutes } from '../../src/routes/sessions.ts';
 import { SessionStore } from '../../src/session-store.ts';
-import { MockMemory } from '../helpers/mock-memory.ts';
+import { MockMemory, MockExtendedMemory } from '../helpers/mock-memory.ts';
 
 describe('Session routes', () => {
   let db: Database;
@@ -209,5 +209,54 @@ describe('Session routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.deleted).toBe(session.id);
     });
+  });
+});
+
+describe('Session routes — extended memory (summarization)', () => {
+  let db: Database;
+  let store: SessionStore;
+  let extMemory: MockExtendedMemory;
+  let routes: ReturnType<typeof createSessionRoutes>;
+
+  beforeEach(() => {
+    db = new Database(':memory:');
+    db.exec('PRAGMA foreign_keys = ON;');
+    store = new SessionStore(db);
+    extMemory = new MockExtendedMemory();
+    routes = createSessionRoutes(store, extMemory as unknown as MemoryInterface);
+  });
+
+  test('session delete calls summarizeSession when memory supports it', async () => {
+    const session = store.create({ title: 'Summarize Me' });
+
+    const req = new Request(`http://localhost/api/sessions/${session.id}`, {
+      method: 'DELETE',
+    });
+    const res = await routes.remove(req, { id: session.id });
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.data.deleted).toBe(session.id);
+    expect(extMemory.summarizeSessionCalls).toContain(session.id);
+    expect(extMemory.clearSessionCalls).toContain(session.id);
+  });
+
+  test('session delete succeeds even when summarizeSession throws', async () => {
+    const session = store.create({ title: 'Fail Summarize' });
+
+    extMemory.summarizeSession = async () => {
+      throw new Error('summarize exploded');
+    };
+
+    const req = new Request(`http://localhost/api/sessions/${session.id}`, {
+      method: 'DELETE',
+    });
+    const res = await routes.remove(req, { id: session.id });
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.data.deleted).toBe(session.id);
+    // clearSession should still have been called despite summarize failure
+    expect(extMemory.clearSessionCalls).toContain(session.id);
   });
 });

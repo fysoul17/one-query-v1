@@ -15,6 +15,7 @@ import {
   Logger,
   type MemorySearchResult,
   MemoryType,
+  RAGStrategy,
 } from '@autonomy/shared';
 import { nanoid } from 'nanoid';
 import { ActivityLog } from './activity-log.ts';
@@ -177,27 +178,12 @@ export class Conductor {
 
     const decisions: ConductorDecision[] = [];
 
-    // Hook: onBeforeMessage
-    const processedMessage = await this.runBeforeMessageHook(message);
-    if (processedMessage === null) {
+    const prepared = await this.prepareMessage(message, onEvent);
+    if (!prepared) {
       yield { type: 'error', error: 'Message rejected by plugin.' };
       return;
     }
-
-    // Memory search
-    const rawMemoryContext = await this.timedStep(
-      () => this.searchMemoryContext(processedMessage),
-      (durationMs, result) =>
-        onEvent?.({
-          type: ConductorEventType.MEMORY_SEARCH,
-          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
-          durationMs,
-          memoryResults: result?.entries.length ?? 0,
-          memoryQuery: processedMessage.content,
-          memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
-        }),
-    );
-    const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
+    const { processedMessage, memoryContext } = prepared;
 
     let accumulatedContent = '';
 
@@ -232,6 +218,18 @@ export class Conductor {
         yield { type: 'error', error: msg };
         return;
       }
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'delegate',
+        targetAgentId: processedMessage.targetAgentId,
+        reason: `Delegated to agent "${processedMessage.targetAgentId}"`,
+      });
+      onEvent?.({
+        type: ConductorEventType.DELEGATION_COMPLETE,
+        content: 'Delegation complete',
+        durationMs: 0,
+        decisions,
+      });
     } else {
       // Conductor responds directly — use per-session backend process
       const configOverrides = processedMessage.metadata?.configOverrides as
@@ -292,16 +290,14 @@ export class Conductor {
       }
     }
 
-    // Hook: onAfterResponse
-    await this.runAfterResponseHook(accumulatedContent, processedMessage.targetAgentId, decisions);
-
-    // Store conversation in memory (non-fatal)
-    try {
-      await this.storeConversation(processedMessage, decisions, accumulatedContent);
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      conductorLogger.warn('Memory store failed', { error: detail });
-    }
+    // Finalize — afterResponse hook, store conversation, record activity
+    await this.finalizeResponse(
+      processedMessage,
+      accumulatedContent,
+      processedMessage.targetAgentId,
+      decisions,
+      onEvent,
+    );
   }
 
   private async executeMessage(
@@ -313,9 +309,8 @@ export class Conductor {
     try {
       const decisions: ConductorDecision[] = [];
 
-      // Hook: onBeforeMessage — plugins can transform or reject the message
-      const processedMessage = await this.runBeforeMessageHook(message);
-      if (processedMessage === null) {
+      const prepared = await this.prepareMessage(message, onEvent);
+      if (!prepared) {
         this.processing = false;
         this.processQueue();
         return {
@@ -329,23 +324,7 @@ export class Conductor {
           ],
         };
       }
-
-      // 1. Search memory for context (non-fatal)
-      const rawMemoryContext = await this.timedStep(
-        () => this.searchMemoryContext(processedMessage),
-        (durationMs, result) =>
-          onEvent?.({
-            type: ConductorEventType.MEMORY_SEARCH,
-            content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
-            durationMs,
-            memoryResults: result?.entries.length ?? 0,
-            memoryQuery: processedMessage.content,
-            memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
-          }),
-      );
-
-      // Hook: onAfterMemorySearch — plugins can transform memory results
-      const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
+      const { processedMessage, memoryContext } = prepared;
 
       // 2. Dispatch — delegate to specific agent or respond directly
       let responseContent: string;
@@ -387,29 +366,13 @@ export class Conductor {
         );
       }
 
-      // Hook: onAfterResponse — plugins can transform the response
-      responseContent = await this.runAfterResponseHook(
+      // Finalize — afterResponse hook, store conversation, record activity
+      responseContent = await this.finalizeResponse(
+        processedMessage,
         responseContent,
         responseAgentId,
         decisions,
-      );
-
-      // 3. Store conversation in memory (non-fatal)
-      await this.timedStep(
-        () => this.storeConversation(processedMessage, decisions, responseContent),
-        (durationMs) =>
-          onEvent?.({
-            type: ConductorEventType.MEMORY_STORE,
-            content: 'Conversation stored',
-            durationMs,
-          }),
-      );
-
-      this.activityLog.record(
-        ActivityType.MESSAGE,
-        `Handled message from "${processedMessage.senderName}"`,
-        undefined,
-        { senderId: processedMessage.senderId },
+        onEvent,
       );
 
       const response: ConductorResponse = {
@@ -713,11 +676,86 @@ export class Conductor {
     return responseContent;
   }
 
+  /**
+   * Common pipeline prefix: runs beforeMessage hook, memory search, and
+   * afterMemorySearch hook. Returns null when the message is rejected by a plugin.
+   */
+  private async prepareMessage(
+    message: IncomingMessage,
+    onEvent?: OnConductorEvent,
+  ): Promise<{
+    processedMessage: IncomingMessage;
+    memoryContext: MemorySearchResult | null;
+  } | null> {
+    const processedMessage = await this.runBeforeMessageHook(message);
+    if (processedMessage === null) return null;
+
+    const rawMemoryContext = await this.timedStep(
+      () => this.searchMemoryContext(processedMessage),
+      (durationMs, result) =>
+        onEvent?.({
+          type: ConductorEventType.MEMORY_SEARCH,
+          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
+          durationMs,
+          memoryResults: result?.entries.length ?? 0,
+          memoryQuery: processedMessage.content,
+          memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
+        }),
+    );
+    const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
+
+    return { processedMessage, memoryContext };
+  }
+
+  /**
+   * Common pipeline suffix: runs afterResponse hook (using the transformed
+   * content for storage), stores the conversation in memory, and records
+   * the activity log entry.
+   */
+  private async finalizeResponse(
+    processedMessage: IncomingMessage,
+    responseContent: string,
+    responseAgentId: string | undefined,
+    decisions: ConductorDecision[],
+    onEvent?: OnConductorEvent,
+  ): Promise<string> {
+    const finalContent = await this.runAfterResponseHook(
+      responseContent,
+      responseAgentId,
+      decisions,
+    );
+
+    try {
+      await this.timedStep(
+        () => this.storeConversation(processedMessage, decisions, finalContent),
+        (durationMs) =>
+          onEvent?.({
+            type: ConductorEventType.MEMORY_STORE,
+            content: 'Conversation stored',
+            durationMs,
+          }),
+      );
+    } catch (error) {
+      const detail = getErrorDetail(error);
+      conductorLogger.warn('Memory store failed', { error: detail });
+    }
+
+    this.activityLog.record(
+      ActivityType.MESSAGE,
+      `Handled message from "${processedMessage.senderName}"`,
+      undefined,
+      { senderId: processedMessage.senderId },
+    );
+
+    return finalContent;
+  }
+
   private async searchMemoryContext(message: IncomingMessage): Promise<MemorySearchResult | null> {
     try {
       return await this.memory.search({
         query: message.content,
         limit: 5,
+        strategy: RAGStrategy.HYBRID,
         ...(message.sessionId ? { agentId: message.senderId } : {}),
       });
     } catch (error) {
@@ -853,7 +891,7 @@ export class Conductor {
       if (responseContent && responseContent.trim().length > 0) {
         await this.memory.store({
           content: responseContent,
-          type: MemoryType.SHORT_TERM,
+          type: MemoryType.EPISODIC,
           agentId: 'conductor',
           sessionId: message.sessionId,
           metadata: { role: 'assistant' },

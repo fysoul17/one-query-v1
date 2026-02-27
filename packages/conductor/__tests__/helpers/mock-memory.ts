@@ -1,3 +1,4 @@
+import type { MemoryInterface } from '@pyx-memory/client';
 import type {
   MemoryEntry,
   MemorySearchParams,
@@ -7,7 +8,7 @@ import type {
 } from '@autonomy/shared';
 import { RAGStrategy } from '@autonomy/shared';
 
-export class MockMemory {
+export class MockMemory implements MemoryInterface {
   private entries = new Map<string, MemoryEntry>();
   private _searchResults: MemorySearchResult = {
     entries: [],
@@ -55,15 +56,15 @@ export class MockMemory {
     return this._searchResults;
   }
 
-  get(id: string): MemoryEntry | null {
+  async get(id: string): Promise<MemoryEntry | null> {
     return this.entries.get(id) ?? null;
   }
 
-  delete(id: string): boolean {
+  async delete(id: string): Promise<boolean> {
     return this.entries.delete(id);
   }
 
-  clearSession(_sessionId: string): number {
+  async clearSession(_sessionId: string): Promise<number> {
     return 0;
   }
 

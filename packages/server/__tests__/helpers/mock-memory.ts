@@ -1,5 +1,11 @@
-import type { MemoryInterface } from '@pyx-memory/client';
-import type { MemoryEntry, MemorySearchParams, MemorySearchResult, MemoryStats } from '@autonomy/shared';
+import type { MemoryInterface, ConsolidationRunResult, ExtendedMemoryInterface } from '@pyx-memory/client';
+import type {
+  MemoryEntry,
+  MemorySearchParams,
+  MemorySearchResult,
+  MemoryStats,
+} from '@autonomy/shared';
+import { RAGStrategy } from '@autonomy/shared';
 
 export class MockMemory implements MemoryInterface {
   clearSessionCalls: string[] = [];
@@ -15,15 +21,16 @@ export class MockMemory implements MemoryInterface {
     return {
       id: entry.id ?? crypto.randomUUID(),
       content: entry.content,
+      type: entry.type,
       sessionId: entry.sessionId,
       agentId: entry.agentId,
-      tags: entry.tags ?? [],
+      metadata: entry.metadata ?? {},
       createdAt: entry.createdAt ?? new Date().toISOString(),
     };
   }
 
   async search(_params: MemorySearchParams): Promise<MemorySearchResult> {
-    return { entries: [], total: 0 };
+    return { entries: [], totalCount: 0, strategy: RAGStrategy.NAIVE };
   }
 
   async get(_id: string): Promise<MemoryEntry | null> {
@@ -40,10 +47,58 @@ export class MockMemory implements MemoryInterface {
   }
 
   async stats(): Promise<MemoryStats> {
-    return { totalEntries: 0, totalSessions: 0, totalAgents: 0 };
+    return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0 };
   }
 
   async shutdown(): Promise<void> {
     this.initialized = false;
+  }
+}
+
+/**
+ * Extended mock that also implements lifecycle methods (consolidate, forget, etc.).
+ * Use this for lifecycle route tests and session delete summarization tests.
+ */
+export class MockExtendedMemory extends MockMemory implements ExtendedMemoryInterface {
+  consolidateCalls = 0;
+  forgetCalls: Array<{ id: string; reason?: string }> = [];
+  summarizeSessionCalls: string[] = [];
+  decayCalls = 0;
+  reindexCalls = 0;
+  deleteBySourceCalls: string[] = [];
+
+  async consolidate(): Promise<ConsolidationRunResult> {
+    this.consolidateCalls++;
+    return { entriesProcessed: 10, entriesMerged: 2, entriesArchived: 1, durationMs: 100 };
+  }
+
+  async forget(id: string, reason?: string): Promise<boolean> {
+    this.forgetCalls.push({ id, reason });
+    return true;
+  }
+
+  async summarizeSession(sessionId: string): Promise<MemoryEntry | null> {
+    this.summarizeSessionCalls.push(sessionId);
+    return {
+      id: 'summary-1',
+      content: `Summary of session ${sessionId}`,
+      type: 'summary' as MemoryEntry['type'],
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async runDecay(): Promise<number> {
+    this.decayCalls++;
+    return 3;
+  }
+
+  async reindex(): Promise<void> {
+    this.reindexCalls++;
+  }
+
+  async deleteBySource(source: string): Promise<number> {
+    this.deleteBySourceCalls.push(source);
+    return 5;
   }
 }

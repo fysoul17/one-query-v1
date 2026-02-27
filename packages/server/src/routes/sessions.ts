@@ -1,9 +1,13 @@
 import type { MemoryInterface } from '@pyx-memory/client';
 import type { CreateSessionRequest, UpdateSessionRequest } from '@autonomy/shared';
+import { Logger } from '@autonomy/shared';
 import { BadRequestError, NotFoundError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
 import type { SessionStore } from '../session-store.ts';
+import { isExtended } from './lifecycle.ts';
+
+const logger = new Logger({ context: { source: 'sessions' } });
 
 export function createSessionRoutes(store: SessionStore, memory: MemoryInterface) {
   return {
@@ -54,16 +58,26 @@ export function createSessionRoutes(store: SessionStore, memory: MemoryInterface
       const { id } = params;
       if (!id) throw new BadRequestError('Session id is required');
 
-      const deleted = store.delete(id);
-      if (!deleted) throw new NotFoundError(`Session "${id}" not found`);
+      if (!store.getById(id)) throw new NotFoundError(`Session "${id}" not found`);
+
+      // Summarize session to long-term memory before clearing/deleting
+      if (isExtended(memory)) {
+        try {
+          await memory.summarizeSession(id);
+        } catch {
+          logger.warn('Failed to summarize session', { sessionId: id });
+        }
+      }
 
       // Clear any memory associated with this session
       try {
         await memory.clearSession(id);
       } catch {
-        // Log but don't fail the delete
-        console.warn(`[sessions] Failed to clear memory for session ${id}`);
+        logger.warn('Failed to clear memory for session', { sessionId: id });
       }
+
+      // Delete session record last, after memory operations are done
+      store.delete(id);
 
       return jsonResponse({ deleted: id });
     },

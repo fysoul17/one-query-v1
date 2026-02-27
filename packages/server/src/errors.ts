@@ -22,6 +22,13 @@ export class NotFoundError extends ServerError {
   }
 }
 
+export class NotImplementedError extends ServerError {
+  constructor(message = 'Not implemented') {
+    super(message, 501);
+    this.name = 'NotImplementedError';
+  }
+}
+
 export class InternalError extends ServerError {
   constructor(message = 'Internal server error') {
     super(message, 500);

@@ -22,11 +22,19 @@ import {
   UsageTracker,
 } from '@autonomy/control-plane';
 import { CronManager } from '@autonomy/cron-manager';
-import { createMemory, StubEmbeddingProvider } from '@pyx-memory/core';
+import {
+  createMemory,
+  HybridRAGEngine,
+  LocalEmbeddingProvider,
+  LLMReranker,
+  registerRAGEngine,
+  SQLiteGraphStore,
+} from '@pyx-memory/core';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
 import { DebugEventCategory, DebugEventLevel, Logger } from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
 import { parseEnvConfig } from './config.ts';
+import { createMemoryLLMCallback } from './memory-llm-bridge.ts';
 import { ConfigManager } from './config-manager.ts';
 import { DebugBus, makeDebugEvent } from './debug-bus.ts';
 import { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
@@ -38,8 +46,10 @@ import { createAuthRoutes } from './routes/auth.ts';
 import { createBackendRoutes } from './routes/backends.ts';
 import { createConfigRoutes } from './routes/config.ts';
 import { createCronRoutes } from './routes/crons.ts';
+import { createGraphRoutes } from './routes/graph.ts';
 import { createHealthRoute } from './routes/health.ts';
 import { createInstanceRoutes } from './routes/instances.ts';
+import { createLifecycleRoutes, isExtended } from './routes/lifecycle.ts';
 import { createMemoryRoutes } from './routes/memory.ts';
 import { createSessionRoutes } from './routes/sessions.ts';
 import { createUsageRoutes } from './routes/usage.ts';
@@ -54,7 +64,13 @@ export { ConfigManager, ConfigUpdateError } from './config-manager.ts';
 export { DebugBus, makeDebugEvent } from './debug-bus.ts';
 export { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
 // --- Exports for library use ---
-export { BadRequestError, InternalError, NotFoundError, ServerError } from './errors.ts';
+export {
+  BadRequestError,
+  InternalError,
+  NotFoundError,
+  NotImplementedError,
+  ServerError,
+} from './errors.ts';
 export {
   corsHeaders,
   errorResponse,
@@ -70,8 +86,11 @@ export { createAuthRoutes } from './routes/auth.ts';
 export { createBackendRoutes } from './routes/backends.ts';
 export { createConfigRoutes } from './routes/config.ts';
 export { createCronRoutes } from './routes/crons.ts';
+export { createGraphRoutes } from './routes/graph.ts';
 export { createHealthRoute } from './routes/health.ts';
 export { createInstanceRoutes } from './routes/instances.ts';
+export { createLifecycleRoutes } from './routes/lifecycle.ts';
+export { createMemoryLLMCallback } from './memory-llm-bridge.ts';
 export { createMemoryRoutes } from './routes/memory.ts';
 export { createSessionRoutes } from './routes/sessions.ts';
 export { createUsageRoutes } from './routes/usage.ts';
@@ -80,9 +99,6 @@ export { SessionStore } from './session-store.ts';
 export { createWebSocketHandler, type WSData } from './websocket.ts';
 
 // --- Bootstrap (only when run directly) ---
-
-const stubProvider = new StubEmbeddingProvider();
-const stubEmbedder = (texts: string[]) => stubProvider.embed(texts);
 
 // --- Combined WS data type for Bun.serve ---
 
@@ -144,24 +160,65 @@ async function main() {
   });
   logger.info('Control plane initialized', { auth: config.AUTH_ENABLED });
 
+  // Initialize Backend Registry (before memory so LLM callback is available)
+  const registry = new DefaultBackendRegistry(config.AI_BACKEND);
+  registry.register(new ClaudeBackend());
+  registry.register(new CodexBackend());
+  registry.register(new GeminiBackend());
+  registry.register(new PiBackend());
+
+  // Wire LLM callback for pyx-memory v2 (consolidation, summarization, reranking)
+  let memoryLLMShutdown: (() => Promise<void>) | undefined;
+  let llmCallback: ((prompt: string) => Promise<string>) | undefined;
+  try {
+    const llmHandle = await createMemoryLLMCallback(registry.getDefault());
+    memoryLLMShutdown = llmHandle.shutdown;
+    llmCallback = llmHandle.callback;
+    logger.info('LLM callback initialized for memory lifecycle');
+  } catch (error) {
+    logger.warn('Failed to initialize LLM callback for memory; will use fallback heuristics', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   // Initialize Memory (uses MemoryClient if MEMORY_URL is set, otherwise embedded)
+  const graphStore = new SQLiteGraphStore();
+  const embedder = new LocalEmbeddingProvider(384);
   const memory = createMemory({
     dataDir: config.DATA_DIR,
     vectorProvider: config.VECTOR_PROVIDER,
     qdrantUrl: config.QDRANT_URL,
-    embedder: stubEmbedder,
+    embedder: (texts: string[]) => embedder.embed(texts),
+    dimensions: 384,
     memoryUrl: config.MEMORY_URL,
+    graphStore,
+    skipDuplicates: true,
+    llm: llmCallback,
   });
   await memory.initialize();
-  logger.info('Memory initialized');
+  logger.info('Memory initialized', { llm: !!llmCallback });
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.MEMORY,
       level: DebugEventLevel.INFO,
       source: 'memory.init',
-      message: 'Memory system initialized',
+      message: `Memory system initialized${llmCallback ? ' with LLM' : ' (no LLM)'}`,
     }),
   );
+
+  // Register Hybrid RAG engine (uses LLM reranker if callback available)
+  if (llmCallback) {
+    registerRAGEngine(
+      new HybridRAGEngine({
+        graphStore,
+        reranker: new LLMReranker(llmCallback),
+      }),
+    );
+    logger.info('Hybrid RAG engine registered with LLM reranker');
+  } else {
+    registerRAGEngine(new HybridRAGEngine({ graphStore }));
+    logger.info('Hybrid RAG engine registered with NoopReranker');
+  }
 
   // Initialize Plugin System
   const hookRegistry = new HookRegistry({
@@ -187,13 +244,6 @@ async function main() {
       message: 'Plugin system initialized',
     }),
   );
-
-  // Initialize Backend Registry
-  const registry = new DefaultBackendRegistry(config.AI_BACKEND);
-  registry.register(new ClaudeBackend());
-  registry.register(new CodexBackend());
-  registry.register(new GeminiBackend());
-  registry.register(new PiBackend());
 
   // Initialize Agent Pool (with registry for per-agent backend selection)
   const workspaceDir = join(config.DATA_DIR, 'workspaces');
@@ -248,6 +298,56 @@ async function main() {
   await cronManager.initialize();
   logger.info('CronManager initialized');
 
+  // Memory lifecycle: periodic consolidation and decay
+  const lifecycleIntervals: ReturnType<typeof setInterval>[] = [];
+  if (isExtended(memory)) {
+    let consolidating = false;
+    let decaying = false;
+
+    // Consolidation every 30 minutes (with overlap protection)
+    lifecycleIntervals.push(
+      setInterval(async () => {
+        if (consolidating) return;
+        consolidating = true;
+        try {
+          const result = await memory.consolidate();
+          logger.info('Memory consolidation completed', {
+            processed: result.entriesProcessed,
+            merged: result.entriesMerged,
+            archived: result.entriesArchived,
+            durationMs: result.durationMs,
+          });
+        } catch (error) {
+          logger.warn('Memory consolidation failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          consolidating = false;
+        }
+      }, 30 * 60 * 1000),
+    );
+
+    // Decay every 24 hours (with overlap protection)
+    lifecycleIntervals.push(
+      setInterval(async () => {
+        if (decaying) return;
+        decaying = true;
+        try {
+          const archived = await memory.runDecay();
+          logger.info('Memory decay completed', { archived });
+        } catch (error) {
+          logger.warn('Memory decay failed', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } finally {
+          decaying = false;
+        }
+      }, 24 * 60 * 60 * 1000),
+    );
+
+    logger.info('Memory lifecycle timers registered (consolidation: 30m, decay: 24h)');
+  }
+
   // Register instance with live heartbeat callback
   instanceRegistry.register(config.PORT, '0.0.0', async () => {
     let memoryStatus = 'ok';
@@ -292,6 +392,8 @@ async function main() {
   const healthRoute = createHealthRoute(conductor, memory, startTime);
   const agentRoutes = createAgentRoutes(conductor, pool);
   const memoryRoutes = createMemoryRoutes(memory);
+  const lifecycleRoutes = createLifecycleRoutes(memory);
+  const graphRoutes = createGraphRoutes(graphStore);
   const cronRoutes = createCronRoutes(cronManager);
   const activityRoute = createActivityRoute(conductor);
   const configRoutes = createConfigRoutes(configManager);
@@ -313,6 +415,25 @@ async function main() {
   router.post('/api/memory/ingest', memoryRoutes.ingest);
   router.post('/api/memory/ingest/file', memoryRoutes.ingestFile);
   router.get('/api/memory/stats', memoryRoutes.stats);
+  router.get('/api/memory/entries', memoryRoutes.entries);
+  router.get('/api/memory/entries/:id', memoryRoutes.getEntry);
+  router.delete('/api/memory/entries/:id', memoryRoutes.deleteEntry);
+
+  router.delete('/api/memory/sessions/:sessionId', memoryRoutes.clearSession);
+
+  router.post('/api/memory/consolidate', lifecycleRoutes.consolidate);
+  router.post('/api/memory/forget/:id', lifecycleRoutes.forget);
+  router.post('/api/memory/sessions/:sessionId/summarize', lifecycleRoutes.summarizeSession);
+  router.post('/api/memory/decay', lifecycleRoutes.decay);
+  router.post('/api/memory/reindex', lifecycleRoutes.reindex);
+  router.delete('/api/memory/source/:source', lifecycleRoutes.deleteBySource);
+  router.get('/api/memory/consolidation-log', lifecycleRoutes.consolidationLog);
+  router.get('/api/memory/query-as-of', lifecycleRoutes.queryAsOf);
+
+  router.get('/api/memory/graph/nodes', graphRoutes.getNodes);
+  router.get('/api/memory/graph/edges', graphRoutes.getEdges);
+  router.get('/api/memory/graph/relationships', graphRoutes.getRelationships);
+  router.post('/api/memory/graph/query', graphRoutes.query);
 
   router.get('/api/crons', cronRoutes.list);
   router.get('/api/crons/logs', cronRoutes.logs);
@@ -329,12 +450,12 @@ async function main() {
   // Backend routes
   router.get('/api/backends/status', backendRoutes.status);
   router.get('/api/backends/options', backendRoutes.options);
-  router.put('/api/backends/api-key', backendRoutes.updateApiKey);
+  router.put('/api/backends/api-key', (req: Request) => backendRoutes.updateApiKey(req));
   router.put('/api/backends/:name/api-key', (req: Request, params: Record<string, string>) =>
     backendRoutes.updateApiKey(req, params.name),
   );
   router.post('/api/backends/:name/logout', (_req: Request, params: Record<string, string>) =>
-    backendRoutes.logout(params.name),
+    backendRoutes.logout(params.name!),
   );
 
   // Auth routes
@@ -506,12 +627,14 @@ async function main() {
         message: 'Server shutting down',
       }),
     );
+    for (const interval of lifecycleIntervals) clearInterval(interval);
     instanceRegistry.deregister();
     ws.shutdown();
     debugWs.shutdown();
     await pluginManager.shutdown();
     await cronManager.shutdown();
     await conductor.shutdown();
+    if (memoryLLMShutdown) await memoryLLMShutdown();
     await pool.shutdown();
     await memory.shutdown();
     controlPlaneDb.close();

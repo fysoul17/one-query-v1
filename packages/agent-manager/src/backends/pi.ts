@@ -105,8 +105,8 @@ class PiProcess implements BackendProcess {
         stderr: 'pipe',
       });
 
-      const stdoutStream = this._process.stdout as ReadableStream;
-      this._stdoutReader = stdoutStream.getReader();
+      this._stdoutReader = (this._process.stdout as ReadableStream<Uint8Array>)
+        .getReader() as ReadableStreamDefaultReader<Uint8Array>;
       this._lineBuffer = '';
       this._ensuring = null;
     })();
@@ -122,13 +122,12 @@ class PiProcess implements BackendProcess {
     await this.ensureProcess();
 
     const proc = this._process!;
-    const stdin = proc.stdin as WritableStream;
-    const writer = stdin.getWriter();
+    const stdin = proc.stdin as import('bun').FileSink;
 
     // Write JSON message to stdin
     const request = JSON.stringify({ type: 'message', content: message }) + '\n';
-    await writer.write(new TextEncoder().encode(request));
-    writer.releaseLock();
+    stdin.write(request);
+    stdin.flush();
 
     // Read NDJSON response lines until we get a complete response
     const chunks: string[] = [];
@@ -190,12 +189,11 @@ class PiProcess implements BackendProcess {
     }
 
     const proc = this._process!;
-    const stdin = proc.stdin as WritableStream;
-    const writer = stdin.getWriter();
+    const stdin = proc.stdin as import('bun').FileSink;
 
     const request = JSON.stringify({ type: 'message', content: message }) + '\n';
-    await writer.write(new TextEncoder().encode(request));
-    writer.releaseLock();
+    stdin.write(request);
+    stdin.flush();
 
     while (true) {
       if (signal?.aborted) {

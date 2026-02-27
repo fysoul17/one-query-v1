@@ -109,6 +109,23 @@ describe('@autonomy/shared type definitions', () => {
       createdAt: new Date().toISOString(),
     };
     expect(entry.type).toBe('long-term');
+    expect(entry.metadata).toEqual({ source: 'test' });
+  });
+
+  test('MemoryEntry supports v2 optional fields', () => {
+    const entry: MemoryEntry = {
+      id: 'mem-2',
+      content: 'Episodic memory',
+      type: 'episodic',
+      metadata: {},
+      createdAt: new Date().toISOString(),
+      importance: 8,
+      accessCount: 3,
+      source: 'conductor',
+      contentHash: 'abc123',
+    };
+    expect(entry.type).toBe('episodic');
+    expect(entry.importance).toBe(8);
   });
 
   test('ActivityEntry type is structurally valid', () => {

@@ -93,6 +93,11 @@ interface PtySession {
   authPollTimer?: ReturnType<typeof setTimeout>;
 }
 
+/** Narrow proc.stdin to FileSink (always valid when spawned with stdin: 'pipe'). */
+function getStdin(proc: PtySession['proc']): import('bun').FileSink {
+  return proc.stdin as import('bun').FileSink;
+}
+
 const sessions = new Map<string, PtySession>();
 
 /** 5-minute hard timeout for login PTY sessions. */
@@ -176,8 +181,9 @@ function gracefullyExitRepl(session: PtySession, sessionId: string): void {
   }
 
   try {
-    session.proc.stdin.write('/exit\r');
-    session.proc.stdin.flush();
+    const stdin = getStdin(session.proc);
+    stdin.write('/exit\r');
+    stdin.flush();
   } catch {
     // stdin already closed
   }
@@ -308,8 +314,9 @@ export function createTerminalWebSocketHandler() {
           setTimeout(() => {
             if (!session.alive) return;
             try {
-              session.proc.stdin.write('/login\r');
-              session.proc.stdin.flush();
+              const stdin = getStdin(session.proc);
+              stdin.write('/login\r');
+              stdin.flush();
             } catch {
               // stdin closed
             }
@@ -325,8 +332,9 @@ export function createTerminalWebSocketHandler() {
 
         try {
           const data = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
-          session.proc.stdin.write(data);
-          session.proc.stdin.flush();
+          const stdin = getStdin(session.proc);
+          stdin.write(data);
+          stdin.flush();
         } catch {
           // stdin closed
         }
@@ -359,7 +367,7 @@ export function createTerminalWebSocketHandler() {
         }
 
         try {
-          session.proc.stdin.end();
+          getStdin(session.proc).end();
         } catch {
           // Ignore
         }
