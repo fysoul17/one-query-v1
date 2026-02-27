@@ -3,6 +3,7 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  Logger,
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
@@ -47,12 +48,13 @@ function buildSafeEnv(): Record<string, string> {
   return env;
 }
 
+const geminiLogger = new Logger({ context: { source: 'gemini-backend' } });
+
 class GeminiProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
   private _nativeSessionId: string | undefined;
-  private _firstCallDone = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -71,44 +73,15 @@ class GeminiProcess implements BackendProcess {
       throw new BackendError('gemini', 'Process is not alive');
     }
 
-    const args = this.buildArgs(message);
-    const env = buildSafeEnv();
-
-    this._process = Bun.spawn(['gemini', ...args], {
-      cwd: this.config.cwd ?? process.cwd(),
-      env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const stdoutStream = this._process.stdout as ReadableStream;
-    const stderrStream = this._process.stderr as ReadableStream;
-
-    const [stdout, _stderr, exitCode] = await Promise.all([
-      new Response(stdoutStream).text(),
-      new Response(stderrStream).text(),
-      this._process.exited,
-    ]);
-
-    this._process = null;
-
-    if (exitCode !== 0) {
-      throw new BackendError('gemini', `Process exited with code ${exitCode}`);
-    }
-
-    // Try to parse session_id from JSON output
-    const trimmed = stdout.trim();
-    try {
-      const parsed = JSON.parse(trimmed) as { session_id?: string };
-      if (parsed.session_id) {
-        this._nativeSessionId = parsed.session_id;
-        this._firstCallDone = true;
+    const chunks: string[] = [];
+    for await (const event of this.sendStreaming(message)) {
+      if (event.type === 'chunk' && event.content) {
+        chunks.push(event.content);
+      } else if (event.type === 'error') {
+        throw new BackendError('gemini', event.error ?? 'Unknown error');
       }
-    } catch {
-      // Not JSON — that's fine, return as plain text
     }
-
-    return trimmed;
+    return chunks.join('');
   }
 
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -122,14 +95,137 @@ class GeminiProcess implements BackendProcess {
       return;
     }
 
-    try {
-      const result = await this.send(message);
-      if (result) {
-        yield { type: 'chunk', content: result };
+    const args = this.buildArgs(message);
+    const env = buildSafeEnv();
+
+    // Gemini uses GEMINI_SYSTEM_MD env var for system prompt
+    if (this.config.systemPrompt && !this._nativeSessionId) {
+      const tmpDir = process.env.TMPDIR || '/tmp';
+      const promptFile = `${tmpDir}/gemini-prompt-${this.config.agentId}.md`;
+      await Bun.write(promptFile, this.config.systemPrompt);
+      env.GEMINI_SYSTEM_MD = promptFile;
+    }
+
+    const onAbort = () => {
+      if (this._process && this._process.exitCode === null) {
+        this._process.kill();
       }
-      yield { type: 'complete' };
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    try {
+      this._process = Bun.spawn(['gemini', ...args], {
+        cwd: this.config.cwd ?? process.cwd(),
+        env,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const reader = (this._process.stdout as ReadableStream<Uint8Array>)
+        .getReader() as ReadableStreamDefaultReader<Uint8Array>;
+      const decoder = new TextDecoder();
+      let lineBuffer = '';
+      let hasContent = false;
+      let streamDone = false;
+
+      // Collect stderr in background
+      const stderrPromise = new Response(this._process.stderr as ReadableStream).text();
+
+      while (true) {
+        if (signal?.aborted) {
+          yield { type: 'error', error: 'Aborted' };
+          reader.releaseLock();
+          return;
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        lineBuffer += decoder.decode(value, { stream: true });
+
+        // Process complete NDJSON lines
+        let newlineIdx: number;
+        while ((newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+          const line = lineBuffer.slice(0, newlineIdx).trim();
+          lineBuffer = lineBuffer.slice(newlineIdx + 1);
+          if (!line) continue;
+
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+
+            // Capture session_id from init event
+            if (typeof parsed.session_id === 'string' && parsed.session_id) {
+              this._nativeSessionId = parsed.session_id;
+            }
+
+            // Map Gemini stream-json events to StreamEvent
+            const events = this.parseGeminiEvent(parsed);
+            for (const event of events) {
+              if (event.type === 'chunk') hasContent = true;
+              if (event.type === 'complete' || event.type === 'error') streamDone = true;
+              yield event;
+            }
+            if (streamDone) break;
+          } catch {
+            // Not valid JSON — emit as raw text chunk
+            if (line) {
+              hasContent = true;
+              yield { type: 'chunk', content: line };
+            }
+          }
+        }
+        if (streamDone) break;
+      }
+
+      // Process any remaining buffer
+      if (!streamDone) {
+        const remaining = lineBuffer.trim();
+        if (remaining) {
+          try {
+            const parsed = JSON.parse(remaining) as Record<string, unknown>;
+            if (typeof parsed.session_id === 'string' && parsed.session_id) {
+              this._nativeSessionId = parsed.session_id;
+            }
+            const events = this.parseGeminiEvent(parsed);
+            for (const event of events) {
+              if (event.type === 'chunk') hasContent = true;
+              if (event.type === 'complete' || event.type === 'error') streamDone = true;
+              yield event;
+            }
+          } catch {
+            if (remaining) {
+              hasContent = true;
+              yield { type: 'chunk', content: remaining };
+            }
+          }
+        }
+      }
+
+      reader.releaseLock();
+
+      const exitCode = await this._process.exited;
+      const stderrText = await stderrPromise;
+      this._process = null;
+
+      if (!streamDone) {
+        if (exitCode !== 0) {
+          const stderr = stderrText.trim().slice(0, 500);
+          yield {
+            type: 'error',
+            error: stderr
+              ? `Backend exited with code ${exitCode}: ${stderr}`
+              : `Backend process exited with code ${exitCode}`,
+          };
+        } else if (!hasContent && stderrText.trim()) {
+          yield { type: 'error', error: `Backend produced no output: ${stderrText.trim().slice(0, 500)}` };
+        } else {
+          yield { type: 'complete' };
+        }
+      }
     } catch (error) {
       yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -139,16 +235,116 @@ class GeminiProcess implements BackendProcess {
       this._process = null;
     }
     this._alive = false;
+
+    // Clean up temp system prompt file
+    const tmpDir = process.env.TMPDIR || '/tmp';
+    const promptFile = `${tmpDir}/gemini-prompt-${this.config.agentId}.md`;
+    try {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(promptFile);
+    } catch {
+      // File may not exist if sendStreaming was never called
+    }
+  }
+
+  /**
+   * Map a Gemini CLI stream-json event to StreamEvents.
+   *
+   * Gemini --output-format stream-json emits NDJSON events:
+   *   {type:"init", session_id:"...", model:"...", timestamp:"..."}
+   *   {type:"message", role:"user"|"assistant", content:"..."}
+   *   {type:"tool_use", tool_name:"...", parameters:{...}}
+   *   {type:"tool_result", tool_id:"...", status:"success"|"error", output:"..."}
+   *   {type:"error", message:"..."}
+   *   {type:"result", status:"success"|"error", stats:{...}}
+   */
+  private parseGeminiEvent(parsed: Record<string, unknown>): StreamEvent[] {
+    const events: StreamEvent[] = [];
+    const eventType = parsed.type as string | undefined;
+
+    switch (eventType) {
+      case 'init':
+        // Session start — just capture session_id (already done above)
+        geminiLogger.debug('Gemini session init', {
+          sessionId: parsed.session_id,
+          model: parsed.model,
+        });
+        break;
+
+      case 'message': {
+        const role = parsed.role as string | undefined;
+        const content = parsed.content as string | undefined;
+        if (role === 'assistant' && content) {
+          events.push({ type: 'chunk', content });
+        }
+        break;
+      }
+
+      case 'tool_use': {
+        const toolName = parsed.tool_name as string | undefined;
+        const toolId = (parsed.tool_id as string) || `tool-${Date.now()}`;
+        if (toolName) {
+          events.push({ type: 'tool_start', toolId, toolName });
+          const params = parsed.parameters;
+          if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+            events.push({
+              type: 'tool_input',
+              toolId,
+              toolName,
+              inputDelta: JSON.stringify(params, null, 2),
+            });
+          }
+        }
+        break;
+      }
+
+      case 'tool_result': {
+        const toolId = parsed.tool_id as string | undefined;
+        if (toolId) {
+          events.push({ type: 'tool_complete', toolId });
+        }
+        break;
+      }
+
+      case 'error': {
+        const message = (parsed.message as string) || 'Unknown Gemini error';
+        events.push({ type: 'error', error: message });
+        break;
+      }
+
+      case 'result': {
+        const status = parsed.status as string | undefined;
+        if (status === 'error') {
+          const errMsg = (parsed.error as { message?: string })?.message || 'Gemini session failed';
+          events.push({ type: 'error', error: errMsg });
+        } else {
+          events.push({ type: 'complete' });
+        }
+        break;
+      }
+
+      default:
+        // Unknown event type — check for generic content
+        if (typeof parsed.content === 'string' && parsed.content) {
+          events.push({ type: 'chunk', content: parsed.content });
+        }
+        break;
+    }
+
+    return events;
   }
 
   private buildArgs(message: string): string[] {
+    // Always include stream-json output and auto-approval
+    const baseFlags = ['--output-format', 'stream-json', '--approval-mode=yolo'];
+
     // Session resume: subsequent calls use `--resume <sessionId> -p <message>`
     if (this._nativeSessionId) {
-      return ['--resume', this._nativeSessionId, '-p', message];
+      return [...baseFlags, '--resume', this._nativeSessionId, '-p', message];
     }
 
     // First call: include full config flags
-    const args: string[] = ['-p', message];
+    const args: string[] = [...baseFlags, '-p', message];
 
     if (this.config.model) {
       args.push('--model', this.config.model);

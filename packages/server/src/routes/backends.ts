@@ -15,6 +15,7 @@ const BACKEND_KEY_CONFIG: Record<string, { envVar: string; altEnvVar?: string; p
     codex: { envVar: 'CODEX_API_KEY', altEnvVar: 'OPENAI_API_KEY' },
     gemini: { envVar: 'GEMINI_API_KEY', altEnvVar: 'GOOGLE_API_KEY' },
     pi: { envVar: 'PI_API_KEY' },
+    ollama: { envVar: 'OLLAMA_BASE_URL' },
   };
 
 function buildStatusResponse(registry: BackendRegistry): Promise<BackendStatusResponse> {

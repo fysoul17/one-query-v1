@@ -1,0 +1,37 @@
+# Dockerfile.memory — Standalone pyx-memory sidecar service
+# Used for --profile full (Graph RAG with Neo4j)
+# Context: repo root (for CI builds). Docker-compose uses vendor/pyx-memory context instead.
+
+FROM oven/bun:1.2.16
+
+WORKDIR /app
+
+# Install dependencies
+# All pyx-memory workspace package.json files must be present for bun to resolve the lockfile.
+COPY vendor/pyx-memory/package.json vendor/pyx-memory/bun.lock* ./
+COPY vendor/pyx-memory/packages/shared/package.json ./packages/shared/
+COPY vendor/pyx-memory/packages/core/package.json ./packages/core/
+COPY vendor/pyx-memory/packages/client/package.json ./packages/client/
+COPY vendor/pyx-memory/packages/server/package.json ./packages/server/
+
+RUN bun install --frozen-lockfile || bun install
+
+# Copy source (Bun runs TS directly — no build step)
+COPY vendor/pyx-memory/tsconfig.base.json ./
+COPY vendor/pyx-memory/packages/ ./packages/
+
+# Create data directory
+RUN mkdir -p /data && chown -R bun:bun /data
+
+# Runtime config
+ENV DATA_DIR=/data
+ENV MEMORY_SERVER_PORT=7822
+
+USER bun
+
+EXPOSE 7822
+
+HEALTHCHECK --interval=10s --timeout=5s --start-period=10s --retries=5 \
+  CMD bun -e "fetch('http://localhost:7822/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+CMD ["bun", "packages/server/src/index.ts"]

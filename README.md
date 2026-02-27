@@ -194,7 +194,7 @@ docker compose -f docker/docker-compose.yaml down
 ### Run Tests
 
 ```bash
-bun run test           # All packages (925 tests)
+bun run test           # All packages
 bun run typecheck      # TypeScript checking
 bun run lint           # Biome linting
 ```
@@ -383,6 +383,8 @@ bun run typecheck            # Type checking
 ### Extension Points
 
 - [ ] **Channel Adapters** — Telegram, Discord, Slack (extension point)
+- [ ] **Community Backends** — Copilot, Cline, Aider (community contribution candidates)
+- [ ] **Organization Templates** — YAML-based agent team definitions
 
 ---
 

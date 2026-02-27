@@ -292,6 +292,12 @@ export class PiBackend implements CLIBackend {
     return new PiProcess(config);
   }
 
+  async logout(): Promise<void> {
+    // Pi uses API key auth — clear the env var.
+    // The server route also calls secretStore.removeBackendKeys() after this.
+    delete process.env.PI_API_KEY;
+  }
+
   async getStatus(): Promise<BackendStatus> {
     const cliPath = typeof Bun !== 'undefined' ? Bun.which('pi') : null;
     const available = cliPath !== null;

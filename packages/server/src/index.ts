@@ -8,6 +8,7 @@ import {
   CodexBackend,
   DefaultBackendRegistry,
   GeminiBackend,
+  OllamaBackend,
   PiBackend,
 } from '@autonomy/agent-manager';
 import { Conductor } from '@autonomy/conductor';
@@ -166,6 +167,7 @@ async function main() {
   registry.register(new CodexBackend());
   registry.register(new GeminiBackend());
   registry.register(new PiBackend());
+  registry.register(new OllamaBackend());
 
   // Wire LLM callback for pyx-memory v2 (consolidation, summarization, reranking)
   let memoryLLMShutdown: (() => Promise<void>) | undefined;
@@ -183,6 +185,7 @@ async function main() {
 
   // Initialize Memory (uses MemoryClient if MEMORY_URL is set, otherwise embedded)
   const graphStore = new SQLiteGraphStore();
+  await graphStore.initialize({});
   const embedder = new LocalEmbeddingProvider(384);
   const memory = createMemory({
     dataDir: config.DATA_DIR,
@@ -291,6 +294,8 @@ async function main() {
 
   // Seed pre-configured agents (idempotent)
   await runSeeds(pool, agentStore);
+  // Restore newly seeded agents into the pool (restore() skips already-loaded agents)
+  await pool.restore();
   logger.info('Agent seeds applied');
 
   // Initialize CronManager
@@ -431,8 +436,11 @@ async function main() {
   router.get('/api/memory/query-as-of', lifecycleRoutes.queryAsOf);
 
   router.get('/api/memory/graph/nodes', graphRoutes.getNodes);
+  router.post('/api/memory/graph/nodes', graphRoutes.createNode);
+  router.delete('/api/memory/graph/nodes/:id', graphRoutes.deleteNode);
   router.get('/api/memory/graph/edges', graphRoutes.getEdges);
   router.get('/api/memory/graph/relationships', graphRoutes.getRelationships);
+  router.post('/api/memory/graph/relationships', graphRoutes.createRelationship);
   router.post('/api/memory/graph/query', graphRoutes.query);
 
   router.get('/api/crons', cronRoutes.list);

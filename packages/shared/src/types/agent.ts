@@ -22,17 +22,6 @@ export interface AgentDefinition {
   backendModel?: string;
 }
 
-export interface AgentRegistryEntry {
-  id: AgentId;
-  file: string;
-  owner: AgentOwner;
-  autoStart: boolean;
-}
-
-export interface AgentRegistry {
-  agents: AgentRegistryEntry[];
-}
-
 export interface AgentStoreInterface {
   save(definition: AgentDefinition): void;
   update(id: AgentId, definition: AgentDefinition): void;

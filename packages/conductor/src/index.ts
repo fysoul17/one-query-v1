@@ -14,8 +14,6 @@ export type {
   ConductorEvent,
   ConductorOptions,
   ConductorResponse,
-  DelegationPipelineResult,
-  DelegationStep,
   IncomingMessage,
   OnConductorEvent,
 } from './types.ts';

@@ -71,23 +71,6 @@ export interface QuotaConfig {
   maxAgents: number;
 }
 
-// --- Billing Types ---
-
-export const BillingEventType = {
-  QUOTA_WARNING: 'quota_warning',
-  QUOTA_EXCEEDED: 'quota_exceeded',
-  KEY_CREATED: 'key_created',
-  KEY_REVOKED: 'key_revoked',
-} as const;
-export type BillingEventType = (typeof BillingEventType)[keyof typeof BillingEventType];
-
-export interface BillingWebhookEvent {
-  type: BillingEventType;
-  apiKeyId?: string;
-  data: Record<string, unknown>;
-  timestamp: Timestamp;
-}
-
 // --- Instance Registry Types ---
 
 export const InstanceStatus = {

@@ -2,8 +2,6 @@ export { AgentStore } from './agent-store.ts';
 export type { AuthContext, AuthMiddlewareOptions } from './auth-middleware.ts';
 export { AuthMiddleware, getAuthContext, setAuthContext } from './auth-middleware.ts';
 export { AuthStore } from './auth-store.ts';
-export type { BillingWebhookHandler } from './billing-webhooks.ts';
-export { LogBillingWebhookHandler } from './billing-webhooks.ts';
 export {
   ApiKeyNotFoundError,
   AuthenticationError,

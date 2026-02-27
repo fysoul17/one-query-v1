@@ -8,6 +8,7 @@ export {
   DefaultBackendRegistry,
   GeminiBackend,
   getBackend,
+  OllamaBackend,
   PiBackend,
   registerBackend,
 } from './backends/index.ts';

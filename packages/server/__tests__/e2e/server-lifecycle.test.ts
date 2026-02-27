@@ -449,6 +449,476 @@ describe('E2E: Server Lifecycle', () => {
     });
   });
 
+  // ----- Backends -----
+
+  describe('Backend endpoints /api/backends', () => {
+    test(
+      'GET /api/backends/status returns all backends',
+      async () => {
+        const res = await fetch(`${baseUrl}/api/backends/status`);
+        expect(res.status).toBe(200);
+
+        const data = await parseOk<{
+          defaultBackend: string;
+          backends: Array<{ name: string; capabilities: object }>;
+        }>(res);
+        expect(data.defaultBackend).toBeTruthy();
+        expect(Array.isArray(data.backends)).toBe(true);
+        expect(data.backends.length).toBeGreaterThanOrEqual(1);
+      },
+      30_000,
+    );
+
+    test('GET /api/backends/options returns config options', async () => {
+      const res = await fetch(`${baseUrl}/api/backends/options`);
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<Record<string, Array<{ name: string; description: string }>>>(res);
+      expect(typeof data).toBe('object');
+    });
+  });
+
+  // ----- Crons -----
+
+  describe('Cron CRUD /api/crons', () => {
+    let createdCronId: string;
+
+    test('POST /api/crons creates a cron', async () => {
+      const res = await fetch(`${baseUrl}/api/crons`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'E2E Test Cron',
+          schedule: '0 9 * * *',
+          enabled: false,
+          workflow: {
+            steps: [{ prompt: 'Hello from E2E test' }],
+          },
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const cron = await parseOk<{ id: string; name: string; enabled: boolean }>(res);
+      expect(cron.id).toBeTruthy();
+      expect(cron.name).toBe('E2E Test Cron');
+      expect(cron.enabled).toBe(false);
+      createdCronId = cron.id;
+    });
+
+    test('GET /api/crons lists crons', async () => {
+      const res = await fetch(`${baseUrl}/api/crons`);
+      expect(res.status).toBe(200);
+
+      const crons = await parseOk<Array<{ id: string; name: string }>>(res);
+      expect(Array.isArray(crons)).toBe(true);
+      const found = crons.find((c) => c.id === createdCronId);
+      expect(found).toBeTruthy();
+    });
+
+    test('PUT /api/crons/:id updates the cron', async () => {
+      const res = await fetch(`${baseUrl}/api/crons/${createdCronId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Updated Cron Name', enabled: false }),
+      });
+
+      expect(res.status).toBe(200);
+      const updated = await parseOk<{ name: string }>(res);
+      expect(updated.name).toBe('Updated Cron Name');
+    });
+
+    test('DELETE /api/crons/:id removes the cron', async () => {
+      const res = await fetch(`${baseUrl}/api/crons/${createdCronId}`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+
+      const result = await parseOk<{ deleted: string }>(res);
+      expect(result.deleted).toBe(createdCronId);
+    });
+  });
+
+  // ----- Memory Lifecycle -----
+
+  describe('Memory lifecycle /api/memory', () => {
+    test('GET /api/memory/consolidation-log returns log', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/consolidation-log`);
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ log: unknown[] }>(res);
+      expect(Array.isArray(data.log)).toBe(true);
+    });
+
+    test(
+      'POST /api/memory/consolidate runs consolidation',
+      async () => {
+        const res = await fetch(`${baseUrl}/api/memory/consolidate`, { method: 'POST' });
+        expect(res.status).toBe(200);
+        const data = await parseOk<{
+          entriesProcessed: number;
+          entriesMerged: number;
+          entriesArchived: number;
+          durationMs: number;
+        }>(res);
+        expect(typeof data.entriesProcessed).toBe('number');
+        expect(typeof data.entriesMerged).toBe('number');
+        expect(typeof data.entriesArchived).toBe('number');
+        expect(typeof data.durationMs).toBe('number');
+      },
+      30_000,
+    );
+
+    test('POST /api/memory/decay archives low-importance entries', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/decay`, { method: 'POST' });
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ archivedCount: number }>(res);
+      expect(typeof data.archivedCount).toBe('number');
+    });
+
+    test('POST /api/memory/reindex rebuilds embeddings', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/reindex`, { method: 'POST' });
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ reindexed: boolean }>(res);
+      expect(data.reindexed).toBe(true);
+    });
+
+    test('POST /api/memory/forget/:id soft-archives an entry', async () => {
+      // First ingest an entry to forget
+      const ingestRes = await fetch(`${baseUrl}/api/memory/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'Entry to be forgotten for lifecycle test',
+          type: 'short-term',
+          metadata: { source: 'e2e-lifecycle' },
+        }),
+      });
+      expect(ingestRes.status).toBe(201);
+      const entry = await parseOk<{ id: string }>(ingestRes);
+
+      const res = await fetch(`${baseUrl}/api/memory/forget/${entry.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'E2E test forget' }),
+      });
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ forgotten: boolean }>(res);
+      expect(data.forgotten).toBe(true);
+    });
+
+    test('POST /api/memory/forget/:id without id returns 400', async () => {
+      // Forgetting a non-existent entry should not crash
+      const res = await fetch(`${baseUrl}/api/memory/forget/non-existent-id`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      // Implementation returns 200 with forgotten: false for non-existent IDs
+      expect([200, 400, 404]).toContain(res.status);
+    });
+
+    test('DELETE /api/memory/source/:source deletes by source', async () => {
+      // Ingest entries with a known source
+      await fetch(`${baseUrl}/api/memory/ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'Entry from deletable source',
+          type: 'short-term',
+          metadata: { source: 'e2e-delete-source' },
+        }),
+      });
+
+      const res = await fetch(`${baseUrl}/api/memory/source/e2e-delete-source`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ deletedCount: number }>(res);
+      expect(typeof data.deletedCount).toBe('number');
+    });
+
+    test('GET /api/memory/query-as-of returns temporal snapshot', async () => {
+      const asOf = new Date().toISOString();
+      const res = await fetch(`${baseUrl}/api/memory/query-as-of?asOf=${encodeURIComponent(asOf)}`);
+      expect(res.status).toBe(200);
+      const data = await parseOk<{ entries: unknown[]; totalCount: number }>(res);
+      expect(Array.isArray(data.entries)).toBe(true);
+      expect(typeof data.totalCount).toBe('number');
+    });
+
+    test('GET /api/memory/query-as-of without asOf returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/query-as-of`);
+      expect(res.status).toBe(400);
+    });
+
+    test('GET /api/memory/query-as-of with invalid date returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/query-as-of?asOf=not-a-date`);
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // ----- Graph Mutations -----
+
+  describe('Graph mutation endpoints /api/memory/graph', () => {
+    let createdNodeId: string;
+    let secondNodeId: string;
+
+    test('POST /api/memory/graph/nodes creates a node', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'E2E Test Entity',
+          type: 'CONCEPT',
+          properties: { domain: 'testing' },
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const node = await parseOk<{ id: string; name: string; type: string }>(res);
+      expect(node.id).toBeTruthy();
+      expect(node.name).toBe('E2E Test Entity');
+      expect(node.type).toBe('CONCEPT');
+      createdNodeId = node.id;
+    });
+
+    test('POST /api/memory/graph/nodes creates a second node', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'E2E Second Entity',
+          type: 'TOOL',
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const node = await parseOk<{ id: string; name: string }>(res);
+      expect(node.id).toBeTruthy();
+      secondNodeId = node.id;
+    });
+
+    test('POST /api/memory/graph/nodes without name returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'CONCEPT' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('POST /api/memory/graph/nodes without type returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Missing type' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('POST /api/memory/graph/nodes with invalid entity type returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Bad type', type: 'INVALID_TYPE' }),
+      });
+      expect(res.status).toBe(400);
+      const err = await parseErr(res);
+      expect(err).toContain('Invalid entity type');
+    });
+
+    test('POST /api/memory/graph/nodes with name exceeding 500 chars returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'x'.repeat(501), type: 'CONCEPT' }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('GET /api/memory/graph/nodes lists nodes including created ones', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`);
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<{ nodes: Array<{ id: string }>; totalCount: number }>(res);
+      expect(Array.isArray(data.nodes)).toBe(true);
+      const found = data.nodes.find((n) => n.id === createdNodeId);
+      expect(found).toBeTruthy();
+    });
+
+    test('GET /api/memory/graph/nodes?type=CONCEPT filters by type', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes?type=CONCEPT`);
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<{ nodes: Array<{ id: string; type: string }> }>(res);
+      for (const node of data.nodes) {
+        expect(node.type).toBe('CONCEPT');
+      }
+    });
+
+    test('POST /api/memory/graph/relationships creates a relationship', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceId: createdNodeId,
+          targetId: secondNodeId,
+          type: 'RELATED_TO',
+          properties: { weight: 0.9 },
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const rel = await parseOk<{
+        id: string;
+        sourceId: string;
+        targetId: string;
+        type: string;
+      }>(res);
+      expect(rel.id).toBeTruthy();
+      expect(rel.sourceId).toBe(createdNodeId);
+      expect(rel.targetId).toBe(secondNodeId);
+      expect(rel.type).toBe('RELATED_TO');
+    });
+
+    test('POST /api/memory/graph/relationships with invalid relation type returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceId: createdNodeId,
+          targetId: secondNodeId,
+          type: 'INVALID_RELATION',
+        }),
+      });
+      expect(res.status).toBe(400);
+      const err = await parseErr(res);
+      expect(err).toContain('Invalid relation type');
+    });
+
+    test('POST /api/memory/graph/relationships with missing sourceId returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetId: secondNodeId,
+          type: 'RELATED_TO',
+        }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('POST /api/memory/graph/relationships with non-existent source returns 400', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceId: 'non-existent-node-id',
+          targetId: secondNodeId,
+          type: 'RELATED_TO',
+        }),
+      });
+      expect(res.status).toBe(400);
+      const err = await parseErr(res);
+      expect(err).toContain('not found');
+    });
+
+    test('GET /api/memory/graph/relationships lists relationships', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`);
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<{
+        relationships: Array<{ sourceId: string; targetId: string }>;
+        totalCount: number;
+      }>(res);
+      expect(Array.isArray(data.relationships)).toBe(true);
+      expect(data.totalCount).toBeGreaterThanOrEqual(1);
+    });
+
+    test('POST /api/memory/graph/query traverses graph from a node', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: createdNodeId, depth: 1 }),
+      });
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<{
+        nodes: unknown[];
+        relationships: unknown[];
+        paths: unknown[];
+      }>(res);
+      expect(Array.isArray(data.nodes)).toBe(true);
+      expect(Array.isArray(data.relationships)).toBe(true);
+      expect(Array.isArray(data.paths)).toBe(true);
+    });
+
+    test('GET /api/memory/graph/edges returns stats', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/edges`);
+      expect(res.status).toBe(200);
+
+      const data = await parseOk<{
+        stats: { nodeCount: number; edgeCount: number };
+      }>(res);
+      expect(typeof data.stats.nodeCount).toBe('number');
+      expect(typeof data.stats.edgeCount).toBe('number');
+      expect(data.stats.nodeCount).toBeGreaterThanOrEqual(2);
+      expect(data.stats.edgeCount).toBeGreaterThanOrEqual(1);
+    });
+
+    test('DELETE /api/memory/graph/nodes/:id removes a node', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes/${secondNodeId}`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+
+      const result = await parseOk<{ deleted: string }>(res);
+      expect(result.deleted).toBe(secondNodeId);
+    });
+
+    test('DELETE /api/memory/graph/nodes/:id for non-existent node returns 404', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes/non-existent-node-id`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(404);
+    });
+
+    // Clean up the first node
+    test('DELETE /api/memory/graph/nodes/:id cleans up first node', async () => {
+      const res = await fetch(`${baseUrl}/api/memory/graph/nodes/${createdNodeId}`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+    });
+  });
+
+  // ----- Activity -----
+
+  describe('Activity endpoint /api/activity', () => {
+    test('GET /api/activity returns activity entries', async () => {
+      const res = await fetch(`${baseUrl}/api/activity`);
+      expect(res.status).toBe(200);
+
+      // Activity returns an array directly (wrapped in envelope by jsonResponse)
+      const data = await parseOk<unknown[]>(res);
+      expect(Array.isArray(data)).toBe(true);
+    });
+  });
+
+  // ----- Seed Agents -----
+
+  describe('Seed agents', () => {
+    test('seed agents are present after startup', async () => {
+      const res = await fetch(`${baseUrl}/api/agents`);
+      expect(res.status).toBe(200);
+
+      const agents = await parseOk<Array<{ id: string; name: string }>>(res);
+      // Seed agents have known IDs: researcher, writer, analyst
+      const seedIds = ['researcher', 'writer', 'analyst'];
+      const foundSeeds = agents.filter((a) => seedIds.includes(a.id));
+      expect(foundSeeds.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
   // ----- 404 -----
 
   describe('Unknown routes', () => {

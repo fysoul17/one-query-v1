@@ -3,6 +3,7 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  Logger,
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
@@ -47,12 +48,13 @@ function buildSafeEnv(): Record<string, string> {
   return env;
 }
 
+const codexLogger = new Logger({ context: { source: 'codex-backend' } });
+
 class CodexProcess implements BackendProcess {
   private _alive = true;
   private _process: ReturnType<typeof Bun.spawn> | null = null;
   private config: BackendSpawnConfig;
   private _nativeSessionId: string | undefined;
-  private _firstCallDone = false;
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
@@ -71,44 +73,15 @@ class CodexProcess implements BackendProcess {
       throw new BackendError('codex', 'Process is not alive');
     }
 
-    const args = this.buildArgs(message);
-    const env = buildSafeEnv();
-
-    this._process = Bun.spawn(['codex', ...args], {
-      cwd: this.config.cwd ?? process.cwd(),
-      env,
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    const stdoutStream = this._process.stdout as ReadableStream;
-    const stderrStream = this._process.stderr as ReadableStream;
-
-    const [stdout, _stderr, exitCode] = await Promise.all([
-      new Response(stdoutStream).text(),
-      new Response(stderrStream).text(),
-      this._process.exited,
-    ]);
-
-    this._process = null;
-
-    if (exitCode !== 0) {
-      throw new BackendError('codex', `Process exited with code ${exitCode}`);
-    }
-
-    // Try to parse session_id from JSON output
-    const trimmed = stdout.trim();
-    try {
-      const parsed = JSON.parse(trimmed) as { session_id?: string };
-      if (parsed.session_id) {
-        this._nativeSessionId = parsed.session_id;
-        this._firstCallDone = true;
+    const chunks: string[] = [];
+    for await (const event of this.sendStreaming(message)) {
+      if (event.type === 'chunk' && event.content) {
+        chunks.push(event.content);
+      } else if (event.type === 'error') {
+        throw new BackendError('codex', event.error ?? 'Unknown error');
       }
-    } catch {
-      // Not JSON — that's fine, return as plain text
     }
-
-    return trimmed;
+    return chunks.join('');
   }
 
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
@@ -122,14 +95,120 @@ class CodexProcess implements BackendProcess {
       return;
     }
 
-    try {
-      const result = await this.send(message);
-      if (result) {
-        yield { type: 'chunk', content: result };
+    const args = this.buildArgs(message);
+    const env = buildSafeEnv();
+
+    const onAbort = () => {
+      if (this._process && this._process.exitCode === null) {
+        this._process.kill();
       }
-      yield { type: 'complete' };
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    try {
+      this._process = Bun.spawn(['codex', ...args], {
+        cwd: this.config.cwd ?? process.cwd(),
+        env,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const reader = (this._process.stdout as ReadableStream<Uint8Array>)
+        .getReader() as ReadableStreamDefaultReader<Uint8Array>;
+      const decoder = new TextDecoder();
+      let lineBuffer = '';
+      let hasContent = false;
+
+      // Collect stderr in background
+      const stderrPromise = new Response(this._process.stderr as ReadableStream).text();
+
+      while (true) {
+        if (signal?.aborted) {
+          yield { type: 'error', error: 'Aborted' };
+          reader.releaseLock();
+          return;
+        }
+
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        lineBuffer += decoder.decode(value, { stream: true });
+
+        // Process complete NDJSON lines
+        let newlineIdx: number;
+        while ((newlineIdx = lineBuffer.indexOf('\n')) !== -1) {
+          const line = lineBuffer.slice(0, newlineIdx).trim();
+          lineBuffer = lineBuffer.slice(newlineIdx + 1);
+          if (!line) continue;
+
+          try {
+            const parsed = JSON.parse(line) as Record<string, unknown>;
+
+            // Capture session_id from any event that carries it
+            if (typeof parsed.session_id === 'string' && parsed.session_id) {
+              this._nativeSessionId = parsed.session_id;
+            }
+
+            // Map Codex NDJSON events to StreamEvent
+            const events = this.parseCodexEvent(parsed);
+            for (const event of events) {
+              if (event.type === 'chunk') hasContent = true;
+              yield event;
+            }
+          } catch {
+            // Not valid JSON — emit as raw text chunk
+            if (line) {
+              hasContent = true;
+              yield { type: 'chunk', content: line };
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      const remaining = lineBuffer.trim();
+      if (remaining) {
+        try {
+          const parsed = JSON.parse(remaining) as Record<string, unknown>;
+          if (typeof parsed.session_id === 'string' && parsed.session_id) {
+            this._nativeSessionId = parsed.session_id;
+          }
+          const events = this.parseCodexEvent(parsed);
+          for (const event of events) {
+            if (event.type === 'chunk') hasContent = true;
+            yield event;
+          }
+        } catch {
+          if (remaining) {
+            hasContent = true;
+            yield { type: 'chunk', content: remaining };
+          }
+        }
+      }
+
+      reader.releaseLock();
+
+      const exitCode = await this._process.exited;
+      const stderrText = await stderrPromise;
+      this._process = null;
+
+      if (exitCode !== 0) {
+        const stderr = stderrText.trim().slice(0, 500);
+        yield {
+          type: 'error',
+          error: stderr
+            ? `Backend exited with code ${exitCode}: ${stderr}`
+            : `Backend process exited with code ${exitCode}`,
+        };
+      } else if (!hasContent && stderrText.trim()) {
+        yield { type: 'error', error: `Backend produced no output: ${stderrText.trim().slice(0, 500)}` };
+      } else {
+        yield { type: 'complete' };
+      }
     } catch (error) {
       yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
     }
   }
 
@@ -141,14 +220,62 @@ class CodexProcess implements BackendProcess {
     this._alive = false;
   }
 
+  /**
+   * Map a Codex CLI --json NDJSON event to StreamEvents.
+   *
+   * Codex --json emits events like:
+   *   {type: "message", role: "assistant", content: "..."} — assistant text
+   *   {type: "function_call", name: "...", arguments: "..."} — tool call
+   *   {type: "function_call_output", output: "..."} — tool result
+   *   {session_id: "...", ...} — session metadata
+   *
+   * Simpler events may just have text content directly.
+   */
+  private parseCodexEvent(parsed: Record<string, unknown>): StreamEvent[] {
+    const events: StreamEvent[] = [];
+    const eventType = parsed.type as string | undefined;
+
+    if (eventType === 'message' || eventType === 'assistant') {
+      const content = parsed.content as string | undefined;
+      if (content) {
+        events.push({ type: 'chunk', content });
+      }
+    } else if (eventType === 'function_call') {
+      const name = parsed.name as string | undefined;
+      const id = (parsed.id as string) || `tool-${Date.now()}`;
+      if (name) {
+        events.push({ type: 'tool_start', toolId: id, toolName: name });
+        const args = parsed.arguments as string | undefined;
+        if (args) {
+          events.push({ type: 'tool_input', toolId: id, toolName: name, inputDelta: args });
+        }
+      }
+    } else if (eventType === 'function_call_output') {
+      // Tool results — informational, no action needed
+      codexLogger.debug('Codex tool output', { output: parsed.output });
+    } else if (typeof parsed.content === 'string' && parsed.content) {
+      // Generic content field
+      events.push({ type: 'chunk', content: parsed.content });
+    } else if (typeof parsed.message === 'string' && parsed.message) {
+      // Some events use 'message' field
+      events.push({ type: 'chunk', content: parsed.message });
+    }
+
+    return events;
+  }
+
   private buildArgs(message: string): string[] {
     // Session resume: subsequent calls use `exec resume <sessionId> <message>`
     if (this._nativeSessionId) {
-      return ['exec', 'resume', this._nativeSessionId, message];
+      return ['exec', 'resume', this._nativeSessionId, '--json', '--full-auto', message];
     }
 
-    // First call: `exec <message>` with config flags
-    const args: string[] = ['exec', message];
+    // First call: `exec <message>` with --json for NDJSON streaming
+    const args: string[] = ['exec', '--json', '--full-auto', '--skip-git-repo-check'];
+
+    if (this.config.systemPrompt) {
+      args.push('-c', `developer_instructions=${this.config.systemPrompt}`);
+    }
 
     if (this.config.model) {
       args.push('--model', this.config.model);
@@ -160,6 +287,7 @@ class CodexProcess implements BackendProcess {
       }
     }
 
+    args.push(message);
     return args;
   }
 }

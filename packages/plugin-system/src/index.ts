@@ -5,12 +5,10 @@
 export {
   DuplicatePluginError,
   HookError,
-  MiddlewareError,
   PluginError,
   PluginNotFoundError,
 } from './errors.ts';
 export { HookRegistry } from './hook-registry.ts';
-export { MiddlewarePipeline } from './middleware-pipeline.ts';
 export { PluginManager } from './plugin-manager.ts';
 
 export {

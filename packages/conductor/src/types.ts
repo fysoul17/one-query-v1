@@ -59,20 +59,3 @@ export interface ConductorEvent {
 }
 
 export type OnConductorEvent = (event: ConductorEvent) => void;
-
-export interface DelegationStep {
-  agentId: AgentId;
-  task: string;
-  context?: string;
-}
-
-export interface DelegationPipelineResult {
-  steps: Array<{
-    agentId: AgentId;
-    result: string;
-    success: boolean;
-    error?: string;
-  }>;
-  finalResult: string;
-  success: boolean;
-}

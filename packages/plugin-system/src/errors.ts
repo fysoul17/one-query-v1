@@ -31,10 +31,3 @@ export class HookError extends PluginError {
     this.name = 'HookError';
   }
 }
-
-export class MiddlewareError extends PluginError {
-  constructor(detail: string) {
-    super(`Middleware error: ${detail}`);
-    this.name = 'MiddlewareError';
-  }
-}
