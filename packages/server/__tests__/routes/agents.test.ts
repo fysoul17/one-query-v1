@@ -182,6 +182,80 @@ describe('Agent routes', () => {
     });
   });
 
+  describe('POST /api/agents — tool name validation', () => {
+    test('accepts valid tool names (alphanumeric, underscore, colon, dot)', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Tool Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          tools: ['shell', 'file_read', 'web:search', 'tool.v2'],
+        }),
+      });
+
+      const res = await routes.create(req);
+      expect(res.status).toBe(201);
+    });
+
+    test('rejects tool names starting with dash (argument injection)', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Bad Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          tools: ['--full-auto'],
+        }),
+      });
+
+      await expect(routes.create(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('rejects tool names with spaces', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Bad Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          tools: ['my tool'],
+        }),
+      });
+
+      await expect(routes.create(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('rejects non-string tool values', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Bad Agent',
+          role: 'worker',
+          systemPrompt: 'Test',
+          tools: [123],
+        }),
+      });
+
+      await expect(routes.create(req)).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('allows empty tools array', async () => {
+      const req = new Request('http://localhost/api/agents', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'No Tools',
+          role: 'worker',
+          systemPrompt: 'Test',
+          tools: [],
+        }),
+      });
+
+      const res = await routes.create(req);
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe('PUT /api/agents/:id (update)', () => {
     test('updates existing agent', async () => {
       const def = makeDefinition({ id: 'agent-1', name: 'Original' });
@@ -236,6 +310,17 @@ describe('Agent routes', () => {
       const req = new Request('http://localhost/api/agents/agent-1', {
         method: 'PUT',
         body: JSON.stringify({ backend: 'invalid-backend' }),
+      });
+      await expect(routes.update(req, { id: 'agent-1' })).rejects.toBeInstanceOf(BadRequestError);
+    });
+
+    test('rejects invalid tool names on update', async () => {
+      const def = makeDefinition({ id: 'agent-1' });
+      pool.addAgent(def);
+
+      const req = new Request('http://localhost/api/agents/agent-1', {
+        method: 'PUT',
+        body: JSON.stringify({ tools: ['--model=evil'] }),
       });
       await expect(routes.update(req, { id: 'agent-1' })).rejects.toBeInstanceOf(BadRequestError);
     });
