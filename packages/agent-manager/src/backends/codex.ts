@@ -284,6 +284,12 @@ class CodexProcess implements BackendProcess {
       args.push('-c', `developer_instructions=${this.config.systemPrompt}`);
     }
 
+    if (this.config.tools && this.config.tools.length > 0) {
+      for (const tool of this.config.tools) {
+        args.push('--enable', tool);
+      }
+    }
+
     if (this.config.model) {
       args.push('--model', this.config.model);
     }

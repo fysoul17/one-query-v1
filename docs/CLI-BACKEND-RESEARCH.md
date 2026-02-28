@@ -236,12 +236,12 @@ The capability matrix in `packages/shared/src/constants/capabilities.ts` reflect
 | Backend | Custom Tools | Streaming | Session Persistence | File Access |
 |---------|-------------|-----------|-------------------|-------------|
 | Claude | Yes | Yes | Yes | Yes |
-| Codex | No | Yes | Yes | Yes |
-| Gemini | No | Yes | Yes | No |
+| Codex | Yes | Yes | Yes | Yes |
+| Gemini | Yes | Yes | Yes | No |
 | Pi | No | Yes | Yes | No |
-| Ollama | No | Yes | No | No |
+| Ollama | Yes | Yes | No | No |
 
-> **Note:** Some CLIs have more raw capabilities than what's exposed here (e.g., Codex and Gemini have tool use). The matrix reflects what's wired up in the template's backend implementations.
+> **Note:** Pi does not support custom tools as it's a multi-provider gateway where tool support depends on the underlying provider.
 
 **Tier 2 candidates (not yet implemented):** Goose, Copilot, Cline, Aider
 

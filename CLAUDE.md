@@ -4,7 +4,7 @@
 
 - Proactively use subagents and skills where needed
 - Follow commit conventions in `.claude/commit-conventions.md`
-- Follow design system in `docs/design-system.md` for UI/UX work, if it exists
+- Follow design system in `docs/design-system.md` for UI/UX work, if one has been created
 
 ## Investigation Workflow
 

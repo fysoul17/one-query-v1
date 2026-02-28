@@ -17,7 +17,7 @@ describe('OllamaBackend', () => {
   });
 
   test('capabilities reflect Ollama features', () => {
-    expect(backend.capabilities.customTools).toBe(false);
+    expect(backend.capabilities.customTools).toBe(true);
     expect(backend.capabilities.streaming).toBe(true);
     expect(backend.capabilities.sessionPersistence).toBe(false);
     expect(backend.capabilities.fileAccess).toBe(false);

@@ -93,7 +93,7 @@ The Conductor is a simple AI agent: it searches memory for context, then either 
 ## Features
 
 ### Pluggable AI Backends
-Swap AI providers without changing code. `claude -p` is the default. Codex CLI, Gemini CLI, Pi, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry.
+Swap AI providers without changing code. `claude -p` is the default. Codex CLI, Gemini CLI, Pi, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry. Custom tool support is wired up for Claude (`--allowed-tools`), Codex (`--enable`), Gemini (`--allowed-tools`), and Ollama (API `tools` parameter).
 
 ### Persistent Memory (pyx-memory)
 Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), extracted as a standalone repo and consumed via git submodule at `vendor/pyx-memory`. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). Runs **embedded** (in-process, zero-latency) or as a **sidecar** (standalone HTTP service with Neo4j graph store). Memory persists across sessions and agent restarts.

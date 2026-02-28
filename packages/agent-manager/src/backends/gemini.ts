@@ -356,6 +356,10 @@ class GeminiProcess implements BackendProcess {
     // First call: include full config flags
     const args: string[] = [...baseFlags, '-p', message];
 
+    if (this.config.tools && this.config.tools.length > 0) {
+      args.push('--allowed-tools', ...this.config.tools);
+    }
+
     if (this.config.model) {
       args.push('--model', this.config.model);
     }

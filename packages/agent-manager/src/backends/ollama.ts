@@ -99,16 +99,25 @@ class OllamaProcess implements BackendProcess {
       ? AbortSignal.any([signal, this._abortController.signal])
       : this._abortController.signal;
 
+    // Build request body — include tools if configured
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages: this.messages,
+      stream: true,
+    };
+    if (this.config.tools && this.config.tools.length > 0) {
+      requestBody.tools = this.config.tools.map((name) => ({
+        type: 'function',
+        function: { name, description: name, parameters: { type: 'object', properties: {} } },
+      }));
+    }
+
     let response: Response;
     try {
       response = await fetch(`${baseUrl}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model,
-          messages: this.messages,
-          stream: true,
-        }),
+        body: JSON.stringify(requestBody),
         signal: combinedSignal,
       });
     } catch (error) {

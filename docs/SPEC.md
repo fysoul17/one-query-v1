@@ -126,7 +126,7 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
 │  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 │                                                                   │
 │  /data volume (persistent)                                       │
-│  ├── agents/           # agent definitions + registry            │
+│  ├── runtime.sqlite    # sessions + agents (WAL mode)            │
 │  ├── crons.json        # scheduled task definitions              │
 │  └── config.json       # runtime config                          │
 └──────────────────────────────────────────────────────────────────┘
@@ -222,7 +222,7 @@ agent-forge/
 │   └── docker-compose.yaml
 │
 ├── data/                        # Default /data volume contents
-│   ├── agents/registry.json     # Persisted agent definitions
+│   ├── runtime.sqlite           # Sessions + agents (bun:sqlite, WAL mode)
 │   ├── crons.json               # Scheduled task definitions
 │   └── config.json              # Runtime config overrides
 │
@@ -308,7 +308,7 @@ Each agent can use a different CLI backend. The `BackendRegistry` manages multip
 
 | Capability          | Claude Code | Codex CLI | Gemini CLI | Pi CLI | Ollama    |
 | ------------------- | ----------- | --------- | ---------- | ------ | --------- |
-| Custom Tools        | ✅          | ❌        | ❌         | ❌     | ❌        |
+| Custom Tools        | ✅          | ✅        | ✅         | ❌     | ✅        |
 | Streaming           | ✅          | ✅        | ✅         | ✅     | ✅        |
 | Session Persistence | ✅          | ✅        | ✅         | ✅     | ❌ (in-memory) |
 | File Access         | ✅          | ✅        | ❌         | ❌     | ❌        |
@@ -434,7 +434,7 @@ Dashboard Pages:
 
 ### Agent Definitions
 
-Agents are created through the Dashboard UI or REST API (`POST /api/agents`). The `AgentPool` restores agents from the store across restarts.
+Agents are created through the Dashboard UI or REST API (`POST /api/agents`). The `AgentStore` (SQLite, in `runtime.sqlite`) persists agent definitions. The `AgentPool` restores agents from the store across restarts.
 
 Fields: id, name, role, systemPrompt, tools (allowed tool list), backend, owner (user|conductor|system), createdAt, updatedAt.
 
@@ -603,6 +603,12 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `STREAM_TIMEOUT_MS`    | No        | `300000`                 | Max stream duration for AI responses (ms) |
 | `OLLAMA_BASE_URL`      | No        | `http://localhost:11434` | Ollama API base URL                  |
 | `OLLAMA_MODEL`         | No        | `llama3.2`               | Default Ollama model                 |
+| `CORS_ORIGIN`          | No        | —                        | Allowed CORS origin (e.g., `https://yourdomain.com`) |
+| `FALLBACK_BACKEND`     | No        | —                        | Fallback AI backend if primary fails to spawn |
+| `ENABLE_TERMINAL_WS`   | No        | `false`                  | Enable PTY-based CLI login WebSocket |
+| `ENABLE_ADVANCED_MEMORY`| No       | `false`                  | Enable consolidation, decay, summarization routes |
+| `ENABLE_DEBUG_WS`      | No        | `true`                   | Enable debug event WebSocket |
+| `DEBUG_WS_TOKEN`       | No        | —                        | Token to protect debug WebSocket endpoint |
 
 ---
 

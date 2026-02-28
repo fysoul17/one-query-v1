@@ -12,6 +12,20 @@ import { BadRequestError, NotFoundError, ServerError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
 
+/** Tool names must be alphanumeric with underscores, colons, or dots — prevents CLI argument injection. */
+const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_:.]+$/;
+
+function validateToolNames(tools: unknown): void {
+  if (!Array.isArray(tools)) return;
+  for (const tool of tools) {
+    if (typeof tool !== 'string' || !TOOL_NAME_PATTERN.test(tool)) {
+      throw new BadRequestError(
+        `Invalid tool name "${tool}". Tool names must match ${TOOL_NAME_PATTERN}`,
+      );
+    }
+  }
+}
+
 export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
   return {
     list: async (_req: Request): Promise<Response> => {
@@ -36,6 +50,8 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
           `Invalid backend "${body.backend}". Valid: ${validBackends.join(', ')}`,
         );
       }
+
+      validateToolNames(body.tools);
 
       const id = nanoid();
       const persistent = body.persistent ?? false;
@@ -83,6 +99,8 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
           );
         }
       }
+
+      validateToolNames(body.tools);
 
       // Pick only defined fields from the request body
       const allowedFields = [

@@ -9,13 +9,13 @@ export const BACKEND_CAPABILITIES: BackendCapabilityMap = {
     fileAccess: true,
   },
   [AIBackend.CODEX]: {
-    customTools: false,
+    customTools: true,
     streaming: true,
     sessionPersistence: true,
     fileAccess: true,
   },
   [AIBackend.GEMINI]: {
-    customTools: false,
+    customTools: true,
     streaming: true,
     sessionPersistence: true,
     fileAccess: false,
@@ -27,7 +27,7 @@ export const BACKEND_CAPABILITIES: BackendCapabilityMap = {
     fileAccess: false,
   },
   [AIBackend.OLLAMA]: {
-    customTools: false,
+    customTools: true,
     streaming: true,
     sessionPersistence: false,
     fileAccess: false,
