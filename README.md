@@ -7,7 +7,7 @@
 Turn any CLI AI tool into an autonomous agent system.<br>
 Persistent memory. Pluggable backends. Cyberpunk dashboard.
 
-[Quick Start](#quick-start) &bull; [Architecture](#architecture) &bull; [Features](#features) &bull; [Development](#development) &bull; [Roadmap](#roadmap)
+[Quick Start](#quick-start) &bull; [Architecture](#architecture) &bull; [Features](#features) &bull; [Development](#development)
 
 </div>
 
@@ -307,40 +307,13 @@ See [`docs/SPEC.md` Section 10-11](docs/SPEC.md#10-rest-api) for the full endpoi
 
 ---
 
-## Roadmap
+## Future
 
-### Core Template (Steps 1-7) ✅
+Community extension points — not part of the core template:
 
-- [x] **Monorepo scaffold** — Bun workspaces + Turborepo + Biome
-- [x] **Agent Manager** — CLIBackend abstraction, process lifecycle, pool management
-- [x] **Memory System** — SQLite + LanceDB + Naive RAG
-- [x] **Conductor** — AI agent with memory search + delegation
-- [x] **Server** — REST API + WebSocket + graceful shutdown
-- [x] **Dashboard** — Cyberpunk UI with chat, agents, debug console
-- [x] **Backend Registry** — Per-agent backend selection, session support
-
-### Infrastructure (Steps 8-10) ✅
-
-- [x] **Step 8: Cron Manager** — CronManager class, workflow executor, server routes, dashboard Automation page
-- [x] **Step 9: Docker** — Dockerfile.runtime, Dockerfile.dashboard, docker-compose.yaml
-- [x] **Step 10: Advanced Memory** — Extracted to [pyx-memory-v1](https://github.com/fysoul17/pyx-memory-v1). Pluggable embeddings, Graph/Agentic RAG, file ingestion, Neo4j graph store, memory browser UI. Runs embedded or as sidecar.
-
-### Extensibility (Steps 11-13) ✅
-
-- [x] **Step 11: Plugin System** — Event hooks, middleware pipeline, `onMessage`/`onResponse`/`onAgentCreate` hooks
-- [x] **Step 12: Sessions** — Conversation history API, session browse/resume/delete, dashboard sessions UI
-- [x] **Step 13: Dashboard Enhancements** — File upload, live health widget
-
-### Production & CI/CD (Steps 14-15) ✅
-
-- [x] **Step 14: Production Hardening** — IP rate limiting, structured JSON logging, standardized streaming contract
-- [x] **Step 15: CI/CD Pipeline** — 3-job GitHub Actions (quality/e2e/docker), 27 E2E integration tests
-
-### Extension Points
-
-- [ ] **Channel Adapters** — Telegram, Discord, Slack (extension point)
-- [ ] **Community Backends** — Copilot, Cline, Aider (community contribution candidates)
-- [ ] **Organization Templates** — YAML-based agent team definitions
+- **Channel Adapters** — Telegram, Discord, Slack webhook handlers
+- **Community Backends** — Copilot, Cline, Aider via the `CLIBackend` interface
+- **Organization Templates** — YAML-based agent team definitions
 
 ---
 
@@ -375,7 +348,7 @@ bun run test && bun run lint
 
 ## License
 
-TBD
+MIT
 
 ---
 

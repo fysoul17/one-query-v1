@@ -31,21 +31,16 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
     │  OaaS   │  │  QA Team │  │  Content │
     │ Product  │  │ Product  │  │ Product  │
     └──────────┘  └──────────┘  └──────────┘
-
-    fork해서       fork해서       fork해서
-    soul.md 추가   ERP 연동      출판 워크플로우
-    메신저 강화    품질 Agent     작가/편집 Agent
-    감정분석 추가  리포트 자동화  원고 파이프라인
 ```
 
 **What this template solves:**
 
-> "claude -p는 강력하지만, 세션이 끝나면 모든 게 사라지고, 24시간 돌릴 수 없고, 여러 agent를 관리할 수 없고, 일반인이 쓸 수 없다"
+> "claude -p is powerful, but everything is lost when the session ends, it can't run 24/7, you can't manage multiple agents, and non-developers can't use it."
 
-1. **Memory** — 세션이 끝나도 기억 유지 (4 memory types + Hybrid RAG)
-2. **Docker** — 24시간 가동
-3. **Agent Manager** — Multi-agent 관리 (5 backends)
-4. **Dashboard** — Non-dev도 사용 가능
+1. **Memory** — Persists across sessions (4 memory types + Hybrid RAG)
+2. **Docker** — Runs 24/7
+3. **Agent Manager** — Multi-agent management (5 backends)
+4. **Dashboard** — Accessible to non-developers
 
 ---
 
@@ -283,15 +278,15 @@ The Conductor can create and delete agents. Products can extend this with custom
 ### Agent Ownership in Dashboard
 
 ```
-🤖 Agents
+Agents
 
   ┌──────────────────────────────────┐
-  │ 품질검사 전문가           [active] │
-  │ 리포트 작성               [idle]  │
+  │ QA Specialist             [active] │
+  │ Report Writer             [idle]  │
   │ data-processor            [busy]  │
   └──────────────────────────────────┘
 
-  🔒 Conductor               [active]  ← 시스템 고정
+  Conductor                   [active]  ← system-protected
 ```
 
 ---
@@ -650,7 +645,7 @@ const myPlugin: PluginDefinition = {
   version: "1.0.0",
   hooks: [
     {
-      hookType: HookType.ON_MESSAGE,
+      hookType: HookType.BEFORE_MESSAGE,
       handler: (data) => {
         /* transform */ return data;
       },
@@ -690,20 +685,20 @@ How products customize this template:
 **The template provides the autonomous runtime.**
 **The product provides the agents, data, and domain logic.**
 
-### Fork-and-Use Scenario (e.g., 제조업 회사)
+### Fork-and-Use Scenario (e.g., Manufacturing Company)
 
 ```
-1. git clone template && docker-compose up         ← 5분
-2. localhost:7821 접속 (Dashboard)
-3. "Create Agent" 버튼 → 품질검사 전문가 생성       ← RPG처럼
-4. 같은 방식으로 재고관리, 리포트 작성 Agent 생성
-5. Memory에 회사 데이터 Ingest
-6. 바로 사용 시작
-   "이번 달 불량률 분석해줘"
-   → Conductor → Agent에게 위임 → 결과
+1. git clone template && docker-compose up         ← 5 minutes
+2. Open localhost:7821 (Dashboard)
+3. Click "Create Agent" → create a QA specialist    ← like building an RPG party
+4. Same flow for inventory management, report writing agents
+5. Ingest company data into Memory
+6. Start using immediately
+   "Analyze this month's defect rate"
+   → Conductor → delegates to Agent → result
 
-코드 수정 없이 Dashboard UI만으로 여기까지 가능.
-커스텀 코드는 ERP 연동 등 심화 단계에서만 필요.
+All of the above works through the Dashboard UI alone — no code changes.
+Custom code is only needed for advanced integrations (e.g., ERP).
 ```
 
 ---
@@ -736,37 +731,3 @@ YAML-based agent team definitions for pre-configuring multi-agent setups.
 
 ---
 
-## 16. Build History
-
-Implementation sequence (all complete):
-
-| Step | Package           | What                                                                                                           | Status     |
-| ---- | ----------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1    | Scaffold          | Bun workspace, Turborepo, shared types                                                                         | ✅ Done    |
-| 2    | agent-manager     | CLI process spawn/communicate, pool, claude backend                                                            | ✅ Done    |
-| 3    | pyx-memory        | SQLite + LanceDB, 4 memory types, Hybrid/Graph/Agentic/Naive RAG, lifecycle, graph store, ingestion pipeline  | ✅ Done    |
-| 4    | conductor         | 7-step pipeline with hooks, per-session backends, memory integration                                           | ✅ Done    |
-| 5    | server            | REST API, 3 WebSocket endpoints, Bun.serve entry, stream buffer, rate limiter                                  | ✅ Done    |
-| 6    | dashboard         | Next.js 16.1, all pages (home, agents, chat, memory, automation, activity, sessions, settings), cyberpunk theme | ✅ Done    |
-| 7    | backends          | BackendRegistry, 5 backends (claude, codex, gemini, pi, ollama), session support                               | ✅ Done    |
-| 8    | cron-manager      | CronManager class, workflow executor, concurrent guard, server routes, dashboard UI                             | ✅ Done    |
-| 9    | docker            | Dockerfile.runtime, Dockerfile.dashboard, docker-compose (minimal + full profiles)                              | ✅ Done    |
-| 10   | plugin-system     | HookRegistry (8 hooks), PluginManager, waterfall + fire-and-forget                                             | ✅ Done    |
-| 11   | sessions          | SessionStore (SQLite), conversation history API, session browse/resume/delete, dashboard UI                     | ✅ Done    |
-| 12   | dashboard-enhance | File upload in memory page, live health widget                                                                   | ✅ Done    |
-| 13   | production        | IP rate limiting, structured JSON logging with redaction, standardized streaming contract                       | ✅ Done    |
-| 14   | ci-cd             | GitHub Actions 3-job workflow (quality/e2e/docker), E2E integration tests                                       | ✅ Done    |
-
-### Remaining Work
-
-Gaps between spec and implementation, tracked step-by-step:
-
-| Step | Area              | What                                                                                      | Status        |
-| ---- | ----------------- | ----------------------------------------------------------------------------------------- | ------------- |
-| R1   | CI/Docker         | Create `docker/Dockerfile.memory` (CI references it but it was missing)                   | ✅ Done       |
-| R2   | Pi backend        | Add `logout()` method to `PiBackend` (dashboard calls `/api/backends/:name/logout`)       | ✅ Done       |
-| R3   | Codex backend     | Real NDJSON streaming via `--json` flag (currently fakes streaming with single chunk)      | ✅ Done       |
-| R4   | Gemini backend    | Real streaming via `--output-format stream-json` (currently fakes streaming)               | ✅ Done       |
-| R5   | Ollama backend    | New HTTP-based backend for local LLM via Ollama API (`/api/chat`, `/api/generate`)        | ✅ Done       |
-| R6   | Seed agents       | Populate `packages/server/src/seeds/index.ts` with 3 starter agents (Researcher, Writer, Analyst) | ✅ Done       |
-| R7   | E2E tests         | Expand E2E test coverage: backends, crons, lifecycle, activity, seeds (36 tests total)     | ✅ Done       |
