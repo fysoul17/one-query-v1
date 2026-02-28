@@ -1,7 +1,7 @@
 'use client';
 
 import type { GraphNode } from '@autonomy/shared';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { getGraphData } from '@/lib/api';
@@ -11,11 +11,7 @@ export function GraphViewer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadGraph();
-  }, [loadGraph]);
-
-  async function loadGraph() {
+  const loadGraph = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -26,7 +22,11 @@ export function GraphViewer() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    loadGraph();
+  }, [loadGraph]);
 
   if (loading) {
     return (

@@ -84,6 +84,7 @@ class GeminiProcess implements BackendProcess {
     return chunks.join('');
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     if (!this._alive) {
       yield { type: 'error', error: 'Process is not alive' };
@@ -266,6 +267,7 @@ class GeminiProcess implements BackendProcess {
    *   {type:"error", message:"..."}
    *   {type:"result", status:"success"|"error", stats:{...}}
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: parser handles many event types
   private parseGeminiEvent(parsed: Record<string, unknown>): StreamEvent[] {
     const events: StreamEvent[] = [];
     const eventType = parsed.type as string | undefined;

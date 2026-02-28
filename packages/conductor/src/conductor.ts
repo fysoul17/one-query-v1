@@ -26,6 +26,7 @@ import {
   DelegationError,
   QueueFullError,
 } from './errors.ts';
+import { SessionProcessPool } from './session-process-pool.ts';
 import {
   ConductorEventType,
   type ConductorOptions,
@@ -36,7 +37,6 @@ import {
 
 const DEFAULT_MAX_DELEGATION_DEPTH = 5;
 const DEFAULT_MAX_QUEUE_DEPTH = 50;
-const MAX_SESSION_PROCESSES = 100;
 
 const conductorLogger = new Logger({ context: { source: 'conductor' } });
 
@@ -85,10 +85,7 @@ export class Conductor {
   private backend?: CLIBackend;
   private fallbackBackend?: CLIBackend;
   private backendProcess?: BackendProcess;
-  /** Per-session backend processes keyed by sessionId. */
-  private sessionProcesses = new Map<string, BackendProcess>();
-  /** Track last-used config overrides per session (to detect changes). */
-  private sessionConfigOverrides = new Map<string, Record<string, string>>();
+  private sessionPool!: SessionProcessPool;
   private activityLog: ActivityLog;
   private initialized = false;
   private options: ConductorOptions;
@@ -154,6 +151,9 @@ export class Conductor {
       }
     }
 
+    const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    this.sessionPool = new SessionProcessPool(this.backend, this.fallbackBackend, systemPrompt);
+
     this.initialized = true;
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor initialized');
   }
@@ -186,6 +186,7 @@ export class Conductor {
     return this.executeMessage(message, onEvent);
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming orchestration requires sequential branching
   async *handleMessageStreaming(
     message: IncomingMessage,
     onEvent?: OnConductorEvent,
@@ -258,10 +259,9 @@ export class Conductor {
       const configOverrides = processedMessage.metadata?.configOverrides as
         | Record<string, string>
         | undefined;
-      const sessionBackend = await this.getBackendProcess(
-        processedMessage.sessionId,
-        configOverrides,
-      );
+      const sessionBackend = processedMessage.sessionId
+        ? await this.sessionPool.getOrCreate(processedMessage.sessionId, configOverrides)
+        : this.backendProcess;
       if (!sessionBackend) {
         yield { type: 'chunk', content: FALLBACK_NO_BACKEND };
         yield { type: 'complete' };
@@ -274,19 +274,7 @@ export class Conductor {
         dispatchTarget: 'conductor',
       });
 
-      let prompt = this.buildMemoryAugmentedPrompt(processedMessage, memoryContext);
-
-      // Hook: onBeforeResponse
-      if (this.hookRegistry) {
-        const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
-          message: processedMessage,
-          memoryContext,
-          prompt,
-        });
-        if (hookResult && typeof hookResult === 'object' && 'prompt' in hookResult) {
-          prompt = (hookResult as { prompt: string }).prompt;
-        }
-      }
+      const prompt = await this.preparePrompt(processedMessage, memoryContext);
 
       try {
         if (sessionBackend.sendStreaming) {
@@ -381,12 +369,47 @@ export class Conductor {
         });
       } else {
         // Conductor responds directly via AI backend
-        responseContent = await this.generateResponse(
-          processedMessage,
-          memoryContext,
-          decisions,
-          onEvent,
-        );
+        const configOverrides = processedMessage.metadata?.configOverrides as
+          | Record<string, string>
+          | undefined;
+        const sessionBackend = processedMessage.sessionId
+          ? await this.sessionPool.getOrCreate(processedMessage.sessionId, configOverrides)
+          : this.backendProcess;
+        if (!sessionBackend) {
+          decisions.push({
+            timestamp: new Date().toISOString(),
+            action: 'direct_response',
+            reason: 'No AI backend available',
+          });
+          responseContent = FALLBACK_NO_BACKEND;
+        } else {
+          onEvent?.({
+            type: ConductorEventType.RESPONDING,
+            content: 'Conductor is responding...',
+            dispatchTarget: 'conductor',
+          });
+
+          const prompt = await this.preparePrompt(processedMessage, memoryContext);
+
+          try {
+            responseContent = await sessionBackend.send(prompt);
+            decisions.push({
+              timestamp: new Date().toISOString(),
+              action: 'direct_response',
+              reason: 'Conductor responded directly',
+            });
+            this.activityLog.record(ActivityType.MESSAGE, 'Conductor responded directly to user');
+          } catch (error) {
+            const detail = getErrorDetail(error);
+            this.activityLog.record(ActivityType.ERROR, `Response generation failed: ${detail}`);
+            decisions.push({
+              timestamp: new Date().toISOString(),
+              action: 'direct_response',
+              reason: `Response failed: ${detail}`,
+            });
+            responseContent = 'I encountered an error generating a response. Please try again.';
+          }
+        }
       }
 
       // Finalize — afterResponse hook, store conversation, record activity
@@ -481,18 +504,7 @@ export class Conductor {
 
   /** Kill the backend process for a session so it respawns with new config on next message. */
   invalidateSessionBackend(sessionId: string): void {
-    const proc = this.sessionProcesses.get(sessionId);
-    if (proc) {
-      proc.stop().catch((error) => {
-        const detail = getErrorDetail(error);
-        conductorLogger.debug('Error stopping invalidated session backend', {
-          sessionId,
-          error: detail,
-        });
-      });
-      this.sessionProcesses.delete(sessionId);
-      this.sessionConfigOverrides.delete(sessionId);
-    }
+    this.sessionPool.invalidate(sessionId);
   }
 
   async shutdown(): Promise<void> {
@@ -514,154 +526,10 @@ export class Conductor {
       this.backendProcess = undefined;
     }
 
-    // Stop all per-session backend processes in parallel
-    await Promise.allSettled(
-      [...this.sessionProcesses.values()].map((proc) =>
-        proc.stop().catch((error) => {
-          const detail = getErrorDetail(error);
-          conductorLogger.debug('Error stopping session backend during shutdown', {
-            error: detail,
-          });
-        }),
-      ),
-    );
-    this.sessionProcesses.clear();
-    this.sessionConfigOverrides.clear();
+    // Stop all per-session backend processes
+    await this.sessionPool.shutdown();
 
     this.initialized = false;
-  }
-
-  /**
-   * Get or create a backend process for the given sessionId.
-   * If no sessionId, returns the default (session-less) process.
-   * Accepts optional configOverrides from message metadata to set model/flags.
-   */
-  private async getBackendProcess(
-    sessionId?: string,
-    configOverrides?: Record<string, string>,
-  ): Promise<BackendProcess | undefined> {
-    if (!this.backend) return undefined;
-
-    // No session — use the default process
-    if (!sessionId) return this.backendProcess;
-
-    // Check if config overrides changed — if so, invalidate existing process
-    if (configOverrides && Object.keys(configOverrides).length > 0) {
-      const lastOverrides = this.sessionConfigOverrides.get(sessionId);
-      const changed =
-        !lastOverrides || JSON.stringify(lastOverrides) !== JSON.stringify(configOverrides);
-      if (changed) {
-        const existing = this.sessionProcesses.get(sessionId);
-        if (existing) {
-          this.sessionProcesses.delete(sessionId);
-          existing.stop().catch((error) => {
-            conductorLogger.debug('Error stopping session for config change', {
-              sessionId,
-              error: getErrorDetail(error),
-            });
-          });
-        }
-      }
-    }
-
-    // Check for existing session process (LRU: delete+re-insert moves to tail)
-    const existing = this.sessionProcesses.get(sessionId);
-    if (existing?.alive) {
-      this.sessionProcesses.delete(sessionId);
-      this.sessionProcesses.set(sessionId, existing);
-      return existing;
-    }
-
-    // Remove dead entry if present
-    if (existing) {
-      this.sessionProcesses.delete(sessionId);
-      this.sessionConfigOverrides.delete(sessionId);
-    }
-
-    // Evict least-recently-used session if at capacity
-    if (this.sessionProcesses.size >= MAX_SESSION_PROCESSES) {
-      const oldest = this.sessionProcesses.keys().next().value;
-      if (oldest) {
-        const oldProc = this.sessionProcesses.get(oldest);
-        this.sessionProcesses.delete(oldest);
-        this.sessionConfigOverrides.delete(oldest);
-        try {
-          await oldProc?.stop();
-        } catch (error) {
-          const detail = getErrorDetail(error);
-          conductorLogger.debug('Error stopping evicted session', {
-            sessionId: oldest,
-            error: detail,
-          });
-        }
-      }
-    }
-
-    // Build spawn config with config overrides
-    const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
-    const spawnConfig: import('@autonomy/agent-manager').BackendSpawnConfig = {
-      agentId: 'conductor',
-      systemPrompt,
-    };
-
-    // Translate config overrides → spawn config fields
-    if (configOverrides && Object.keys(configOverrides).length > 0) {
-      const backendOptions = this.backend.getConfigOptions();
-
-      for (const [optName, optValue] of Object.entries(configOverrides)) {
-        if (optName === 'model') {
-          spawnConfig.model = optValue;
-        } else {
-          // Find the CLI flag for this option
-          const optDef = backendOptions.find((o) => o.name === optName);
-          if (optDef) {
-            if (!spawnConfig.extraFlags) spawnConfig.extraFlags = {};
-            spawnConfig.extraFlags[optDef.cliFlag] = optValue;
-          }
-        }
-      }
-
-      this.sessionConfigOverrides.set(sessionId, { ...configOverrides });
-    }
-
-    // Spawn a new stateless process for this session.
-    try {
-      const proc = await this.backend.spawn(spawnConfig);
-      this.sessionProcesses.set(sessionId, proc);
-      conductorLogger.info('Session backend spawned', {
-        sessionId,
-        configOverrideKeys: configOverrides ? Object.keys(configOverrides) : [],
-      });
-      return proc;
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      conductorLogger.error('Failed to spawn session backend', { sessionId, error: detail });
-
-      if (this.fallbackBackend) {
-        try {
-          conductorLogger.info('Trying fallback backend for session', {
-            sessionId,
-            fallback: this.fallbackBackend.name,
-          });
-          const fallbackConfig = { agentId: 'conductor', systemPrompt: spawnConfig.systemPrompt };
-          const proc = await this.fallbackBackend.spawn(fallbackConfig);
-          this.sessionProcesses.set(sessionId, proc);
-          conductorLogger.info('Session backend spawned via fallback', {
-            sessionId,
-            fallback: this.fallbackBackend.name,
-          });
-          return proc;
-        } catch (fallbackError) {
-          const fbDetail = getErrorDetail(fallbackError);
-          conductorLogger.error('Fallback backend also failed for session', {
-            sessionId,
-            error: fbDetail,
-          });
-        }
-      }
-
-      return undefined;
-    }
   }
 
   private buildMemoryAugmentedPrompt(
@@ -681,6 +549,30 @@ export class Conductor {
         .map((e) => e.content)
         .join('\n---\n');
       prompt = `<memory-context>\n${contextSnippet}\n</memory-context>\n\n${prompt}`;
+    }
+
+    return prompt;
+  }
+
+  /**
+   * Build the final prompt for a direct conductor response: augment with memory
+   * context, then run the onBeforeResponse hook so plugins can transform it.
+   */
+  private async preparePrompt(
+    message: IncomingMessage,
+    memoryContext: MemorySearchResult | null,
+  ): Promise<string> {
+    let prompt = this.buildMemoryAugmentedPrompt(message, memoryContext);
+
+    if (this.hookRegistry) {
+      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
+        message,
+        memoryContext,
+        prompt,
+      });
+      if (hookResult && typeof hookResult === 'object' && 'prompt' in hookResult) {
+        prompt = (hookResult as { prompt: string }).prompt;
+      }
     }
 
     return prompt;
@@ -809,64 +701,6 @@ export class Conductor {
       const detail = getErrorDetail(error);
       conductorLogger.warn('Memory search failed', { error: detail });
       return null;
-    }
-  }
-
-  private async generateResponse(
-    message: IncomingMessage,
-    memoryContext: MemorySearchResult | null,
-    decisions: ConductorDecision[],
-    onEvent?: OnConductorEvent,
-  ): Promise<string> {
-    const configOverrides = message.metadata?.configOverrides as Record<string, string> | undefined;
-    const sessionBackend = await this.getBackendProcess(message.sessionId, configOverrides);
-    if (!sessionBackend) {
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'direct_response',
-        reason: 'No AI backend available',
-      });
-      return FALLBACK_NO_BACKEND;
-    }
-
-    onEvent?.({
-      type: ConductorEventType.RESPONDING,
-      content: 'Conductor is responding...',
-      dispatchTarget: 'conductor',
-    });
-
-    let prompt = this.buildMemoryAugmentedPrompt(message, memoryContext);
-
-    // Hook: onBeforeResponse — plugins can transform the prompt
-    if (this.hookRegistry) {
-      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
-        message,
-        memoryContext,
-        prompt,
-      });
-      if (hookResult && typeof hookResult === 'object' && 'prompt' in hookResult) {
-        prompt = (hookResult as { prompt: string }).prompt;
-      }
-    }
-
-    try {
-      const response = await sessionBackend.send(prompt);
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'direct_response',
-        reason: 'Conductor responded directly',
-      });
-      this.activityLog.record(ActivityType.MESSAGE, 'Conductor responded directly to user');
-      return response;
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      this.activityLog.record(ActivityType.ERROR, `Response generation failed: ${detail}`);
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'direct_response',
-        reason: `Response failed: ${detail}`,
-      });
-      return 'I encountered an error generating a response. Please try again.';
     }
   }
 

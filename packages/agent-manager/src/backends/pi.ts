@@ -115,6 +115,7 @@ class PiProcess implements BackendProcess {
     return this._ensuring;
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: process lifecycle handling is inherently branchy
   async send(message: string): Promise<string> {
     if (!this._alive) {
       throw new BackendError('pi', 'Process is not alive');
@@ -122,6 +123,7 @@ class PiProcess implements BackendProcess {
 
     await this.ensureProcess();
 
+    // biome-ignore lint/style/noNonNullAssertion: ensureProcess() guarantees _process is set
     const proc = this._process!;
     const stdin = proc.stdin as import('bun').FileSink;
 
@@ -168,6 +170,7 @@ class PiProcess implements BackendProcess {
     return chunks.join('');
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     if (!this._alive) {
       yield { type: 'error', error: 'Process is not alive' };
@@ -189,6 +192,7 @@ class PiProcess implements BackendProcess {
       return;
     }
 
+    // biome-ignore lint/style/noNonNullAssertion: ensureProcess() guarantees _process is set
     const proc = this._process!;
     const stdin = proc.stdin as import('bun').FileSink;
 

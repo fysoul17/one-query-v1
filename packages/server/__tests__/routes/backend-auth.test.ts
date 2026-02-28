@@ -115,6 +115,7 @@ describe('PUT /api/backends/api-key', () => {
   test('sets API key when provided', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -129,6 +130,7 @@ describe('PUT /api/backends/api-key', () => {
   test('clears API key when null', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-existing-key-value-0000';
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -140,6 +142,7 @@ describe('PUT /api/backends/api-key', () => {
   test('clears API key when empty string', async () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-existing-key-value-0000';
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -151,6 +154,7 @@ describe('PUT /api/backends/api-key', () => {
   test('returns refreshed backend status after setting key', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -167,6 +171,7 @@ describe('PUT /api/backends/api-key', () => {
   test('trims whitespace from API key', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -177,6 +182,7 @@ describe('PUT /api/backends/api-key', () => {
   test('rejects API key without sk-ant- prefix', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -191,6 +197,7 @@ describe('PUT /api/backends/api-key', () => {
   test('rejects API key shorter than 20 characters', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -204,6 +211,7 @@ describe('PUT /api/backends/api-key', () => {
 
   test('rejects missing apiKey field', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -246,6 +254,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
   test('sets CODEX_API_KEY when backendName=codex', async () => {
     delete process.env.CODEX_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -261,6 +270,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
     process.env.CODEX_API_KEY = 'sk-existing-key-00000000';
     process.env.OPENAI_API_KEY = 'sk-openai-alt-key-00000';
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -273,6 +283,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
   test('sets GEMINI_API_KEY when backendName=gemini', async () => {
     delete process.env.GEMINI_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -288,6 +299,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
     process.env.GEMINI_API_KEY = 'AIzaSyA-existing-key-0000';
     process.env.GOOGLE_API_KEY = 'AIzaSyA-alt-key-00000000';
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -301,6 +313,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
     process.env.ANTHROPIC_API_KEY = 'sk-ant-existing-key-value-0000';
     delete process.env.CODEX_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -314,6 +327,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
 
   test('accepts codex keys without sk-ant- prefix', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -328,6 +342,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
   test('still validates sk-ant- prefix for claude', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -342,6 +357,7 @@ describe('PUT /api/backends/:name/api-key — per-backend', () => {
 
   test('returns 400 for unknown backend', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -359,6 +375,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
   test('calls logout on claude backend', async () => {
     const backend = new MockBackend('claude');
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -373,6 +390,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
   test('calls logout on codex backend', async () => {
     const backend = new MockBackend('codex');
     const registry = new DefaultBackendRegistry(AIBackend.CODEX);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -387,6 +405,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
   test('calls logout on gemini backend', async () => {
     const backend = new MockBackend('gemini');
     const registry = new DefaultBackendRegistry(AIBackend.GEMINI);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -413,6 +432,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
       logoutError: new Error('CLI not found'),
     });
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -426,6 +446,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
   test('returns refreshed status after successful logout', async () => {
     const backend = new MockBackend('claude');
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -441,6 +462,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
   test('returns 400 when backend has no logout method', async () => {
     const backend = new MockBackendNoLogout('claude');
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -456,6 +478,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
       logoutError: new Error('codex CLI not found'),
     });
     const registry = new DefaultBackendRegistry(AIBackend.CODEX);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -471,6 +494,7 @@ describe('POST /api/backends/:name/logout — generalized', () => {
       logoutError: new Error('gemini auth error'),
     });
     const registry = new DefaultBackendRegistry(AIBackend.GEMINI);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
 
     const routes = createBackendRoutes(registry);
@@ -513,6 +537,7 @@ describe('SecretStore integration with backend routes', () => {
   test('updateApiKey persists key to SecretStore', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
     const secretStore = new SecretStore(testDir);
     const routes = createBackendRoutes(registry, secretStore);
@@ -525,6 +550,7 @@ describe('SecretStore integration with backend routes', () => {
 
   test('updateApiKey clears key from SecretStore when null', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
     const secretStore = new SecretStore(testDir);
 
@@ -541,6 +567,7 @@ describe('SecretStore integration with backend routes', () => {
   test('logout clears persisted keys from SecretStore', async () => {
     const backend = new MockBackend('claude');
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(backend as any);
     const secretStore = new SecretStore(testDir);
 
@@ -557,6 +584,7 @@ describe('SecretStore integration with backend routes', () => {
   test('routes work without SecretStore (backward compatible)', async () => {
     delete process.env.ANTHROPIC_API_KEY;
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new MockBackend('claude') as any);
 
     // No secretStore passed

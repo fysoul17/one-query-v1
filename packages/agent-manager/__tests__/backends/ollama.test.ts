@@ -99,6 +99,7 @@ describe('OllamaBackend', () => {
     await proc.stop();
 
     const events = [];
+    // biome-ignore lint/style/noNonNullAssertion: test assertion after spawn guarantees sendStreaming exists
     for await (const event of proc.sendStreaming!('hello')) {
       events.push(event);
     }
@@ -116,6 +117,7 @@ describe('OllamaBackend', () => {
     abortController.abort();
 
     const events = [];
+    // biome-ignore lint/style/noNonNullAssertion: test assertion after spawn guarantees sendStreaming exists
     for await (const event of proc.sendStreaming!('hello', abortController.signal)) {
       events.push(event);
     }
@@ -134,6 +136,7 @@ describe('OllamaBackend', () => {
     });
 
     const events = [];
+    // biome-ignore lint/style/noNonNullAssertion: test assertion after spawn guarantees sendStreaming exists
     for await (const event of proc.sendStreaming!('hello')) {
       events.push(event);
     }

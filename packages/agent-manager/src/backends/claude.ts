@@ -148,6 +148,7 @@ class ClaudeProcess implements BackendProcess {
     }
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     if (!this._alive) {
       yield { type: 'error', error: 'Process is not alive' };
@@ -355,6 +356,7 @@ class ClaudeProcess implements BackendProcess {
    * Text/thinking content grows across consecutive "assistant" events; we track progress
    * per block index so only the delta is emitted each time.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: parser handles many event types
   private parseStreamJsonEvent(
     parsed: Record<string, unknown>,
     textProgress: Map<number, number>,
@@ -491,6 +493,7 @@ class ClaudeProcess implements BackendProcess {
     return this.buildArgsInternal(message, true);
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: CLI flag mapping is inherently branchy
   private buildArgsInternal(message: string, streaming: boolean): string[] {
     const args: string[] = [];
 

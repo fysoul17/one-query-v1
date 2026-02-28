@@ -24,6 +24,7 @@ function createMockPool() {
   return {
     create: mock(async () => ({
       id: 'test',
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
       definition: {} as any,
       toRuntimeInfo: () => ({
         id: 'test',
@@ -68,6 +69,7 @@ function createMockBackend() {
   };
 
   const backend: CLIBackend = {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     name: 'claude' as any,
     capabilities: {
       streaming: true,

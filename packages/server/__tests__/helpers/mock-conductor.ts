@@ -135,6 +135,7 @@ export class ControllableMockConductor extends MockConductor {
   private nextEvent(): Promise<StreamEvent> {
     return new Promise((resolve) => {
       if (this.eventQueue.length > 0) {
+        // biome-ignore lint/style/noNonNullAssertion: length check guarantees element exists
         resolve(this.eventQueue.shift()!);
       } else {
         this.waiters.push(resolve);
@@ -144,6 +145,7 @@ export class ControllableMockConductor extends MockConductor {
 
   pushEvent(event: StreamEvent): void {
     if (this.waiters.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: length check guarantees element exists
       const waiter = this.waiters.shift()!;
       waiter(event);
     } else {

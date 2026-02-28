@@ -8,10 +8,8 @@ export {
   CodexBackend,
   DefaultBackendRegistry,
   GeminiBackend,
-  getBackend,
   OllamaBackend,
   PiBackend,
-  registerBackend,
 } from './backends/index.ts';
 export type { BackendRegistry } from './backends/registry.ts';
 export type { BackendProcess, BackendSpawnConfig, CLIBackend } from './backends/types.ts';

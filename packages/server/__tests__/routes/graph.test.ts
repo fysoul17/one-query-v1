@@ -20,6 +20,7 @@ class MockGraphStore {
   async findNodes(query: { name?: string; type?: string; limit?: number }) {
     this.findNodesCalls.push(query);
     let result = [...this._nodes];
+    // biome-ignore lint/style/noNonNullAssertion: guarded by if check above
     if (query.name) result = result.filter((n) => n.name.includes(query.name!));
     if (query.type) result = result.filter((n) => n.type === query.type);
     if (query.limit) result = result.slice(0, query.limit);
@@ -87,6 +88,7 @@ describe('Graph routes', () => {
 
   beforeEach(() => {
     store = new MockGraphStore();
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     routes = createGraphRoutes(store as any);
   });
 

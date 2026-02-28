@@ -21,6 +21,7 @@ describe('createMemoryLLMCallback()', () => {
   });
 
   test('returned callback sends prompt to spawned process', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     backend = new MockBackend('claude' as any, undefined as any, ['LLM result']);
     const handle = await createMemoryLLMCallback(backend);
 

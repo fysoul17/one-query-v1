@@ -40,6 +40,7 @@ class MockMemoryWithList {
     return { entries: this._allEntries, totalCount: this._allEntries.length, strategy: 'naive' };
   }
 
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
   async store(entry: any) {
     return { id: 'new', ...entry, createdAt: new Date().toISOString() };
   }
@@ -114,6 +115,7 @@ describe('agent-forge Memory routes — entries with proper list() pagination', 
       const b1 = await res1.json();
       const b2 = await res2.json();
 
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
       const ids1 = new Set(b1.data.entries.map((e: any) => e.id));
       for (const e of b2.data.entries) {
         expect(ids1.has(e.id)).toBe(false);

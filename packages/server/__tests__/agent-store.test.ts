@@ -39,15 +39,15 @@ describe('AgentStore', () => {
 
       const result = store.getById('agent-1');
       expect(result).not.toBeNull();
-      expect(result!.id).toBe('agent-1');
-      expect(result!.name).toBe('Alpha');
-      expect(result!.role).toBe('assistant');
-      expect(result!.tools).toEqual(['search']);
-      expect(result!.canModifyFiles).toBe(false);
-      expect(result!.canDelegateToAgents).toBe(false);
-      expect(result!.maxConcurrent).toBe(1);
-      expect(result!.persistent).toBe(false);
-      expect(result!.systemPrompt).toBe('You are a test agent.');
+      expect(result?.id).toBe('agent-1');
+      expect(result?.name).toBe('Alpha');
+      expect(result?.role).toBe('assistant');
+      expect(result?.tools).toEqual(['search']);
+      expect(result?.canModifyFiles).toBe(false);
+      expect(result?.canDelegateToAgents).toBe(false);
+      expect(result?.maxConcurrent).toBe(1);
+      expect(result?.persistent).toBe(false);
+      expect(result?.systemPrompt).toBe('You are a test agent.');
     });
 
     it('returns null for non-existent agent', () => {
@@ -64,9 +64,9 @@ describe('AgentStore', () => {
       store.save(def);
 
       const result = store.getById('agent-opts');
-      expect(result!.sessionId).toBe('sess-42');
-      expect(result!.backend).toBe('claude');
-      expect(result!.backendModel).toBe('claude-3-opus');
+      expect(result?.sessionId).toBe('sess-42');
+      expect(result?.backend).toBe('claude');
+      expect(result?.backendModel).toBe('claude-3-opus');
     });
 
     it('handles undefined optional fields as undefined', () => {
@@ -74,9 +74,9 @@ describe('AgentStore', () => {
       store.save(def);
 
       const result = store.getById('agent-no-opts');
-      expect(result!.sessionId).toBeUndefined();
-      expect(result!.backend).toBeUndefined();
-      expect(result!.backendModel).toBeUndefined();
+      expect(result?.sessionId).toBeUndefined();
+      expect(result?.backend).toBeUndefined();
+      expect(result?.backendModel).toBeUndefined();
     });
   });
 
@@ -119,12 +119,12 @@ describe('AgentStore', () => {
       store.update('agent-upd', updated);
 
       const result = store.getById('agent-upd');
-      expect(result!.name).toBe('After');
-      expect(result!.role).toBe('specialist');
-      expect(result!.tools).toEqual(['search', 'write']);
-      expect(result!.canModifyFiles).toBe(true);
-      expect(result!.systemPrompt).toBe('Updated prompt.');
-      expect(result!.backend).toBe('gemini');
+      expect(result?.name).toBe('After');
+      expect(result?.role).toBe('specialist');
+      expect(result?.tools).toEqual(['search', 'write']);
+      expect(result?.canModifyFiles).toBe(true);
+      expect(result?.systemPrompt).toBe('Updated prompt.');
+      expect(result?.backend).toBe('gemini');
     });
 
     it('marks agent as user_modified after update', () => {
@@ -168,7 +168,7 @@ describe('AgentStore', () => {
       const inserted = store.upsertSeed(def);
 
       expect(inserted).toBe(true);
-      expect(store.getById('seed-1')!.name).toBe('Seeded');
+      expect(store.getById('seed-1')?.name).toBe('Seeded');
     });
 
     it('updates existing seed agent that has not been user-modified', () => {
@@ -179,7 +179,7 @@ describe('AgentStore', () => {
       const result = store.upsertSeed(updated);
 
       expect(result).toBe(true);
-      expect(store.getById('seed-2')!.name).toBe('Updated Seed');
+      expect(store.getById('seed-2')?.name).toBe('Updated Seed');
     });
 
     it('skips update for user-modified seed agent', () => {
@@ -197,7 +197,7 @@ describe('AgentStore', () => {
       const result = store.upsertSeed(seedUpdate);
 
       expect(result).toBe(false);
-      expect(store.getById('seed-3')!.name).toBe('User Modified');
+      expect(store.getById('seed-3')?.name).toBe('User Modified');
     });
 
     it('skips update for non-seed source agent', () => {
@@ -212,7 +212,7 @@ describe('AgentStore', () => {
       const result = store.upsertSeed(seedUpdate);
 
       expect(result).toBe(false);
-      expect(store.getById('api-agent')!.name).toBe('API Created');
+      expect(store.getById('api-agent')?.name).toBe('API Created');
     });
   });
 

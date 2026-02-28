@@ -54,6 +54,7 @@ function SystemMessage({ message, showSteps, elapsedMs, warning }: ChatMessageBu
       return (
         <LiveActivityFeed
           phases={message.pipeline ?? []}
+          // biome-ignore lint/style/noNonNullAssertion: activityFeed is guaranteed by hasActivity guard
           feed={message.activityFeed!}
           isLive={true}
         />

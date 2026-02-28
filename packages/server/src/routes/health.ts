@@ -19,6 +19,7 @@ export function createHealthRoute(
       return statusCache.result;
     }
     // Only called inside `if (registry)` guard, so registry is always defined here
+    // biome-ignore lint/style/noNonNullAssertion: called inside registry guard
     const result = await registry!.getStatusAll();
     statusCache = { result, expiresAt: Date.now() + BACKEND_STATUS_TTL_MS };
     return result;

@@ -60,6 +60,7 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
       return jsonResponse(process.toRuntimeInfo(), 201);
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: update handler validates many optional fields
     update: async (req: Request, params: RouteParams): Promise<Response> => {
       const { id } = params;
       if (!id) throw new BadRequestError('Agent id is required');

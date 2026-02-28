@@ -33,6 +33,7 @@ interface ChatInterfaceProps {
   backendOptions?: BackendConfigOption[];
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: chat interface requires complex state management
 export function ChatInterface({
   initialAgents,
   initialSessionId,

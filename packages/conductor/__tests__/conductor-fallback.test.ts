@@ -41,6 +41,7 @@ function createMockPool() {
 function createMockBackend(name: string, shouldFail = false): CLIBackend {
   const sendFn = mock(async (_prompt: string) => `Response from ${name}`);
   return {
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     name: name as any,
     capabilities: {
       customTools: false,

@@ -69,6 +69,7 @@ class OllamaProcess implements BackendProcess {
     return chunks.join('');
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     if (!this._alive) {
       yield { type: 'error', error: 'Process is not alive' };

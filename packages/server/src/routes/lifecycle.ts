@@ -15,7 +15,7 @@ function hasDirectAccess(m: MemoryInterface): m is Memory {
   return m instanceof Memory;
 }
 
-export function createLifecycleRoutes(memory: MemoryInterface) {
+export function createLifecycleRoutes(memory: MemoryInterface, enableAdvanced = true) {
   if (!isExtended(memory)) {
     const unavailable = () => {
       throw new NotImplementedError('Lifecycle operations not available in remote mode');
@@ -33,6 +33,9 @@ export function createLifecycleRoutes(memory: MemoryInterface) {
   }
 
   const ext = memory;
+
+  const advancedDisabled = () =>
+    new Response('Advanced memory routes are disabled', { status: 403 });
 
   return {
     consolidate: async (): Promise<Response> => {
@@ -61,11 +64,13 @@ export function createLifecycleRoutes(memory: MemoryInterface) {
     },
 
     reindex: async (): Promise<Response> => {
+      if (!enableAdvanced) return advancedDisabled();
       await ext.reindex();
       return jsonResponse({ reindexed: true });
     },
 
     deleteBySource: async (_req: Request, params: RouteParams): Promise<Response> => {
+      if (!enableAdvanced) return advancedDisabled();
       const { source } = params;
       if (!source) throw new BadRequestError('source is required');
       const count = await ext.deleteBySource(decodeURIComponent(source));
@@ -73,6 +78,7 @@ export function createLifecycleRoutes(memory: MemoryInterface) {
     },
 
     consolidationLog: async (req: Request): Promise<Response> => {
+      if (!enableAdvanced) return advancedDisabled();
       if (!hasDirectAccess(memory)) {
         throw new NotImplementedError('Consolidation log requires direct memory access');
       }
@@ -87,6 +93,7 @@ export function createLifecycleRoutes(memory: MemoryInterface) {
     },
 
     queryAsOf: async (req: Request): Promise<Response> => {
+      if (!enableAdvanced) return advancedDisabled();
       if (!hasDirectAccess(memory)) {
         throw new NotImplementedError('Bi-temporal queries require direct memory access');
       }

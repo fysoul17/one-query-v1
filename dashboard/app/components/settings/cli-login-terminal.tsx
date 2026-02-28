@@ -271,6 +271,7 @@ function AuthUrlLink({ url }: { url: string }) {
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: terminal UI requires complex state management
 export function CliLoginTerminal({
   backendName,
   isAuthenticated,

@@ -83,8 +83,10 @@ export function parseEnvConfig(): EnvironmentConfig {
     PI_MODEL: env.PI_MODEL,
     CODEX_API_KEY: env.CODEX_API_KEY,
     GEMINI_API_KEY: env.GEMINI_API_KEY,
-    CORS_ORIGIN: env.CORS_ORIGIN ?? '*',
+    CORS_ORIGIN: env.CORS_ORIGIN ?? 'http://localhost:7821',
     FALLBACK_BACKEND: parseFallbackBackend(env.FALLBACK_BACKEND),
+    ENABLE_TERMINAL_WS: env.ENABLE_TERMINAL_WS !== 'false',
+    ENABLE_ADVANCED_MEMORY: env.ENABLE_ADVANCED_MEMORY !== 'false',
   };
 }
 

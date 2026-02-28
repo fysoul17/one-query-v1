@@ -125,6 +125,7 @@ export function useWebSocket({
     setMessages((prev) => prev.map((m) => (m.id === targetId ? { ...m, activityFeed: feed } : m)));
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: agent step handler processes many event types
   function handleAgentStep(parsed: WSServerMessage & { type: 'agent_step' }) {
     if (cancelledRef.current) return;
 
@@ -412,6 +413,7 @@ export function useWebSocket({
         }, 30_000);
       };
 
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WebSocket message handler dispatches many event types
       ws.onmessage = (event) => {
         let parsed: WSServerMessage;
         try {

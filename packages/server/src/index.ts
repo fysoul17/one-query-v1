@@ -373,7 +373,7 @@ async function main() {
   const healthRoute = createHealthRoute(conductor, memory, startTime, registry);
   const agentRoutes = createAgentRoutes(conductor, pool);
   const memoryRoutes = createMemoryRoutes(memory);
-  const lifecycleRoutes = createLifecycleRoutes(memory);
+  const lifecycleRoutes = createLifecycleRoutes(memory, config.ENABLE_ADVANCED_MEMORY);
   const graphRoutes = createGraphRoutes(graphStore);
   const cronRoutes = createCronRoutes(cronManager);
   const activityRoute = createActivityRoute(conductor);
@@ -436,6 +436,7 @@ async function main() {
     backendRoutes.updateApiKey(req, params.name),
   );
   router.post('/api/backends/:name/logout', (_req: Request, params: Record<string, string>) =>
+    // biome-ignore lint/style/noNonNullAssertion: route pattern guarantees param exists
     backendRoutes.logout(params.name!),
   );
 
@@ -471,6 +472,7 @@ async function main() {
     port: config.PORT,
     idleTimeout: 0,
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTTP request dispatch is inherently branchy
     async fetch(req, server) {
       const url = new URL(req.url);
 
@@ -500,6 +502,9 @@ async function main() {
 
       // Terminal WebSocket upgrade (for PTY-based CLI login)
       if (url.pathname === '/ws/terminal') {
+        if (!config.ENABLE_TERMINAL_WS) {
+          return new Response('Terminal WebSocket is disabled', { status: 403 });
+        }
         const backend = url.searchParams.get('backend') ?? 'claude';
         const upgraded = server.upgrade(req, {
           data: { id: crypto.randomUUID(), type: 'terminal' as const, backend },

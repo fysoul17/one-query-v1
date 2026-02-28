@@ -84,6 +84,7 @@ class CodexProcess implements BackendProcess {
     return chunks.join('');
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
   async *sendStreaming(message: string, signal?: AbortSignal): AsyncGenerator<StreamEvent> {
     if (!this._alive) {
       yield { type: 'error', error: 'Process is not alive' };
@@ -236,6 +237,7 @@ class CodexProcess implements BackendProcess {
    *
    * Simpler events may just have text content directly.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: parser handles many event types
   private parseCodexEvent(parsed: Record<string, unknown>): StreamEvent[] {
     const events: StreamEvent[] = [];
     const eventType = parsed.type as string | undefined;

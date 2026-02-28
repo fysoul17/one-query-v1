@@ -57,6 +57,7 @@ async function parseResponse(res: Response) {
 describe('GET /api/backends/status', () => {
   test('returns correct response shape', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -71,8 +72,11 @@ describe('GET /api/backends/status', () => {
 
   test('returns all registered backends', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude') as any);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('codex') as any);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('gemini') as any);
 
     const routes = createBackendRoutes(registry);
@@ -88,6 +92,7 @@ describe('GET /api/backends/status', () => {
 
   test('reflects correct default backend', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CODEX);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('codex') as any);
 
     const routes = createBackendRoutes(registry);
@@ -100,6 +105,7 @@ describe('GET /api/backends/status', () => {
   test('returns backend availability and configured status', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
     registry.register(
+      // biome-ignore lint/suspicious/noExplicitAny: test mock
       new StatusMockBackend('claude', { available: true, configured: true }) as any,
     );
     registry.register(
@@ -107,6 +113,7 @@ describe('GET /api/backends/status', () => {
         available: false,
         configured: false,
         error: 'Not installed',
+        // biome-ignore lint/suspicious/noExplicitAny: test mock
       }) as any,
     );
 
@@ -126,6 +133,7 @@ describe('GET /api/backends/status', () => {
 
   test('returns capabilities for each backend', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);
@@ -140,6 +148,7 @@ describe('GET /api/backends/status', () => {
 
   test('returns masked API key when present', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude', { apiKeyMasked: 'sk-ant...7x4Q' }) as any);
 
     const routes = createBackendRoutes(registry);
@@ -151,6 +160,7 @@ describe('GET /api/backends/status', () => {
 
   test('returns authMode for each backend', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude', { authMode: 'cli_login' }) as any);
 
     const routes = createBackendRoutes(registry);
@@ -162,6 +172,7 @@ describe('GET /api/backends/status', () => {
 
   test('response is valid JSON with correct content-type', async () => {
     const registry = new DefaultBackendRegistry(AIBackend.CLAUDE);
+    // biome-ignore lint/suspicious/noExplicitAny: test mock
     registry.register(new StatusMockBackend('claude') as any);
 
     const routes = createBackendRoutes(registry);

@@ -192,7 +192,7 @@ describe('E2E: Server Lifecycle', () => {
     test('OPTIONS returns CORS headers', async () => {
       const res = await fetch(`${baseUrl}/health`, { method: 'OPTIONS' });
       expect(res.status).toBe(204);
-      expect(res.headers.get('access-control-allow-origin')).toBe('*');
+      expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:7821');
       expect(res.headers.get('access-control-allow-methods')).toBeTruthy();
     });
   });

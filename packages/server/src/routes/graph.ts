@@ -76,6 +76,7 @@ export function createGraphRoutes(graphStore: GraphStore) {
       return jsonResponse(node, 201);
     },
 
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: query handler validates many optional fields
     createRelationship: async (req: Request): Promise<Response> => {
       const body = await parseJsonBody<{
         sourceId?: string;
