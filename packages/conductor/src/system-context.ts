@@ -1,0 +1,82 @@
+// system-context.ts — Builds a dynamic <system-context> preamble for agent prompts
+
+import type { AgentRuntimeInfo } from '@autonomy/shared';
+
+export interface SystemContextConfig {
+  /** Currently running agents from pool.list() */
+  agents: AgentRuntimeInfo[];
+  /** Whether a CronManager is available */
+  cronEnabled: boolean;
+}
+
+const PLATFORM_IDENTITY = [
+  'You are running inside agent-forge, an AI orchestration platform.',
+  'You are one of potentially many agents managed by a Conductor.',
+].join(' ');
+
+const MEMORY_RULES = [
+  'Memory is automatic — the Conductor stores your conversations in pyx-memory (a RAG memory system).',
+  'Do NOT write files to manage memory. Do NOT confuse pyx-memory with CLAUDE.md or any local config.',
+  'If you need to recall something, ask the user or use a <system-action type="search_memory" /> tag.',
+].join(' ');
+
+const ACTION_DOCS_HEADER = 'You can request platform operations using self-closing XML tags:';
+
+interface ActionDoc {
+  type: string;
+  description: string;
+  attrs: string;
+}
+
+const CORE_ACTIONS: ActionDoc[] = [
+  {
+    type: 'create_agent',
+    description: 'Spawn a new agent',
+    attrs: 'name="..." role="..." systemPrompt="..."',
+  },
+  {
+    type: 'search_memory',
+    description: 'Search long-term memory',
+    attrs: 'query="..." limit="5"',
+  },
+];
+
+const CRON_ACTION: ActionDoc = {
+  type: 'create_cron',
+  description: 'Create a scheduled task',
+  attrs: 'name="..." schedule="0 * * * *" agentId="..." task="..."',
+};
+
+function formatActionDoc(action: ActionDoc): string {
+  return `  <system-action type="${action.type}" ${action.attrs} />  — ${action.description}`;
+}
+
+function formatAgentList(agents: AgentRuntimeInfo[]): string {
+  if (agents.length === 0) return 'No other agents are currently running.';
+  const lines = agents.map((a) => `  - ${a.name} (${a.id}): ${a.role} [${a.status}]`);
+  return `Active agents:\n${lines.join('\n')}`;
+}
+
+/**
+ * Build the system context preamble that tells agents what platform they're on,
+ * what memory rules to follow, and what system actions are available.
+ */
+export function buildSystemContextPreamble(config: SystemContextConfig): string {
+  const actions = [...CORE_ACTIONS];
+  if (config.cronEnabled) {
+    actions.push(CRON_ACTION);
+  }
+
+  const sections = [
+    PLATFORM_IDENTITY,
+    '',
+    MEMORY_RULES,
+    '',
+    formatAgentList(config.agents),
+    '',
+    ACTION_DOCS_HEADER,
+    ...actions.map(formatActionDoc),
+  ];
+
+  return `<system-context>\n${sections.join('\n')}\n</system-context>`;
+}

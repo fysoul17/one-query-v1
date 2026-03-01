@@ -1,7 +1,6 @@
 import type {
   ActivityEntry,
   AgentRuntimeInfo,
-  ApiResponse,
   BackendStatusResponse,
   CreateAgentRequest,
   CreateCronRequest,
@@ -10,10 +9,7 @@ import type {
   CronEntryWithStatus,
   CronExecutionLog,
   EnvironmentConfig,
-  GraphNode,
-  GraphTraversalResult,
   HealthCheckResponse,
-  MemoryIngestRequest,
   MemorySearchResult,
   MemoryStats,
   PlatformConfig,
@@ -25,31 +21,14 @@ import type {
   UpdateCronRequest,
   UpdateSessionRequest,
 } from '@autonomy/shared';
+import { createFetchApi } from './fetch-api';
 
 const RUNTIME_URL =
   typeof window !== 'undefined'
     ? (process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820')
     : 'http://localhost:7820';
 
-async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options?.headers as Record<string, string>),
-  };
-
-  const res = await fetch(`${RUNTIME_URL}${path}`, {
-    ...options,
-    headers,
-  });
-
-  const body = (await res.json()) as ApiResponse<T>;
-
-  if (!body.success || body.data === undefined) {
-    throw new Error(body.error ?? `API error: ${res.status}`);
-  }
-
-  return body.data;
-}
+const fetchApi = createFetchApi(RUNTIME_URL);
 
 export async function getHealth(): Promise<HealthCheckResponse> {
   return fetchApi<HealthCheckResponse>('/health');
@@ -82,13 +61,6 @@ export async function searchMemory(query: string, limit = 10): Promise<MemorySea
   return fetchApi<MemorySearchResult>(
     `/api/memory/search?query=${encodeURIComponent(query)}&limit=${limit}`,
   );
-}
-
-export async function ingestMemory(data: MemoryIngestRequest): Promise<unknown> {
-  return fetchApi<unknown>('/api/memory/ingest', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
 }
 
 export async function getMemoryStats(): Promise<MemoryStats> {
@@ -161,60 +133,13 @@ export async function deleteMemoryEntry(id: string): Promise<{ deleted: string }
   });
 }
 
-export async function getGraphData(): Promise<{
-  nodes: GraphNode[];
-  totalCount: number;
-}> {
-  return fetchApi(`/api/memory/graph/nodes`);
-}
-
-export async function queryGraph(nodeId: string, depth = 1): Promise<GraphTraversalResult> {
-  return fetchApi<GraphTraversalResult>('/api/memory/graph/query', {
-    method: 'POST',
-    body: JSON.stringify({ nodeId, depth }),
-  });
-}
-
-export async function uploadFile(file: File): Promise<unknown> {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  const res = await fetch(`${RUNTIME_URL}/api/memory/ingest/file`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  const body = (await res.json()) as ApiResponse<unknown>;
-  if (!body.success || body.data === undefined) {
-    throw new Error(body.error ?? `API error: ${res.status}`);
-  }
-  return body.data;
-}
-
 // --- Memory Lifecycle Operations ---
-
-export async function consolidateMemory(): Promise<{
-  entriesProcessed: number;
-  entriesMerged: number;
-  entriesArchived: number;
-  durationMs: number;
-}> {
-  return fetchApi('/api/memory/consolidate', { method: 'POST' });
-}
 
 export async function forgetMemory(id: string, reason?: string): Promise<{ forgotten: boolean }> {
   return fetchApi(`/api/memory/forget/${id}`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
-}
-
-export async function decayMemory(): Promise<{ archivedCount: number }> {
-  return fetchApi('/api/memory/decay', { method: 'POST' });
-}
-
-export async function reindexMemory(): Promise<{ reindexed: boolean }> {
-  return fetchApi('/api/memory/reindex', { method: 'POST' });
 }
 
 export async function summarizeSession(sessionId: string): Promise<unknown> {
@@ -242,44 +167,6 @@ export async function queryAsOf(
   if (options?.agentId) params.set('agentId', options.agentId);
   if (options?.limit) params.set('limit', String(options.limit));
   return fetchApi(`/api/memory/query-as-of?${params}`);
-}
-
-// --- Graph Mutations ---
-
-export async function createGraphNode(data: {
-  name: string;
-  type: string;
-  properties?: Record<string, unknown>;
-}): Promise<GraphNode> {
-  return fetchApi('/api/memory/graph/nodes', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function createGraphRelationship(data: {
-  sourceId: string;
-  targetId: string;
-  type: string;
-  properties?: Record<string, unknown>;
-  memoryEntryId?: string;
-}): Promise<unknown> {
-  return fetchApi('/api/memory/graph/relationships', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
-export async function deleteGraphNode(id: string): Promise<{ deleted: string }> {
-  return fetchApi(`/api/memory/graph/nodes/${id}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function getGraphRelationships(
-  limit = 200,
-): Promise<{ relationships: unknown[]; totalCount: number }> {
-  return fetchApi(`/api/memory/graph/relationships?limit=${limit}`);
 }
 
 // --- Agent Update ---

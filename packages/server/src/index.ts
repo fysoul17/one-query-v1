@@ -15,21 +15,14 @@ import { Conductor } from '@autonomy/conductor';
 import { CronManager } from '@autonomy/cron-manager';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
 import { DebugEventCategory, DebugEventLevel, Logger } from '@autonomy/shared';
-import {
-  createMemory,
-  HybridRAGEngine,
-  LLMReranker,
-  LocalEmbeddingProvider,
-  registerRAGEngine,
-  SQLiteGraphStore,
-} from '@pyx-memory/core';
+import { MemoryClient } from '@pyx-memory/client';
 import type { ServerWebSocket } from 'bun';
 import { AgentStore } from './agent-store.ts';
+import { DisabledMemory } from './disabled-memory.ts';
 import { parseEnvConfig } from './config.ts';
 import { ConfigManager } from './config-manager.ts';
 import { DebugBus, makeDebugEvent } from './debug-bus.ts';
 import { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
-import { createMemoryLLMCallback } from './memory-llm-bridge.ts';
 import { RateLimiter } from './rate-limiter.ts';
 import { Router } from './router.ts';
 import { createActivityRoute } from './routes/activity.ts';
@@ -43,7 +36,7 @@ import { createLifecycleRoutes, isExtended } from './routes/lifecycle.ts';
 import { createMemoryRoutes } from './routes/memory.ts';
 import { createSessionRoutes } from './routes/sessions.ts';
 import { SecretStore } from './secret-store.ts';
-import { runSeeds } from './seeds/index.ts';
+import { runCronSeeds, runSeeds } from './seeds/index.ts';
 import { SessionStore } from './session-store.ts';
 import { createTerminalWebSocketHandler, type TerminalWSData } from './terminal-ws.ts';
 import { createWebSocketHandler, type WSData } from './websocket.ts';
@@ -134,7 +127,7 @@ async function main() {
   const agentStore = new AgentStore(runtimeDb);
   logger.info('Runtime database initialized');
 
-  // Initialize Backend Registry (before memory so LLM callback is available)
+  // Initialize Backend Registry
   const registry = new DefaultBackendRegistry(config.AI_BACKEND);
   registry.register(new ClaudeBackend());
   registry.register(new CodexBackend());
@@ -142,59 +135,37 @@ async function main() {
   registry.register(new PiBackend());
   registry.register(new OllamaBackend());
 
-  // Wire LLM callback for pyx-memory v2 (consolidation, summarization, reranking)
-  let memoryLLMShutdown: (() => Promise<void>) | undefined;
-  let llmCallback: ((prompt: string) => Promise<string>) | undefined;
-  try {
-    const llmHandle = await createMemoryLLMCallback(registry.getDefault());
-    memoryLLMShutdown = llmHandle.shutdown;
-    llmCallback = llmHandle.callback;
-    logger.info('LLM callback initialized for memory lifecycle');
-  } catch (error) {
-    logger.warn('Failed to initialize LLM callback for memory; will use fallback heuristics', {
-      error: error instanceof Error ? error.message : String(error),
-    });
+  // Initialize Memory — consumer pattern: MemoryClient when MEMORY_URL is set, DisabledMemory otherwise.
+  // All memory features (graph, lifecycle, RAG) are provided by the pyx-memory server.
+  let memory: MemoryClient | DisabledMemory;
+  if (config.MEMORY_URL) {
+    const client = new MemoryClient(config.MEMORY_URL);
+    try {
+      await client.initialize();
+      memory = client;
+      logger.info('Memory connected', { url: config.MEMORY_URL });
+    } catch (error) {
+      logger.warn('Memory server unreachable — running without memory', {
+        error: error instanceof Error ? error.message : String(error),
+        url: config.MEMORY_URL,
+      });
+      memory = new DisabledMemory();
+      await memory.initialize();
+    }
+  } else {
+    memory = new DisabledMemory();
+    await memory.initialize();
   }
-
-  // Initialize Memory (uses MemoryClient if MEMORY_URL is set, otherwise embedded)
-  const graphStore = new SQLiteGraphStore();
-  await graphStore.initialize({});
-  const embedder = new LocalEmbeddingProvider(384);
-  const memory = createMemory({
-    dataDir: config.DATA_DIR,
-    vectorProvider: config.VECTOR_PROVIDER,
-    qdrantUrl: config.QDRANT_URL,
-    embedder: (texts: string[]) => embedder.embed(texts),
-    dimensions: 384,
-    memoryUrl: config.MEMORY_URL,
-    graphStore,
-    skipDuplicates: true,
-    llm: llmCallback,
-  });
-  await memory.initialize();
-  logger.info('Memory initialized', { llm: !!llmCallback });
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.MEMORY,
       level: DebugEventLevel.INFO,
       source: 'memory.init',
-      message: `Memory system initialized${llmCallback ? ' with LLM' : ' (no LLM)'}`,
+      message: memory instanceof DisabledMemory
+        ? 'Memory disabled — no MEMORY_URL configured'
+        : `Memory connected to ${config.MEMORY_URL}`,
     }),
   );
-
-  // Register Hybrid RAG engine (uses LLM reranker if callback available)
-  if (llmCallback) {
-    registerRAGEngine(
-      new HybridRAGEngine({
-        graphStore,
-        reranker: new LLMReranker(llmCallback),
-      }),
-    );
-    logger.info('Hybrid RAG engine registered with LLM reranker');
-  } else {
-    registerRAGEngine(new HybridRAGEngine({ graphStore }));
-    logger.info('Hybrid RAG engine registered with NoopReranker');
-  }
 
   // Initialize Plugin System
   const hookRegistry = new HookRegistry({
@@ -283,7 +254,12 @@ async function main() {
   // Initialize CronManager
   const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
   await cronManager.initialize();
+  conductor.setCronManager(cronManager);
   logger.info('CronManager initialized');
+
+  // Seed cron jobs (idempotent)
+  await runCronSeeds(cronManager);
+  logger.info('Cron seeds applied');
 
   // Memory lifecycle: periodic consolidation and decay
   const lifecycleIntervals: ReturnType<typeof setInterval>[] = [];
@@ -374,7 +350,7 @@ async function main() {
   const agentRoutes = createAgentRoutes(conductor, pool);
   const memoryRoutes = createMemoryRoutes(memory);
   const lifecycleRoutes = createLifecycleRoutes(memory, config.ENABLE_ADVANCED_MEMORY);
-  const graphRoutes = createGraphRoutes(graphStore);
+  const graphRoutes = createGraphRoutes(memory);
   const cronRoutes = createCronRoutes(cronManager);
   const activityRoute = createActivityRoute(conductor);
   const configRoutes = createConfigRoutes(configManager);
@@ -582,7 +558,6 @@ async function main() {
     await pluginManager.shutdown();
     await cronManager.shutdown();
     await conductor.shutdown();
-    if (memoryLLMShutdown) await memoryLLMShutdown();
     await pool.shutdown();
     await memory.shutdown();
     runtimeDb.close();

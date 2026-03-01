@@ -28,6 +28,13 @@ import {
 } from './errors.ts';
 import { SessionProcessPool } from './session-process-pool.ts';
 import {
+  type CronManagerLike,
+  executeSystemActions,
+  formatActionResults,
+} from './system-action-executor.ts';
+import { parseSystemActions, stripSystemActions } from './system-action-parser.ts';
+import { buildSystemContextPreamble } from './system-context.ts';
+import {
   ConductorEventType,
   type ConductorOptions,
   type ConductorResponse,
@@ -41,7 +48,7 @@ const DEFAULT_MAX_QUEUE_DEPTH = 50;
 const conductorLogger = new Logger({ context: { source: 'conductor' } });
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are an AI assistant. Answer the user clearly and helpfully. If memory context is provided, use it to inform your response.';
+  'You are an AI assistant running inside agent-forge, an AI orchestration platform. Answer the user clearly and helpfully. If memory context is provided, use it to inform your response.';
 
 const FALLBACK_NO_BACKEND =
   "I'm the Conductor but have no AI backend configured. Please set up a backend or target a specific agent.";
@@ -92,6 +99,7 @@ export class Conductor {
   private hookRegistry?: HookRegistryInterface;
   private messageQueue: QueuedConductorMessage[] = [];
   private processing = false;
+  private cronManager?: CronManagerLike;
 
   constructor(
     pool: AgentPool,
@@ -507,6 +515,26 @@ export class Conductor {
     this.sessionPool.invalidate(sessionId);
   }
 
+  /** Wire a CronManager so agents can create cron jobs via system actions. */
+  setCronManager(cronManager: CronManagerLike): void {
+    this.cronManager = cronManager;
+  }
+
+  /** Search memory — exposed for system action executor. */
+  async searchMemory(query: string, limit: number): Promise<MemorySearchResult | null> {
+    try {
+      return await this.memory.search({
+        query,
+        limit,
+        strategy: RAGStrategy.HYBRID,
+      });
+    } catch (error) {
+      const detail = getErrorDetail(error);
+      conductorLogger.warn('System action memory search failed', { error: detail });
+      return null;
+    }
+  }
+
   async shutdown(): Promise<void> {
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor shutting down');
 
@@ -550,6 +578,13 @@ export class Conductor {
         .join('\n---\n');
       prompt = `<memory-context>\n${contextSnippet}\n</memory-context>\n\n${prompt}`;
     }
+
+    // Prepend system context preamble (platform identity, agent list, available actions).
+    const systemContext = buildSystemContextPreamble({
+      agents: this.pool.list(),
+      cronEnabled: !!this.cronManager,
+    });
+    prompt = `${systemContext}\n\n${prompt}`;
 
     return prompt;
   }
@@ -658,11 +693,28 @@ export class Conductor {
     decisions: ConductorDecision[],
     onEvent?: OnConductorEvent,
   ): Promise<string> {
-    const finalContent = await this.runAfterResponseHook(
-      responseContent,
-      responseAgentId,
-      decisions,
-    );
+    let finalContent = await this.runAfterResponseHook(responseContent, responseAgentId, decisions);
+
+    // Parse and execute system actions from the response
+    const systemActions = parseSystemActions(finalContent);
+    if (systemActions.length > 0) {
+      const actionResults = await executeSystemActions(systemActions, {
+        conductor: this,
+        cronManager: this.cronManager,
+      });
+      // Strip action tags from output shown to user
+      finalContent = stripSystemActions(finalContent);
+      // Append results so the agent (on next turn) can see what happened
+      const resultsBlock = formatActionResults(actionResults);
+      if (resultsBlock) {
+        finalContent = `${finalContent}${resultsBlock}`;
+      }
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'system_actions',
+        reason: `Executed ${systemActions.length} system action(s)`,
+      });
+    }
 
     try {
       await this.timedStep(

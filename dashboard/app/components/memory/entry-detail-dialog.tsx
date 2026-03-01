@@ -2,7 +2,6 @@
 
 import type { MemoryEntry } from '@autonomy/shared';
 import { Archive, Trash2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
   AlertDialog,
@@ -18,15 +17,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { deleteMemoryEntry, forgetMemory } from '@/lib/api';
+import { memoryTypeBadgeVariant } from './memory-utils';
 
 interface EntryDetailDialogProps {
   entry: MemoryEntry | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onMutate?: () => void;
 }
 
-export function EntryDetailDialog({ entry, open, onOpenChange }: EntryDetailDialogProps) {
-  const router = useRouter();
+export function EntryDetailDialog({ entry, open, onOpenChange, onMutate }: EntryDetailDialogProps) {
   const [deleting, setDeleting] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +41,7 @@ export function EntryDetailDialog({ entry, open, onOpenChange }: EntryDetailDial
     try {
       await deleteMemoryEntry(entry.id);
       onOpenChange(false);
-      router.refresh();
+      onMutate?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete entry');
     } finally {
@@ -57,7 +57,7 @@ export function EntryDetailDialog({ entry, open, onOpenChange }: EntryDetailDial
     try {
       await forgetMemory(entry.id, 'Manually forgotten via dashboard');
       onOpenChange(false);
-      router.refresh();
+      onMutate?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to forget entry');
     } finally {
@@ -77,9 +77,7 @@ export function EntryDetailDialog({ entry, open, onOpenChange }: EntryDetailDial
           </DialogHeader>
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={entry.type === 'short-term' ? 'secondary' : 'default'}>
-                {entry.type}
-              </Badge>
+              <Badge variant={memoryTypeBadgeVariant(entry.type)}>{entry.type}</Badge>
               {entry.agentId && (
                 <Badge variant="outline" className="font-mono">
                   agent: {entry.agentId}

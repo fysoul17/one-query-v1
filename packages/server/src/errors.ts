@@ -29,6 +29,13 @@ export class NotImplementedError extends ServerError {
   }
 }
 
+export class ForbiddenError extends ServerError {
+  constructor(message = 'Forbidden') {
+    super(message, 403);
+    this.name = 'ForbiddenError';
+  }
+}
+
 export class InternalError extends ServerError {
   constructor(message = 'Internal server error') {
     super(message, 500);

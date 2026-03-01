@@ -14,7 +14,7 @@ import type {
   BackendSpawnConfig,
   CLIBackend,
 } from '@autonomy/agent-manager';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { Conductor } from '../src/conductor.ts';
 import { makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
@@ -105,7 +105,7 @@ describe('Per-session backend processes', () => {
   test('message with sessionId spawns a session-specific backend process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
       { systemPrompt: 'Test prompt' },
     );
@@ -126,7 +126,7 @@ describe('Per-session backend processes', () => {
   test('subsequent messages with same sessionId reuse the same process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -142,7 +142,7 @@ describe('Per-session backend processes', () => {
   test('different sessionIds spawn different backend processes', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -159,7 +159,7 @@ describe('Per-session backend processes', () => {
   test('message without sessionId uses default backend process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -173,7 +173,7 @@ describe('Per-session backend processes', () => {
   test('shutdown stops all session processes', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -201,7 +201,7 @@ describe('Assistant response stored in memory', () => {
   test('handleMessage stores BOTH user message AND assistant response', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -221,7 +221,7 @@ describe('Assistant response stored in memory', () => {
   test('handleMessageStreaming stores assistant response in memory', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -242,7 +242,7 @@ describe('Assistant response stored in memory', () => {
   test('stored assistant response includes session context', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -270,7 +270,7 @@ describe('Multi-message session context', () => {
   test('second message in session should have context from first exchange', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();
@@ -307,7 +307,7 @@ describe('Multi-message session context', () => {
   test('assistant responses are stored with conductor agentId', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       mockBackend.backend,
     );
     await conductor.initialize();

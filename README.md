@@ -19,7 +19,7 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 
 - A **Conductor** — AI agent that responds to messages, searches memory for context, and delegates to specialist agents
 - An **Agent Pool** of AI agents with pluggable backends (per-agent backend selection)
-- **Persistent Memory** via [pyx-memory](https://github.com/fysoul17/pyx-memory-v1) — vector search (LanceDB), structured storage (SQLite), Graph RAG (Neo4j), and file ingestion. Runs embedded or as a sidecar.
+- **Persistent Memory** via [pyx-memory](https://github.com/fysoul17/pyx-memory-v1) — vector search (LanceDB), structured storage (SQLite), Graph RAG (Neo4j), and file ingestion. Connects as a sidecar via `MemoryClient`.
 - A real-time **Cyberpunk Dashboard** with streaming chat, agent management, and debug console
 - **Scheduled tasks** via Cron Manager
 
@@ -58,8 +58,8 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 │                        │  │ Agent Pool  │     │    Memory     │    │  │
 │                        │  │             │     │              │    │  │
 │                        │  │ Agent #1    │     │ pyx-memory   │    │  │
-│                        │  │ Agent #2    │     │ (embedded or │    │  │
-│                        │  │ Agent #N    │     │   sidecar)   │    │  │
+│                        │  │ Agent #2    │     │ (sidecar via │    │  │
+│                        │  │ Agent #N    │     │ MemoryClient)│    │  │
 │                        │  └─────────────┘     └──────────────┘    │  │
 │                        └──────────────────────────────────────────┘  │
 │                                                                      │
@@ -96,7 +96,7 @@ The Conductor is a simple AI agent: it searches memory for context, then either 
 Swap AI providers without changing code. `claude -p` is the default. Codex CLI, Gemini CLI, Pi, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry. Custom tool support is wired up for Claude (`--allowed-tools`), Codex (`--enable`), Gemini (`--allowed-tools`), and Ollama (API `tools` parameter).
 
 ### Persistent Memory (pyx-memory)
-Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), extracted as a standalone repo and consumed via git submodule at `vendor/pyx-memory`. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). Runs **embedded** (in-process, zero-latency) or as a **sidecar** (standalone HTTP service with Neo4j graph store). Memory persists across sessions and agent restarts.
+Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), extracted as a standalone repo and consumed via git submodule at `vendor/pyx-memory`. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). The runtime connects to pyx-memory as a **sidecar** (standalone HTTP service) via `MemoryClient` when `MEMORY_URL` is configured. Memory persists across sessions and agent restarts.
 
 ### Agent Lifecycle Management
 Full CRUD for AI agents with serial message queues, idle timeout auto-shutdown, configurable pool limits, session persistence (`--resume` flags), and ownership-based permissions (user-created vs conductor-created agents).
@@ -251,8 +251,8 @@ agent-forge/
        └──▶ @autonomy/plugin-system (hooks, middleware)
                     │
                     ▼
-             @autonomy/server  ◀── uses @pyx-memory/core (embedded)
-                    │                  or @pyx-memory/client (sidecar)
+             @autonomy/server  ◀── uses @pyx-memory/client (sidecar)
+                    │                  or DisabledMemory (no-op)
                     │                  + AgentStore (bun:sqlite)
                     ▼
                dashboard (HTTP + WS)

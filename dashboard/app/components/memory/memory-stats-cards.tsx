@@ -1,23 +1,20 @@
-import type { MemoryStats } from '@autonomy/shared';
+import { formatBytes } from '@pyx-memory/dashboard';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface MemoryStatsCardsProps {
-  stats: MemoryStats | null;
-  graphStats?: { nodeCount: number; edgeCount: number } | null;
+  stats: { totalEntries: number; vectorCount: number; storageUsedBytes: number } | null;
+  graphNodeCount: number | null;
+  graphEdgeCount: number | null;
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-export function MemoryStatsCards({ stats, graphStats }: MemoryStatsCardsProps) {
+export function MemoryStatsCards({ stats, graphNodeCount, graphEdgeCount }: MemoryStatsCardsProps) {
+  // Show skeleton on initial load (no stats yet, still loading or first error).
+  // The polling hook will retry within seconds, so don't flash an error immediately.
   if (!stats) {
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {['total', 'short', 'long', 'episodic'].map((id) => (
-          <Card key={id}>
+        {['total', 'vectors', 'storage', 'graph'].map((id) => (
+          <Card key={id} className="glass">
             <CardContent className="py-3">
               <div className="h-4 w-16 animate-pulse rounded bg-muted" />
               <div className="mt-1 h-6 w-10 animate-pulse rounded bg-muted" />
@@ -34,7 +31,8 @@ export function MemoryStatsCards({ stats, graphStats }: MemoryStatsCardsProps) {
     { label: 'Storage', value: formatBytes(stats.storageUsedBytes) },
     {
       label: 'Graph',
-      value: graphStats ? `${graphStats.nodeCount}N / ${graphStats.edgeCount}E` : '—',
+      value: graphNodeCount !== null ? `${graphNodeCount}N / ${graphEdgeCount ?? 0}E` : '\u2014',
+      glow: 'hover:glow-cyan',
     },
   ];
 

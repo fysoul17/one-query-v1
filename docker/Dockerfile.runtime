@@ -14,6 +14,7 @@ COPY packages/agent-manager/package.json ./packages/agent-manager/
 COPY vendor/pyx-memory/packages/shared/package.json ./vendor/pyx-memory/packages/shared/
 COPY vendor/pyx-memory/packages/client/package.json ./vendor/pyx-memory/packages/client/
 COPY vendor/pyx-memory/packages/core/package.json ./vendor/pyx-memory/packages/core/
+COPY vendor/pyx-memory/packages/dashboard/package.json ./vendor/pyx-memory/packages/dashboard/
 COPY packages/conductor/package.json ./packages/conductor/
 COPY packages/cron-manager/package.json ./packages/cron-manager/
 COPY packages/server/package.json ./packages/server/

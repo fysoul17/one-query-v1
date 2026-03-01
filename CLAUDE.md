@@ -4,7 +4,7 @@
 
 - Proactively use subagents and skills where needed
 - Follow commit conventions in `.claude/commit-conventions.md`
-- Follow design system in `docs/design-system.md` for UI/UX work, if one has been created
+- Follow design system in `docs/design-system.md` for UI/UX work if exist
 
 ## Investigation Workflow
 
@@ -38,6 +38,13 @@ The full design-to-implementation pipeline:
 4. **Small commits** - Commit working increments rather than large changesets
 
 For complex features, use the Plan agent to design the approach before implementation.
+
+## Documentation Workflow
+
+- **Sync docs with codebase**: Use `/devlyn.update-docs` to clean up stale content, update outdated info, and generate missing docs
+- **Focused doc update**: Use `/devlyn.update-docs [area]` for targeted updates (e.g., "API reference", "getting-started")
+- Preserves all forward-looking content: roadmaps, future plans, visions, open questions
+- If no docs exist, proposes a tailored docs structure and generates initial content
 
 ## Debugging Workflow
 

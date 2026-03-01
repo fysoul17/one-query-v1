@@ -1,13 +1,16 @@
 'use client';
 
 import type { BackendStatusResponse } from '@autonomy/shared';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { updateConfig } from '@/lib/api';
 import { ProviderCard } from './provider-card';
 
-export function ProviderList({ status }: { status: BackendStatusResponse }) {
-  const router = useRouter();
+interface ProviderListProps {
+  status: BackendStatusResponse;
+  onRefetch: () => void;
+}
+
+export function ProviderList({ status, onRefetch }: ProviderListProps) {
   const [switching, setSwitching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,16 +19,12 @@ export function ProviderList({ status }: { status: BackendStatusResponse }) {
     setError(null);
     try {
       await updateConfig({ AI_BACKEND: backendName });
-      router.refresh();
+      onRefetch();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to switch backend');
     } finally {
       setSwitching(null);
     }
-  }
-
-  function handleAuthChange() {
-    router.refresh();
   }
 
   return (
@@ -43,7 +42,7 @@ export function ProviderList({ status }: { status: BackendStatusResponse }) {
             isDefault={backend.name === status.defaultBackend}
             isSwitching={switching === backend.name}
             onSetDefault={() => handleSetDefault(backend.name)}
-            onAuthChange={handleAuthChange}
+            onAuthChange={onRefetch}
           />
         ))}
       </div>

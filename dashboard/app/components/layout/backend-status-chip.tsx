@@ -61,28 +61,37 @@ function deriveStatus(data: BackendStatusResponse | null, hasError: boolean): Ch
   return 'connected';
 }
 
+/** Poll fast (5s) while disconnected, slow (30s) once connected. */
+const POLL_FAST_MS = 5_000;
+const POLL_SLOW_MS = 30_000;
+
 export function BackendStatusChip() {
   const [data, setData] = useState<BackendStatusResponse | null>(null);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
     async function pollStatus() {
       try {
         const result = await getBackendStatus();
         if (!cancelled) {
           setData(result);
           setHasError(false);
+          timer = setTimeout(pollStatus, POLL_SLOW_MS);
         }
       } catch {
-        if (!cancelled) setHasError(true);
+        if (!cancelled) {
+          setHasError(true);
+          timer = setTimeout(pollStatus, POLL_FAST_MS);
+        }
       }
     }
     pollStatus();
-    const interval = setInterval(pollStatus, 30_000);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timer);
     };
   }, []);
 

@@ -1,6 +1,7 @@
 import type { MemoryEntry } from '@autonomy/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { memoryTypeBadgeVariant } from './memory-utils';
 
 interface MemoryEntryCardProps {
   entry: MemoryEntry;
@@ -20,8 +21,11 @@ function formatRelativeTime(dateStr: string): string {
 }
 
 const typeGlow: Record<string, string> = {
-  'short-term': 'hover:border-status-amber/30',
-  'long-term': 'hover:border-primary/30',
+  'short-term': 'hover:border-neon-amber/30 hover:glow-amber',
+  'long-term': 'hover:border-neon-cyan/30 hover:glow-cyan',
+  working: 'hover:border-neon-green/30 hover:glow-green',
+  episodic: 'hover:border-neon-purple/30 hover:glow-purple',
+  summary: 'hover:border-neon-red/30 hover:glow-red',
 };
 
 export function MemoryEntryCard({ entry, onSelect }: MemoryEntryCardProps) {
@@ -43,9 +47,7 @@ export function MemoryEntryCard({ entry, onSelect }: MemoryEntryCardProps) {
     >
       <CardHeader className="pb-2">
         <div className="flex items-center gap-2">
-          <Badge variant={entry.type === 'short-term' ? 'secondary' : 'default'}>
-            {entry.type}
-          </Badge>
+          <Badge variant={memoryTypeBadgeVariant(entry.type)}>{entry.type}</Badge>
           {entry.agentId && (
             <Badge variant="outline" className="font-mono text-[10px]">
               {entry.agentId.slice(0, 8)}

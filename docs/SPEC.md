@@ -2,7 +2,7 @@
 
 > Single source of truth. Everything needed to understand and extend this template.
 >
-> Last synced with codebase: 2026-02-27
+> Last synced with codebase: 2026-03-02
 
 ---
 
@@ -101,9 +101,10 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
 │  │                                                           │    │
 │  │  Memory Types:                                            │    │
 │  │  ├── Short-term   (conversation/session state)            │    │
+│  │  ├── Long-term    (persistent knowledge)                  │    │
+│  │  ├── Working      (active task context)                   │    │
 │  │  ├── Episodic     (conversation history)                  │    │
-│  │  ├── Semantic     (facts, knowledge)                      │    │
-│  │  └── Procedural   (how-to, workflows)                     │    │
+│  │  └── Summary      (condensed session summaries)           │    │
 │  │                                                           │    │
 │  │  Lifecycle:                                               │    │
 │  │  ├── Consolidation (every 30 min)                         │    │
@@ -148,19 +149,20 @@ MINIMAL (docker-compose up) — default
   │  │                  │  │                       │  │
   │  │  Agent Manager   │  │  Next.js 16.1         │  │
   │  │  Conductor       │←─│  (standalone output)  │  │
-  │  │  Memory (embed.) │  │                       │  │
-  │  │  Cron Manager    │  │  connects to          │  │
-  │  │  Plugin System   │  │  http://runtime:7820  │  │
-  │  │  /data volume    │  │                       │  │
+  │  │  Cron Manager    │  │                       │  │
+  │  │  Plugin System   │  │  connects to          │  │
+  │  │  /data volume    │  │  http://runtime:7820  │  │
+  │  │  (no memory)     │  │                       │  │
   │  └─────────────────┘  └───────────────────────┘  │
   │                                                   │
-  │  DB: bun:sqlite + LanceDB (embedded, zero config)  │
+  │  DB: bun:sqlite (agents, sessions — no memory)     │
   └──────────────────────────────────────────────────┘
 
 FULL (docker-compose --profile full up)
 ──────────────────────────────────────────────────────
   ┌──────────────────────────────────────────────────┐
-  │  + memory sidecar :7822                           │
+  │  + memory sidecar :7822 (runtime connects via     │
+  │    MemoryClient when MEMORY_URL is set)            │
   │  + Neo4j :7474/:7687 (Graph RAG)                  │
   └──────────────────────────────────────────────────┘
 ```
@@ -321,24 +323,27 @@ Each agent can use a different CLI backend. The `BackendRegistry` manages multip
 
 ## 7. Memory System (pyx-memory)
 
-Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via git submodule at `vendor/pyx-memory`. Runs **embedded** (in-process, zero-latency) or as a **sidecar** (standalone HTTP service with Neo4j graph store).
+Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via git submodule at `vendor/pyx-memory`. The runtime connects to pyx-memory as a **sidecar** (standalone HTTP service) via `MemoryClient` when `MEMORY_URL` is set. When no memory server is configured, the runtime uses `DisabledMemory` (no-op) and all memory features are unavailable.
 
-### Storage Layer
+### Storage Layer (managed by pyx-memory sidecar)
 
 | Store             | Technology                          | Purpose                               |
 | ----------------- | ----------------------------------- | ------------------------------------- |
-| Structured data   | bun:sqlite (WAL mode)               | Sessions, config, agent registry, graph nodes/edges |
+| Structured data   | bun:sqlite (WAL mode)               | Memory entries, graph nodes/edges, config |
 | Vector embeddings | LanceDB (embedded, 384-dim local)   | Semantic search, RAG                  |
 | Graph store       | SQLiteGraphStore (default) or Neo4j | Entity/relation graph for Graph RAG   |
+
+> **Note:** These stores are owned and managed by the pyx-memory sidecar, not the runtime. The runtime accesses them indirectly via `MemoryClient` HTTP calls. The runtime has its own `runtime.sqlite` (in `/data`) for sessions and agent definitions.
 
 ### Memory Types
 
 | Type          | Enum              | Purpose                                        |
 | ------------- | ----------------- | ---------------------------------------------- |
 | Short-term    | `SHORT_TERM`      | Conversation/session state                     |
+| Long-term     | `LONG_TERM`       | Persistent knowledge and facts                 |
+| Working       | `WORKING`         | Active task context                            |
 | Episodic      | `EPISODIC`        | Conversation history (assistant responses)     |
-| Semantic      | `SEMANTIC`        | Facts, knowledge, extracted information        |
-| Procedural    | `PROCEDURAL`      | How-to instructions, workflows                 |
+| Summary       | `SUMMARY`         | Condensed session summaries                    |
 
 ### RAG Strategies
 
@@ -487,20 +492,18 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | `POST`   | `/api/memory/decay`                           | Run memory decay                 |
 | `POST`   | `/api/memory/reindex`                         | Reindex vector embeddings        |
 | `DELETE` | `/api/memory/source/:source`                  | Delete memories by source        |
-| `GET`    | `/api/memory/consolidation-log`               | Consolidation log                |
-| `GET`    | `/api/memory/query-as-of`                     | Query memory at a point in time  |
+| `GET`    | `/api/memory/consolidation-log`               | Consolidation log (501 — use pyx-memory dashboard) |
+| `GET`    | `/api/memory/query-as-of`                     | Bi-temporal query (501 — use pyx-memory server directly) |
 
 ### Memory Graph Routes
 
 | Method   | Path                              | Description                     |
 | -------- | --------------------------------- | ------------------------------- |
-| `GET`    | `/api/memory/graph/nodes`         | List graph nodes                |
-| `POST`   | `/api/memory/graph/nodes`         | Create graph node               |
-| `DELETE` | `/api/memory/graph/nodes/:id`     | Delete graph node               |
+| `GET`    | `/api/memory/graph/nodes`         | List graph nodes (filter by name, type, limit) |
 | `GET`    | `/api/memory/graph/edges`         | Graph stats (node/edge counts)  |
-| `GET`    | `/api/memory/graph/relationships` | Get entity relationships        |
-| `POST`   | `/api/memory/graph/relationships` | Create graph relationship       |
-| `POST`   | `/api/memory/graph/query`         | Query the graph (traverse)      |
+| `POST`   | `/api/memory/graph/query`         | Query the graph (traverse by nodeId + depth) |
+
+> **Note:** Graph write operations (`POST /nodes`, `DELETE /nodes/:id`, `POST /relationships`) and bulk relationship listing are registered as routes but return `501 Not Implemented`. Graph nodes and relationships are created automatically by the pyx-memory entity extraction pipeline.
 
 ### Cron Routes
 

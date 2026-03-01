@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { MemoryType, RAGStrategy } from '@autonomy/shared';
-import { EntityType, RelationType } from '@pyx-memory/core';
 import { BadRequestError } from '../src/errors.ts';
 import {
+  EntityType,
+  RelationType,
   validateEntityType,
   validateMemoryType,
   validatePositiveInt,

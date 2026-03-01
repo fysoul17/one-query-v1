@@ -1,18 +1,7 @@
-import type { BackendStatusResponse } from '@autonomy/shared';
 import { Header } from '@/components/layout/header';
-import { ProviderList } from '@/components/settings/provider-list';
-import { getBackendStatus } from '@/lib/api-server';
+import { ProviderListLoader } from '@/components/settings/provider-list-loader';
 
-export const dynamic = 'force-dynamic';
-
-export default async function ProvidersPage() {
-  let status: BackendStatusResponse | null = null;
-  try {
-    status = await getBackendStatus();
-  } catch {
-    status = null;
-  }
-
+export default function ProvidersPage() {
   return (
     <>
       <Header title="AI Providers" />
@@ -22,13 +11,7 @@ export default async function ProvidersPage() {
             Manage AI backend providers and see their connection status
           </p>
         </div>
-        {status ? (
-          <ProviderList status={status} />
-        ) : (
-          <div className="rounded-none p-8 text-center text-muted-foreground">
-            <p>Unable to connect to runtime. Check that the server is running.</p>
-          </div>
-        )}
+        <ProviderListLoader />
       </div>
     </>
   );

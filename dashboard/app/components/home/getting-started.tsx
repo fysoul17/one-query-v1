@@ -44,7 +44,8 @@ export function GettingStarted({ health, memoryStats, backends }: GettingStarted
     },
     {
       title: 'Add Knowledge',
-      description: 'Ingest domain data so agents have context. Upload files or use the memory API.',
+      description:
+        'Ingest domain data so agents have context via the memory API or agent interactions.',
       href: '/memory',
       icon: <Brain className="h-4 w-4" />,
       done: hasMemory,

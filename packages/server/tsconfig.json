@@ -11,8 +11,6 @@
       "@autonomy/agent-manager/*": ["../agent-manager/src/*"],
       "@pyx-memory/shared": ["../../vendor/pyx-memory/packages/shared/src/index.ts"],
       "@pyx-memory/shared/*": ["../../vendor/pyx-memory/packages/shared/src/*"],
-      "@pyx-memory/core": ["../../vendor/pyx-memory/packages/core/src/index.ts"],
-      "@pyx-memory/core/*": ["../../vendor/pyx-memory/packages/core/src/*"],
       "@pyx-memory/client": ["../../vendor/pyx-memory/packages/client/src/index.ts"],
       "@pyx-memory/client/*": ["../../vendor/pyx-memory/packages/client/src/*"],
       "@autonomy/cron-manager": ["../cron-manager/src/index.ts"],

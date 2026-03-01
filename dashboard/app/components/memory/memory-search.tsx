@@ -46,18 +46,22 @@ export function MemorySearch({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="naive">Naive</SelectItem>
+            <SelectItem value="hybrid">Hybrid</SelectItem>
             <SelectItem value="graph">Graph</SelectItem>
             <SelectItem value="agentic">Agentic</SelectItem>
           </SelectContent>
         </Select>
         <Select value={typeFilter} onValueChange={onTypeFilterChange}>
-          <SelectTrigger className="w-[130px]" aria-label="Memory type filter">
+          <SelectTrigger className="w-[140px]" aria-label="Memory type filter">
             <SelectValue placeholder="Type" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="short-term">Short-term</SelectItem>
             <SelectItem value="long-term">Long-term</SelectItem>
+            <SelectItem value="working">Working</SelectItem>
+            <SelectItem value="episodic">Episodic</SelectItem>
+            <SelectItem value="summary">Summary</SelectItem>
           </SelectContent>
         </Select>
       </div>

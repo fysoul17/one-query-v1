@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { BackendRegistry } from '@autonomy/agent-manager';
 import type { Conductor } from '@autonomy/conductor';
 import type { AIBackend, BackendStatus } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { createHealthRoute } from '../../src/routes/health.ts';
 import { MockConductor } from '../helpers/mock-conductor.ts';
 
@@ -43,7 +43,7 @@ describe('GET /health', () => {
 
     const handler = createHealthRoute(
       conductor as unknown as Conductor,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       startTime,
     );
     const res = await handler();
@@ -65,7 +65,7 @@ describe('GET /health', () => {
 
     const handler = createHealthRoute(
       conductor as unknown as Conductor,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       startTime,
     );
     const res = await handler();
@@ -112,7 +112,7 @@ describe('GET /health', () => {
 
     const handler = createHealthRoute(
       conductor as unknown as Conductor,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       startTime,
       registry,
     );
@@ -154,7 +154,7 @@ describe('GET /health', () => {
 
     const handler = createHealthRoute(
       conductor as unknown as Conductor,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       startTime,
       registry,
     );
