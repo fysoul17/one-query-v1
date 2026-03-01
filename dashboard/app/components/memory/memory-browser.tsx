@@ -112,8 +112,6 @@ export function MemoryBrowser({ serverUrl }: MemoryBrowserProps) {
     <div className="space-y-6">
       <MemoryStatsCards
         stats={stats.data}
-        isLoading={stats.isLoading}
-        error={stats.error}
         graphNodeCount={graph.data?.nodeCount ?? null}
         graphEdgeCount={graph.data?.edgeCount ?? null}
       />

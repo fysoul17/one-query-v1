@@ -32,6 +32,9 @@ COPY --from=deps /app/node_modules ./node_modules
 
 COPY tsconfig.base.json ./
 COPY packages/shared/ ./packages/shared/
+COPY vendor/pyx-memory/packages/shared/ ./vendor/pyx-memory/packages/shared/
+COPY vendor/pyx-memory/packages/client/ ./vendor/pyx-memory/packages/client/
+COPY vendor/pyx-memory/packages/dashboard/ ./vendor/pyx-memory/packages/dashboard/
 COPY dashboard/ ./dashboard/
 
 ENV NEXT_TELEMETRY_DISABLED=1

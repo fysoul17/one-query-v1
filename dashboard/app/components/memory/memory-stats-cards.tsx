@@ -3,20 +3,14 @@ import { Card, CardContent } from '@/components/ui/card';
 
 interface MemoryStatsCardsProps {
   stats: { totalEntries: number; vectorCount: number; storageUsedBytes: number } | null;
-  isLoading: boolean;
-  error: Error | null;
   graphNodeCount: number | null;
   graphEdgeCount: number | null;
 }
 
-export function MemoryStatsCards({
-  stats,
-  isLoading,
-  error,
-  graphNodeCount,
-  graphEdgeCount,
-}: MemoryStatsCardsProps) {
-  if (isLoading && !stats) {
+export function MemoryStatsCards({ stats, graphNodeCount, graphEdgeCount }: MemoryStatsCardsProps) {
+  // Show skeleton on initial load (no stats yet, still loading or first error).
+  // The polling hook will retry within seconds, so don't flash an error immediately.
+  if (!stats) {
     return (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {['total', 'vectors', 'storage', 'graph'].map((id) => (
@@ -30,16 +24,6 @@ export function MemoryStatsCards({
       </div>
     );
   }
-
-  if (error && !stats) {
-    return (
-      <div className="rounded-lg border border-neon-red/30 bg-neon-red/10 p-3 text-sm text-neon-red">
-        Failed to load stats. The runtime server may be unavailable.
-      </div>
-    );
-  }
-
-  if (!stats) return null;
 
   const cards = [
     { label: 'Entries', value: String(stats.totalEntries), glow: 'hover:glow-cyan' },
