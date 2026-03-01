@@ -3,7 +3,7 @@
 import type { MemoryEntry, RAGStrategy } from '@autonomy/shared';
 import type { EntryFilters } from '@pyx-memory/dashboard';
 import { useKnowledgeGraph, useMemoryEntries, useMemoryStats } from '@pyx-memory/dashboard/react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { searchMemoryWithStrategy } from '@/lib/api';
 import { EntryDetailDialog } from './entry-detail-dialog';
@@ -26,6 +26,7 @@ export function MemoryBrowser({ serverUrl }: MemoryBrowserProps) {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<MemoryEntry[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const searchFetchIdRef = useRef(0);
 
   const stats = useMemoryStats(serverUrl);
   const graph = useKnowledgeGraph(serverUrl);
@@ -45,39 +46,55 @@ export function MemoryBrowser({ serverUrl }: MemoryBrowserProps) {
     setPage(1);
   }
 
-  // Search with debounce
-  useEffect(() => {
-    if (!query.trim()) {
-      setSearchResults(null);
-      setSearching(false);
-      setSearchError(null);
-      return;
-    }
-
-    setSearching(true);
-    setSearchError(null);
-    const timeout = setTimeout(async () => {
+  const executeSearch = useCallback(
+    async (fetchId: number) => {
       try {
         const results = await searchMemoryWithStrategy(query, {
           strategy: strategy as RAGStrategy,
           type: typeFilter !== 'all' ? typeFilter : undefined,
           limit: 20,
         });
+        if (fetchId !== searchFetchIdRef.current) return;
         setSearchResults(results.entries);
       } catch (err) {
+        if (fetchId !== searchFetchIdRef.current) return;
         setSearchError(err instanceof Error ? err.message : 'Search failed');
       } finally {
-        setSearching(false);
+        if (fetchId === searchFetchIdRef.current) setSearching(false);
       }
-    }, 300);
+    },
+    [query, strategy, typeFilter],
+  );
 
+  // Search with debounce and stale-fetch guard
+  useEffect(() => {
+    if (!query.trim()) {
+      searchFetchIdRef.current++;
+      setSearchResults(null);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+
+    searchFetchIdRef.current++;
+    const fetchId = searchFetchIdRef.current;
+    setSearching(true);
+    setSearchError(null);
+    const timeout = setTimeout(() => void executeSearch(fetchId), 300);
     return () => clearTimeout(timeout);
-  }, [query, strategy, typeFilter]);
+  }, [query, executeSearch]);
 
   function handleSelectEntry(entry: MemoryEntry) {
     setSelectedEntry(entry);
     setDialogOpen(true);
   }
+
+  const handleMutate = useCallback(() => {
+    entries.refetch();
+    stats.refetch();
+    graph.refetch();
+    setSelectedEntry(null);
+  }, [entries, stats, graph]);
 
   const isSearchMode = query.trim().length > 0;
   const displayEntries = isSearchMode ? (searchResults ?? []) : (entries.data?.entries ?? []);
@@ -137,7 +154,12 @@ export function MemoryBrowser({ serverUrl }: MemoryBrowserProps) {
         </TabsContent>
       </Tabs>
 
-      <EntryDetailDialog entry={selectedEntry} open={dialogOpen} onOpenChange={setDialogOpen} />
+      <EntryDetailDialog
+        entry={selectedEntry}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onMutate={handleMutate}
+      />
     </div>
   );
 }
