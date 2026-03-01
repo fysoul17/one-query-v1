@@ -1,0 +1,1 @@
+docker compose -f docker/docker-compose.yaml --profile full build --no-cache dashboard && docker compose -f docker/docker-compose.yaml --profile full up
