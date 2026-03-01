@@ -1,40 +1,77 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { Memory } from '@pyx-memory/core';
-import { BadRequestError } from '../../src/errors.ts';
+import type { MemoryInterface } from '@pyx-memory/client';
+import { BadRequestError, NotImplementedError } from '../../src/errors.ts';
 import { createMemoryRoutes } from '../../src/routes/memory.ts';
 
-interface MockStoreInput {
-  content: string;
-  type: string;
-  metadata: Record<string, unknown>;
-}
+/** Mock that simulates MemoryClient with ingestFile support. */
+class MockMemoryWithIngest {
+  ingestFileCalls: File[] = [];
 
-class MockMemory {
-  storeCalls: MockStoreInput[] = [];
-
-  async store(entry: MockStoreInput) {
-    this.storeCalls.push(entry);
+  async ingestFile(file: File) {
+    this.ingestFileCalls.push(file);
     return {
-      id: `mem-${this.storeCalls.length}`,
-      content: entry.content,
-      type: entry.type,
-      metadata: entry.metadata ?? {},
-      createdAt: new Date().toISOString(),
+      filename: file.name,
+      chunks: 1,
+      totalCharacters: file.size,
     };
   }
 
-  async search() {
-    return { entries: [], totalCount: 0, strategy: 'naive' };
+  // MemoryInterface stubs
+  async initialize() {}
+  async store(entry: { content: string; type: string }) {
+    return { id: '1', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
   }
-
+  async search() {
+    return { entries: [], totalCount: 0, strategy: 'naive' as const };
+  }
+  async list() {
+    return { entries: [], totalCount: 0, page: 1, limit: 20 };
+  }
+  async get() {
+    return null;
+  }
+  async delete() {
+    return false;
+  }
+  async clearSession() {
+    return 0;
+  }
   async stats() {
     return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0 };
   }
+  async shutdown() {}
 }
 
-function makeFileRequest(filename: string, content: string, contentType?: string): Request {
+/** Mock without ingestFile — simulates DisabledMemory. */
+class MockMemoryNoIngest {
+  async initialize() {}
+  async store(entry: { content: string; type: string }) {
+    return { id: '', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
+  }
+  async search() {
+    return { entries: [], totalCount: 0, strategy: 'naive' as const };
+  }
+  async list() {
+    return { entries: [], totalCount: 0, page: 1, limit: 20 };
+  }
+  async get() {
+    return null;
+  }
+  async delete() {
+    return false;
+  }
+  async clearSession() {
+    return 0;
+  }
+  async stats() {
+    return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0 };
+  }
+  async shutdown() {}
+}
+
+function makeFileRequest(filename: string, content: string): Request {
   const formData = new FormData();
-  const blob = new Blob([content], { type: contentType ?? 'text/plain' });
+  const blob = new Blob([content], { type: 'text/plain' });
   formData.append('file', new File([blob], filename));
 
   return new Request('http://localhost/api/memory/ingest/file', {
@@ -43,16 +80,16 @@ function makeFileRequest(filename: string, content: string, contentType?: string
   });
 }
 
-describe('POST /api/memory/ingest/file', () => {
-  let memory: MockMemory;
+describe('POST /api/memory/ingest/file — with MemoryClient', () => {
+  let memory: MockMemoryWithIngest;
   let routes: ReturnType<typeof createMemoryRoutes>;
 
   beforeEach(() => {
-    memory = new MockMemory();
-    routes = createMemoryRoutes(memory as unknown as Memory);
+    memory = new MockMemoryWithIngest();
+    routes = createMemoryRoutes(memory as unknown as MemoryInterface);
   });
 
-  test('ingests a valid .txt file', async () => {
+  test('ingests a valid file', async () => {
     const req = makeFileRequest('test.txt', 'Hello world, this is test content.');
     const res = await routes.ingestFile(req);
     const body = await res.json();
@@ -64,28 +101,12 @@ describe('POST /api/memory/ingest/file', () => {
     expect(body.data.totalCharacters).toBeGreaterThan(0);
   });
 
-  test('ingests a valid .md file', async () => {
-    const req = makeFileRequest('readme.md', '# Title\n\nSome markdown content.');
-    const res = await routes.ingestFile(req);
-    const body = await res.json();
+  test('passes file to memory.ingestFile', async () => {
+    const req = makeFileRequest('notes.txt', 'Some content.');
+    await routes.ingestFile(req);
 
-    expect(res.status).toBe(201);
-    expect(body.data.filename).toBe('readme.md');
-    expect(body.data.chunks).toBeGreaterThanOrEqual(1);
-  });
-
-  test('ingests a valid .csv file', async () => {
-    const req = makeFileRequest('data.csv', 'name,value\nalice,1\nbob,2');
-    const res = await routes.ingestFile(req);
-    const body = await res.json();
-
-    expect(res.status).toBe(201);
-    expect(body.data.filename).toBe('data.csv');
-  });
-
-  test('rejects unsupported file type', async () => {
-    const req = makeFileRequest('malware.exe', 'binary content');
-    await expect(routes.ingestFile(req)).rejects.toBeInstanceOf(BadRequestError);
+    expect(memory.ingestFileCalls).toHaveLength(1);
+    expect(memory.ingestFileCalls[0].name).toBe('notes.txt');
   });
 
   test('rejects empty file', async () => {
@@ -111,23 +132,18 @@ describe('POST /api/memory/ingest/file', () => {
     });
     await expect(routes.ingestFile(req)).rejects.toBeInstanceOf(BadRequestError);
   });
+});
 
-  test('stores chunks in memory with source metadata', async () => {
-    const req = makeFileRequest('notes.txt', 'Some content to be chunked and stored.');
-    await routes.ingestFile(req);
+describe('POST /api/memory/ingest/file — without MemoryClient (DisabledMemory)', () => {
+  let routes: ReturnType<typeof createMemoryRoutes>;
 
-    expect(memory.storeCalls.length).toBeGreaterThanOrEqual(1);
-    expect(memory.storeCalls[0].metadata.source).toBe('notes.txt');
+  beforeEach(() => {
+    const memory = new MockMemoryNoIngest();
+    routes = createMemoryRoutes(memory as unknown as MemoryInterface);
   });
 
-  test('rejects file with no extension', async () => {
-    const req = makeFileRequest('Makefile', 'all: build');
-    await expect(routes.ingestFile(req)).rejects.toBeInstanceOf(BadRequestError);
-  });
-
-  test('handles double extension correctly', async () => {
-    // file.tar.gz → extracts .gz which is not in supported extensions
-    const req = makeFileRequest('archive.tar.gz', 'fake gzip content');
-    await expect(routes.ingestFile(req)).rejects.toBeInstanceOf(BadRequestError);
+  test('throws NotImplementedError when memory has no ingestFile', async () => {
+    const req = makeFileRequest('test.txt', 'content');
+    await expect(routes.ingestFile(req)).rejects.toBeInstanceOf(NotImplementedError);
   });
 });

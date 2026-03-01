@@ -8,9 +8,7 @@
       "@autonomy/agent-manager": ["../agent-manager/src/index.ts"],
       "@autonomy/agent-manager/*": ["../agent-manager/src/*"],
       "@pyx-memory/client": ["../../vendor/pyx-memory/packages/client/src/index.ts"],
-      "@pyx-memory/client/*": ["../../vendor/pyx-memory/packages/client/src/*"],
-      "@pyx-memory/core": ["../../vendor/pyx-memory/packages/core/src/index.ts"],
-      "@pyx-memory/core/*": ["../../vendor/pyx-memory/packages/core/src/*"]
+      "@pyx-memory/client/*": ["../../vendor/pyx-memory/packages/client/src/*"]
     }
   },
   "include": ["src/**/*.ts"],

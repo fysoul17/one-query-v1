@@ -1,9 +1,34 @@
 import { MemoryType, RAGStrategy } from '@autonomy/shared';
-import { EntityType, RelationType } from '@pyx-memory/core';
 import { BadRequestError } from './errors.ts';
 
 const VALID_MEMORY_TYPES = new Set<string>(Object.values(MemoryType));
 const VALID_RAG_STRATEGIES = new Set<string>(Object.values(RAGStrategy));
+
+/** Graph entity types — inlined to avoid @pyx-memory/core dependency. */
+export const EntityType = {
+  PERSON: 'PERSON',
+  ORGANIZATION: 'ORGANIZATION',
+  CONCEPT: 'CONCEPT',
+  TOOL: 'TOOL',
+  LOCATION: 'LOCATION',
+  EVENT: 'EVENT',
+} as const;
+export type EntityType = (typeof EntityType)[keyof typeof EntityType];
+
+/** Graph relation types — inlined to avoid @pyx-memory/core dependency. */
+export const RelationType = {
+  USES: 'USES',
+  OWNS: 'OWNS',
+  DEPENDS_ON: 'DEPENDS_ON',
+  RELATED_TO: 'RELATED_TO',
+  CREATED_BY: 'CREATED_BY',
+  PART_OF: 'PART_OF',
+  IS_A: 'IS_A',
+  WORKS_AT: 'WORKS_AT',
+  LOCATED_IN: 'LOCATED_IN',
+} as const;
+export type RelationType = (typeof RelationType)[keyof typeof RelationType];
+
 const VALID_ENTITY_TYPES = new Set<string>(Object.values(EntityType));
 const VALID_RELATION_TYPES = new Set<string>(Object.values(RelationType));
 

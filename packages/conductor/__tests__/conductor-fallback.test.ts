@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
 import { type AgentDefinition, type AgentRuntimeInfo, AgentStatus } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { Conductor } from '../src/conductor.ts';
 import { makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
@@ -75,7 +75,7 @@ describe('Conductor fallback backend', () => {
     const fallback = createMockBackend('ollama');
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       primary,
       {
         fallbackBackend: fallback,
@@ -93,7 +93,7 @@ describe('Conductor fallback backend', () => {
     const fallback = createMockBackend('ollama');
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       primary,
       {
         fallbackBackend: fallback,
@@ -113,7 +113,7 @@ describe('Conductor fallback backend', () => {
     const primary = createMockBackend('claude', true);
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       primary,
     );
     await conductor.initialize();
@@ -127,7 +127,7 @@ describe('Conductor fallback backend', () => {
     const fallback = createMockBackend('ollama', true);
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       primary,
       {
         fallbackBackend: fallback,

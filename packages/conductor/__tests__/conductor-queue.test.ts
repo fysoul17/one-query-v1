@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { AgentPool } from '@autonomy/agent-manager';
 import { type AgentDefinition, type AgentRuntimeInfo, AgentStatus } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { Conductor } from '../src/conductor.ts';
 import { QueueFullError } from '../src/errors.ts';
 import { ConductorEventType, type OnConductorEvent } from '../src/types.ts';
@@ -87,7 +87,7 @@ describe('Conductor — message queue', () => {
   beforeEach(async () => {
     pool = createDelayMockPool(50);
     memory = new MockMemory();
-    conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+    conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
     await conductor.initialize();
 
     // Set up one agent so routing delegates to it
@@ -137,7 +137,7 @@ describe('Conductor — message queue', () => {
       // Use a longer delay to observe queue depth during processing
       pool = createDelayMockPool(100);
       memory = new MockMemory();
-      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       await conductor.initialize();
       const def = makeAgent({ id: 'worker', name: 'Worker', role: 'worker' });
       await pool.create(def);
@@ -168,7 +168,7 @@ describe('Conductor — message queue', () => {
     test('pending messages are rejected when shutdown is called', async () => {
       pool = createDelayMockPool(200); // slow enough that messages queue up
       memory = new MockMemory();
-      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       await conductor.initialize();
       const def = makeAgent({ id: 'worker', name: 'Worker', role: 'worker' });
       await pool.create(def);
@@ -202,7 +202,7 @@ describe('Conductor — message queue', () => {
     test('onEvent callback receives QUEUED event when message is queued', async () => {
       pool = createDelayMockPool(100);
       memory = new MockMemory();
-      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       await conductor.initialize();
       const def = makeAgent({ id: 'worker', name: 'Worker', role: 'worker' });
       await pool.create(def);
@@ -236,7 +236,7 @@ describe('Conductor — message queue', () => {
       memory = new MockMemory();
       conductor = new Conductor(
         pool as unknown as AgentPool,
-        memory as unknown as Memory,
+        memory as unknown as MemoryInterface,
         undefined,
         {
           maxQueueDepth: 2,
@@ -267,7 +267,7 @@ describe('Conductor — message queue', () => {
     test('error in one queued message does not break subsequent messages', async () => {
       pool = createDelayMockPool(50);
       memory = new MockMemory();
-      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+      conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       await conductor.initialize();
       const def = makeAgent({ id: 'worker', name: 'Worker', role: 'worker' });
       await pool.create(def);

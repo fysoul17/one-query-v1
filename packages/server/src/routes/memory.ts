@@ -1,12 +1,19 @@
 import { type MemoryIngestRequest, type MemorySearchParams, MemoryType } from '@autonomy/shared';
 import type { MemoryInterface } from '@pyx-memory/client';
-import { getSupportedExtensions, IngestionPipeline } from '@pyx-memory/core';
-import { BadRequestError, NotFoundError } from '../errors.ts';
+import type { IngestionResult } from '@pyx-memory/client';
+import { BadRequestError, NotFoundError, NotImplementedError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
 import { validateMemoryType, validatePositiveInt, validateRAGStrategy } from '../validation.ts';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+/** Type guard: does the memory instance support file ingestion? (MemoryClient does) */
+function hasIngestFile(
+  m: MemoryInterface,
+): m is MemoryInterface & { ingestFile(file: File): Promise<IngestionResult> } {
+  return 'ingestFile' in m;
+}
 
 export function createMemoryRoutes(memory: MemoryInterface) {
   return {
@@ -93,6 +100,12 @@ export function createMemoryRoutes(memory: MemoryInterface) {
     },
 
     ingestFile: async (req: Request): Promise<Response> => {
+      if (!hasIngestFile(memory)) {
+        throw new NotImplementedError(
+          'File ingestion not available — memory service not connected',
+        );
+      }
+
       const contentType = req.headers.get('content-type') ?? '';
       if (!contentType.includes('multipart/form-data')) {
         throw new BadRequestError('Content-Type must be multipart/form-data');
@@ -113,19 +126,7 @@ export function createMemoryRoutes(memory: MemoryInterface) {
         throw new BadRequestError(`File too large (max ${MAX_FILE_SIZE / 1024 / 1024}MB)`);
       }
 
-      // Validate file extension server-side
-      const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
-      const supported = getSupportedExtensions();
-      if (!supported.includes(ext)) {
-        throw new BadRequestError(
-          `Unsupported file type "${ext}". Supported: ${supported.join(', ')}`,
-        );
-      }
-
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-
-      const result = await IngestionPipeline.ingest(buffer, file.name, memory);
+      const result = await memory.ingestFile(file);
 
       return jsonResponse(
         {

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { RAGStrategy } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { BadRequestError, NotFoundError } from '../../src/errors.ts';
 import { createMemoryRoutes } from '../../src/routes/memory.ts';
 
@@ -105,7 +105,7 @@ describe('Memory routes', () => {
 
   beforeEach(() => {
     memory = new MockMemory();
-    routes = createMemoryRoutes(memory as unknown as Memory);
+    routes = createMemoryRoutes(memory as unknown as MemoryInterface);
   });
 
   describe('GET /api/memory/search', () => {

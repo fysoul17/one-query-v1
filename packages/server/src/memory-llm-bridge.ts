@@ -1,5 +1,7 @@
 import type { BackendProcess, CLIBackend } from '@autonomy/agent-manager';
-import type { LLMCallback } from '@pyx-memory/core';
+
+/** LLM callback signature — inlined to avoid @pyx-memory/core dependency. */
+export type LLMCallback = (prompt: string) => Promise<string>;
 
 export interface MemoryLLMHandle {
   callback: LLMCallback;

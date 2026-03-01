@@ -6,7 +6,7 @@ import {
   type AgentRuntimeInfo,
   AgentStatus,
 } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { Conductor } from '../src/conductor.ts';
 import { ConductorNotInitializedError } from '../src/errors.ts';
 import { makeAgent, makeMessage } from './helpers/fixtures.ts';
@@ -63,7 +63,7 @@ describe('Conductor', () => {
   beforeEach(() => {
     pool = createMockPool();
     memory = new MockMemory();
-    conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+    conductor = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
   });
 
   describe('initialization', () => {
@@ -203,7 +203,7 @@ describe('Conductor', () => {
     });
 
     test('throws if not initialized', async () => {
-      const c = new Conductor(pool as unknown as AgentPool, memory as unknown as Memory);
+      const c = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       try {
         await c.createAgent({ name: 'X', role: 'x', systemPrompt: 'x' });
         expect(true).toBe(false);

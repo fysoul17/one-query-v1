@@ -18,7 +18,6 @@
     "@autonomy/agent-manager": "workspace:*",
     "@autonomy/conductor": "workspace:*",
     "@autonomy/cron-manager": "workspace:*",
-    "@pyx-memory/core": "workspace:*",
     "@pyx-memory/client": "workspace:*",
     "@pyx-memory/shared": "workspace:*",
     "@autonomy/plugin-system": "workspace:*",

@@ -21,7 +21,7 @@ import type {
   CLIBackend,
 } from '@autonomy/agent-manager';
 import { AIBackend } from '@autonomy/shared';
-import type { Memory } from '@pyx-memory/core';
+import type { MemoryInterface } from '@pyx-memory/client';
 import { Conductor } from '../src/conductor.ts';
 import { makeMessage } from './helpers/fixtures.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
@@ -111,7 +111,7 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
   test('ephemeral WS UUID creates per-session backend process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
       { systemPrompt: 'Test prompt' },
     );
@@ -132,7 +132,7 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
   test('multiple messages with same ephemeral UUID reuse same process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -157,7 +157,7 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
   test('WS reconnect creates new session process, losing context', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -192,7 +192,7 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
   test('streaming: ephemeral UUID creates per-session process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -228,7 +228,7 @@ describe('Contrast: proper session vs ephemeral session behavior', () => {
   test('real sessionId survives reconnect (same sessionId used)', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -253,7 +253,7 @@ describe('Contrast: proper session vs ephemeral session behavior', () => {
   test('messages without sessionId at all use default process', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -281,7 +281,7 @@ describe('Edge cases: session process lifecycle', () => {
   test('empty string sessionId uses default process (no session)', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -297,7 +297,7 @@ describe('Edge cases: session process lifecycle', () => {
   test('mixed: some messages have real sessions, some have ephemeral UUIDs', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
@@ -328,7 +328,7 @@ describe('Edge cases: session process lifecycle', () => {
   test('shutdown stops ephemeral session processes too', async () => {
     const conductor = new Conductor(
       pool as unknown as AgentPool,
-      memory as unknown as Memory,
+      memory as unknown as MemoryInterface,
       tracking.backend,
     );
     await conductor.initialize();
