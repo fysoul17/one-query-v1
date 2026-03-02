@@ -45,4 +45,8 @@ export interface EnvironmentConfig {
   ENABLE_TERMINAL_WS: boolean;
   /** Enable advanced memory lifecycle routes (default: true, opt-out with 'false'). */
   ENABLE_ADVANCED_MEMORY: boolean;
+  /** Number of retries when connecting to the memory server at startup. */
+  MEMORY_RETRY_COUNT: number;
+  /** Delay between memory connection retries in milliseconds. */
+  MEMORY_RETRY_DELAY_MS: number;
 }

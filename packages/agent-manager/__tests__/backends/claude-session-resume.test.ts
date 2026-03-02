@@ -299,4 +299,61 @@ describe('ClaudeProcess session resume mode', () => {
       expect(spawnControl.capturedArgs[0]).not.toContain('--no-session-persistence');
     });
   });
+
+  // ============================================================
+  // 7. Session restore from config.sessionId
+  // ============================================================
+  describe('session restore from config.sessionId', () => {
+    test('nativeSessionId is immediately set from config.sessionId', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test',
+        systemPrompt: 'Test',
+        sessionId: 'restored-sess-123',
+      });
+
+      // Before any send(), nativeSessionId should be restored
+      expect(proc.nativeSessionId).toBe('restored-sess-123');
+    });
+
+    test('first send() uses --resume with restored session ID', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test',
+        systemPrompt: 'Test',
+        sessionId: 'restored-sess-123',
+      });
+
+      await proc.send('Hello after restore');
+
+      const args = spawnControl.capturedArgs[0];
+      expect(args).toContain('--resume');
+      const resumeIdx = args.indexOf('--resume');
+      expect(args[resumeIdx + 1]).toBe('restored-sess-123');
+    });
+
+    test('first send() does NOT include --system-prompt (firstCallDone is true)', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test',
+        systemPrompt: 'Test',
+        sessionId: 'restored-sess-123',
+      });
+
+      await proc.send('Hello after restore');
+
+      expect(spawnControl.capturedArgs[0]).not.toContain('--system-prompt');
+    });
+
+    test('first send() does NOT include --dangerously-skip-permissions', async () => {
+      const proc = await backend.spawn({
+        agentId: 'test',
+        systemPrompt: 'Test',
+        sessionId: 'restored-sess-123',
+        skipPermissions: true,
+      });
+
+      await proc.send('Hello after restore');
+
+      // Config flags are skipped when _firstCallDone is true
+      expect(spawnControl.capturedArgs[0]).not.toContain('--dangerously-skip-permissions');
+    });
+  });
 });

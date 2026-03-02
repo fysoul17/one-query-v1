@@ -130,6 +130,9 @@ function registerRoutes(router: Router, deps: RouteDeps): void {
   router.delete('/api/sessions/:id', sessionRoutes.remove);
 }
 
+const MEMORY_CONSOLIDATION_INTERVAL_MS = 30 * 60 * 1000;
+const MEMORY_DECAY_INTERVAL_MS = 24 * 60 * 60 * 1000;
+
 function startMemoryLifecycle(
   memory: MemoryClient | DisabledMemory,
   logger: Logger,
@@ -141,48 +144,42 @@ function startMemoryLifecycle(
   let decaying = false;
 
   intervals.push(
-    setInterval(
-      async () => {
-        if (consolidating) return;
-        consolidating = true;
-        try {
-          const result = await memory.consolidate();
-          logger.info('Memory consolidation completed', {
-            processed: result.entriesProcessed,
-            merged: result.entriesMerged,
-            archived: result.entriesArchived,
-            durationMs: result.durationMs,
-          });
-        } catch (error) {
-          logger.warn('Memory consolidation failed', {
-            error: getErrorDetail(error),
-          });
-        } finally {
-          consolidating = false;
-        }
-      },
-      30 * 60 * 1000,
-    ),
+    setInterval(async () => {
+      if (consolidating) return;
+      consolidating = true;
+      try {
+        const result = await memory.consolidate();
+        logger.info('Memory consolidation completed', {
+          processed: result.entriesProcessed,
+          merged: result.entriesMerged,
+          archived: result.entriesArchived,
+          durationMs: result.durationMs,
+        });
+      } catch (error) {
+        logger.warn('Memory consolidation failed', {
+          error: getErrorDetail(error),
+        });
+      } finally {
+        consolidating = false;
+      }
+    }, MEMORY_CONSOLIDATION_INTERVAL_MS),
   );
 
   intervals.push(
-    setInterval(
-      async () => {
-        if (decaying) return;
-        decaying = true;
-        try {
-          const archived = await memory.runDecay();
-          logger.info('Memory decay completed', { archived });
-        } catch (error) {
-          logger.warn('Memory decay failed', {
-            error: getErrorDetail(error),
-          });
-        } finally {
-          decaying = false;
-        }
-      },
-      24 * 60 * 60 * 1000,
-    ),
+    setInterval(async () => {
+      if (decaying) return;
+      decaying = true;
+      try {
+        const archived = await memory.runDecay();
+        logger.info('Memory decay completed', { archived });
+      } catch (error) {
+        logger.warn('Memory decay failed', {
+          error: getErrorDetail(error),
+        });
+      } finally {
+        decaying = false;
+      }
+    }, MEMORY_DECAY_INTERVAL_MS),
   );
 
   logger.info('Memory lifecycle timers registered (consolidation: 30m, decay: 24h)');
@@ -192,18 +189,32 @@ function startMemoryLifecycle(
 async function initMemory(
   memoryUrl: string | undefined,
   logger: Logger,
+  retries = 5,
+  retryDelayMs = 2000,
 ): Promise<MemoryClient | DisabledMemory> {
   if (memoryUrl) {
-    const client = new MemoryClient(memoryUrl);
-    try {
-      await client.initialize();
-      logger.info('Memory connected', { url: memoryUrl });
-      return client;
-    } catch (error) {
-      logger.warn('Memory server unreachable — running without memory', {
-        error: getErrorDetail(error),
-        url: memoryUrl,
-      });
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      const client = new MemoryClient(memoryUrl);
+      try {
+        await client.initialize();
+        logger.info('Memory connected', { url: memoryUrl, attempt });
+        return client;
+      } catch (error) {
+        if (attempt < retries) {
+          logger.info(`Memory server not ready, retrying in ${retryDelayMs}ms`, {
+            attempt,
+            maxRetries: retries,
+            url: memoryUrl,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        } else {
+          logger.warn('Memory server unreachable after all retries — running without memory', {
+            error: getErrorDetail(error),
+            url: memoryUrl,
+            attempts: retries,
+          });
+        }
+      }
     }
   }
   const disabled = new DisabledMemory();
@@ -263,7 +274,12 @@ async function main() {
   registry.register(new OllamaBackend());
 
   // Initialize Memory
-  const memory = await initMemory(config.MEMORY_URL, logger);
+  const memory = await initMemory(
+    config.MEMORY_URL,
+    logger,
+    config.MEMORY_RETRY_COUNT,
+    config.MEMORY_RETRY_DELAY_MS,
+  );
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.MEMORY,

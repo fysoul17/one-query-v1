@@ -71,6 +71,24 @@ export class SessionStore {
     this.db.run(
       'CREATE INDEX IF NOT EXISTS idx_session_messages_session_id ON session_messages(session_id)',
     );
+
+    // Migration: add backend_session_id for native CLI session resume across restarts.
+    // Stores the nativeSessionId (e.g., Claude --resume ID) so it can be restored
+    // when the backend process is respawned after Docker rebuild or LRU eviction.
+    this.addColumnIfMissing('sessions', 'backend_session_id', 'TEXT');
+  }
+
+  /**
+   * Add a column to a table if it doesn't already exist.
+   * SAFETY: table, column, and type are interpolated into SQL identifiers (PRAGMA/ALTER TABLE
+   * don't support parameterized identifiers). This method MUST only be called with hardcoded
+   * string literals — never with user input or dynamic values.
+   */
+  private addColumnIfMissing(table: string, column: string, type: string): void {
+    const cols = this.db.query(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) {
+      this.db.run(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
   }
 
   create(request: CreateSessionRequest): Session {
@@ -215,6 +233,33 @@ export class SessionStore {
       metadata,
       createdAt: now,
     };
+  }
+
+  /** Get the most recent N messages for a session (for conversation history injection). */
+  getRecentMessages(sessionId: string, limit: number): SessionMessage[] {
+    const rows = this.db
+      .query(
+        'SELECT * FROM session_messages WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?',
+      )
+      .all(sessionId, limit) as MessageRow[];
+    // Reverse to chronological order (oldest first)
+    return rows.reverse().map((r) => this.rowToMessage(r));
+  }
+
+  /** Get the stored native backend session ID for resuming CLI sessions (e.g., Claude --resume). */
+  getBackendSessionId(sessionId: string): string | undefined {
+    const row = this.db
+      .query('SELECT backend_session_id FROM sessions WHERE id = ?')
+      .get(sessionId) as { backend_session_id: string | null } | null;
+    return row?.backend_session_id ?? undefined;
+  }
+
+  /** Persist the native backend session ID so it survives process restarts. */
+  setBackendSessionId(sessionId: string, backendSessionId: string): void {
+    this.db.run('UPDATE sessions SET backend_session_id = ? WHERE id = ?', [
+      backendSessionId,
+      sessionId,
+    ]);
   }
 
   private rowToSession(row: SessionRow): Session {

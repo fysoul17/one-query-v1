@@ -46,6 +46,7 @@ const MAX_WS_MESSAGE_SIZE = 65_536; // 64 KB
 const MAX_WS_CLIENTS = 100;
 const WS_MSG_RATE_LIMIT = 10;
 const WS_MSG_RATE_WINDOW_MS = 60_000;
+const STATUS_BROADCAST_INTERVAL_MS = 5000;
 
 const wsLogger = new Logger({ context: { source: 'websocket' } });
 
@@ -342,10 +343,9 @@ async function handleConductorMessage(
   const sessionId = ws.data.sessionId;
   if (sessionStore && sessionId) {
     try {
-      const detail = sessionStore.getDetail(sessionId);
-      if (detail?.messages && detail.messages.length > 0) {
-        // Slice to the last MAX_HISTORY_MESSAGES entries (chronological order, oldest first).
-        conversationHistory = detail.messages.slice(-MAX_HISTORY_MESSAGES);
+      const messages = sessionStore.getRecentMessages(sessionId, MAX_HISTORY_MESSAGES);
+      if (messages.length > 0) {
+        conversationHistory = messages;
       }
     } catch (err) {
       wsLogger.warn('Failed to fetch conversation history', {
@@ -355,15 +355,31 @@ async function handleConductorMessage(
     }
   }
 
+  // Look up stored native backend session ID for --resume across restarts.
+  let backendSessionId: string | undefined;
+  if (sessionStore && sessionId) {
+    try {
+      backendSessionId = sessionStore.getBackendSessionId(sessionId);
+    } catch {
+      // Non-critical — process will start fresh without resume
+    }
+  }
+
+  const metadata: Record<string, unknown> = {};
+  if (ws.data.configOverrides) {
+    metadata.configOverrides = { ...ws.data.configOverrides };
+  }
+  if (backendSessionId) {
+    metadata.backendSessionId = backendSessionId;
+  }
+
   const incoming: IncomingMessage = {
     content: parsed.content ?? '',
     senderId: 'dashboard',
     senderName: 'Dashboard User',
     sessionId: ws.data.sessionId,
     targetAgentId: parsed.targetAgent,
-    metadata: ws.data.configOverrides
-      ? { configOverrides: { ...ws.data.configOverrides } }
-      : undefined,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     conversationHistory,
   };
 
@@ -428,6 +444,16 @@ async function handleConductorMessage(
         parsed.targetAgent,
         result.stepMetadata as Record<string, unknown> | undefined,
       );
+
+      // Persist the native backend session ID so --resume works after restart.
+      try {
+        const newBackendSessionId = conductor.getSessionBackendId(sessionId);
+        if (newBackendSessionId && newBackendSessionId !== backendSessionId) {
+          sessionStore.setBackendSessionId(sessionId, newBackendSessionId);
+        }
+      } catch {
+        // Non-critical — session will start fresh on next restart
+      }
     }
 
     emitResponseDebug(debugBus, agentId, parsed.targetAgent, result.content.length);
@@ -587,7 +613,7 @@ export function createWebSocketHandler(
 
   function startStatusBroadcast(): void {
     if (statusInterval) return;
-    statusInterval = setInterval(broadcastAgentStatus, 5000);
+    statusInterval = setInterval(broadcastAgentStatus, STATUS_BROADCAST_INTERVAL_MS);
   }
 
   function stopStatusBroadcast(): void {

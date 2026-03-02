@@ -14,7 +14,6 @@ import {
   type HookRegistryInterface,
   Logger,
   type MemorySearchResult,
-  MemoryType,
   RAGStrategy,
 } from '@autonomy/shared';
 import type { MemoryInterface } from '@pyx-memory/client';
@@ -24,6 +23,10 @@ import {
   runAfterResponseHook,
   runBeforeMessageHook,
 } from './conductor-hooks.ts';
+import {
+  searchMemoryContext as searchMemoryContextFn,
+  storeConversation as storeConversationFn,
+} from './conductor-memory.ts';
 import { buildMemoryAugmentedPrompt } from './conductor-prompt.ts';
 import {
   ConductorNotInitializedError,
@@ -254,6 +257,7 @@ export class Conductor {
         memoryContext,
         this.pool.list(),
         !!this.cronManager,
+        this.memoryConnected,
       );
 
       try {
@@ -289,12 +293,7 @@ export class Conductor {
       });
     } else {
       // Conductor responds directly — use per-session backend process
-      const configOverrides = processedMessage.metadata?.configOverrides as
-        | Record<string, string>
-        | undefined;
-      const sessionBackend = processedMessage.sessionId
-        ? await this.sessionPool.getOrCreate(processedMessage.sessionId, configOverrides)
-        : this.backendProcess;
+      const sessionBackend = await this.resolveSessionBackend(processedMessage);
       if (!sessionBackend) {
         yield { type: 'chunk', content: FALLBACK_NO_BACKEND };
         yield { type: 'complete' };
@@ -401,12 +400,7 @@ export class Conductor {
         });
       } else {
         // Conductor responds directly via AI backend
-        const configOverrides = processedMessage.metadata?.configOverrides as
-          | Record<string, string>
-          | undefined;
-        const sessionBackend = processedMessage.sessionId
-          ? await this.sessionPool.getOrCreate(processedMessage.sessionId, configOverrides)
-          : this.backendProcess;
+        const sessionBackend = await this.resolveSessionBackend(processedMessage);
         if (!sessionBackend) {
           decisions.push({
             timestamp: new Date().toISOString(),
@@ -539,6 +533,11 @@ export class Conductor {
     this.sessionPool.invalidate(sessionId);
   }
 
+  /** Get the native backend session ID for a session (e.g., Claude's session_id for --resume). */
+  getSessionBackendId(sessionId: string): string | undefined {
+    return this.sessionPool.getProcess(sessionId)?.nativeSessionId;
+  }
+
   /** Wire a CronManager so agents can create cron jobs via system actions. */
   setCronManager(cronManager: CronManagerLike): void {
     this.cronManager = cronManager;
@@ -599,6 +598,7 @@ export class Conductor {
       memoryContext,
       this.pool.list(),
       !!this.cronManager,
+      this.memoryConnected,
     );
 
     if (this.hookRegistry) {
@@ -736,18 +736,7 @@ export class Conductor {
   }
 
   private async searchMemoryContext(message: IncomingMessage): Promise<MemorySearchResult | null> {
-    try {
-      return await this.memory.search({
-        query: message.content,
-        limit: 5,
-        strategy: RAGStrategy.HYBRID,
-        ...(message.sessionId ? { agentId: message.senderId } : {}),
-      });
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      conductorLogger.warn('Memory search failed', { error: detail });
-      return null;
-    }
+    return searchMemoryContextFn(this.memory, message);
   }
 
   private async delegateToAgent(
@@ -760,6 +749,7 @@ export class Conductor {
       memoryContext,
       this.pool.list(),
       !!this.cronManager,
+      this.memoryConnected,
     );
 
     try {
@@ -777,77 +767,24 @@ export class Conductor {
     decisions: ConductorDecision[],
     responseContent?: string,
   ): Promise<void> {
-    if (!this.memoryConnected) {
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'skip_memory',
-        reason: 'Memory service not connected',
-      });
-      return;
-    }
+    return storeConversationFn(
+      this.memory,
+      this.hookRegistry,
+      this.memoryConnected,
+      message,
+      decisions,
+      responseContent,
+    );
+  }
 
-    if (message.content.trim().length === 0) {
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'skip_memory',
-        reason: 'Empty message content',
-      });
-      return;
-    }
-
-    // Hook: onBeforeMemoryStore — plugins can transform or skip memory storage
-    let content = message.content;
-    let metadata: Record<string, unknown> = { senderName: message.senderName };
-    if (this.hookRegistry) {
-      const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_MEMORY_STORE, {
-        content,
-        metadata,
-        agentId: message.senderId,
-        sessionId: message.sessionId,
-      });
-      if (hookResult === null || hookResult === undefined) {
-        decisions.push({
-          timestamp: new Date().toISOString(),
-          action: 'skip_memory',
-          reason: 'Memory store skipped by plugin',
-        });
-        return;
-      }
-      if (typeof hookResult === 'object' && 'content' in hookResult) {
-        content = (hookResult as { content: string }).content;
-        metadata = (hookResult as { metadata: Record<string, unknown> }).metadata ?? metadata;
-      }
-    }
-
-    try {
-      await this.memory.store({
-        content,
-        type: MemoryType.SHORT_TERM,
-        agentId: message.senderId,
-        sessionId: message.sessionId,
-        metadata,
-      });
-
-      // Also store assistant response so memory search can find it
-      if (responseContent && responseContent.trim().length > 0) {
-        await this.memory.store({
-          content: responseContent,
-          type: MemoryType.EPISODIC,
-          agentId: 'conductor',
-          sessionId: message.sessionId,
-          metadata: { role: 'assistant' },
-        });
-      }
-
-      decisions.push({
-        timestamp: new Date().toISOString(),
-        action: 'store_memory',
-        reason: 'Stored conversation in memory',
-      });
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      conductorLogger.warn('Memory store failed', { error: detail });
-    }
+  private async resolveSessionBackend(
+    message: IncomingMessage,
+  ): Promise<BackendProcess | undefined> {
+    const configOverrides = message.metadata?.configOverrides as Record<string, string> | undefined;
+    const backendSessionId = message.metadata?.backendSessionId as string | undefined;
+    return message.sessionId
+      ? await this.sessionPool.getOrCreate(message.sessionId, configOverrides, backendSessionId)
+      : this.backendProcess;
   }
 
   private checkDelegationDepth(message: IncomingMessage): void {

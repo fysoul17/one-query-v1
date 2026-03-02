@@ -21,11 +21,14 @@ export class SessionProcessPool {
   /**
    * Get or create a backend process for the given sessionId.
    * Accepts optional configOverrides from message metadata to set model/flags.
+   * @param backendSessionId - Stored native CLI session ID for resuming sessions
+   *   across process restarts (e.g., Claude --resume, Codex exec resume).
    */
   // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: LRU pool management with config override detection
   async getOrCreate(
     sessionId: string,
     configOverrides?: Record<string, string>,
+    backendSessionId?: string,
   ): Promise<BackendProcess | undefined> {
     if (!this.backend) return undefined;
 
@@ -89,6 +92,8 @@ export class SessionProcessPool {
       agentId: 'conductor',
       systemPrompt: this.systemPrompt,
       skipPermissions: true,
+      // Pass stored native session ID so the CLI backend can --resume it.
+      ...(backendSessionId ? { sessionId: backendSessionId } : {}),
     };
 
     // Translate config overrides → spawn config fields
@@ -132,6 +137,8 @@ export class SessionProcessPool {
             sessionId,
             fallback: this.fallbackBackend.name,
           });
+          // backendSessionId intentionally not forwarded — the fallback is a different
+          // CLI backend and its session format is incompatible. Starts fresh.
           const fallbackConfig = {
             agentId: 'conductor',
             systemPrompt: this.systemPrompt,
@@ -154,6 +161,12 @@ export class SessionProcessPool {
 
       return undefined;
     }
+  }
+
+  /** Get the live backend process for a session (if any). */
+  getProcess(sessionId: string): BackendProcess | undefined {
+    const proc = this.processes.get(sessionId);
+    return proc?.alive ? proc : undefined;
   }
 
   /** Kill the backend process for a session so it respawns with new config on next message. */

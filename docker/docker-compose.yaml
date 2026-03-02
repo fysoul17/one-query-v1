@@ -21,7 +21,7 @@ services:
       - VECTOR_PROVIDER=${VECTOR_PROVIDER:-lancedb}
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - MODE=standalone
-      - MEMORY_URL=${MEMORY_URL:-}
+      - MEMORY_URL=${MEMORY_URL:-http://memory:7822}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - CODEX_API_KEY=${CODEX_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -31,6 +31,10 @@ services:
       - CLAUDE_CONFIG_DIR=/data/cli-config/claude
       - CODEX_HOME=/data/cli-config/codex
       - GEMINI_CLI_HOME=/data/cli-config/gemini
+    depends_on:
+      memory:
+        condition: service_healthy
+        required: false
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "bun", "-e", "fetch('http://localhost:7820/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
@@ -48,7 +52,7 @@ services:
     environment:
       - RUNTIME_URL=http://runtime:7820
       - NODE_ENV=production
-      - MEMORY_URL=${MEMORY_URL:-}
+      - MEMORY_URL=${MEMORY_URL:-http://memory:7822}
     depends_on:
       runtime:
         condition: service_healthy

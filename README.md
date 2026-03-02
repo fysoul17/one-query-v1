@@ -227,9 +227,11 @@ agent-forge/
 ├── vendor/
 │   └── pyx-memory/      # Git submodule → fysoul17/pyx-memory-v1
 │       └── packages/
-│           ├── shared/  # Memory types (@pyx-memory/shared)
-│           ├── client/  # MemoryInterface + HTTP client (@pyx-memory/client)
-│           └── core/    # SQLite + LanceDB + RAG + embeddings (@pyx-memory/core)
+│           ├── shared/    # Memory types (@pyx-memory/shared)
+│           ├── client/    # MemoryInterface + HTTP client (@pyx-memory/client)
+│           ├── core/      # SQLite + LanceDB + RAG + embeddings (@pyx-memory/core)
+│           ├── server/    # Standalone memory sidecar (:7822)
+│           └── dashboard/ # Memory browser UI components
 ├── dashboard/           # Next.js 16.1 cyberpunk dashboard
 ├── docker/              # Dockerfile.runtime, Dockerfile.dashboard, docker-compose.yaml
 ├── package.json         # Monorepo root

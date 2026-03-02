@@ -2,7 +2,7 @@
 
 > Single source of truth. Everything needed to understand and extend this template.
 >
-> Last synced with codebase: 2026-03-02
+> Last synced with codebase: 2026-03-03
 
 ---
 
@@ -272,6 +272,16 @@ Message In
 - Per-session config overrides (from `/model sonnet`-style slash commands)
 - LRU eviction at 100 concurrent session processes
 - Serial message queue (one message at a time per session)
+- **Session resume persistence**: The native CLI session ID (e.g., Claude `--resume` UUID) is persisted to SQLite (`backend_session_id` column in `sessions` table). When the backend process is respawned after Docker rebuild or LRU eviction, the stored ID is restored so the CLI resumes from full conversation history.
+
+### Module Structure
+
+The Conductor's logic is split across focused modules:
+
+- `conductor.ts` — core orchestrator class with pipeline, queue, and agent management
+- `conductor-memory.ts` — memory search and conversation storage (extracted free functions)
+- `conductor-hooks.ts` — hook execution helpers (before_message, after_memory_search, after_response)
+- `conductor-prompt.ts` — memory-augmented prompt builder with system context
 
 ### Agent Management
 
@@ -618,6 +628,8 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `ENABLE_ADVANCED_MEMORY`| No       | `true`                   | Consolidation, decay, summarization routes (opt-out with `false`) |
 | `ENABLE_DEBUG_WS`      | No        | `true`                   | Enable debug event WebSocket |
 | `DEBUG_WS_TOKEN`       | No        | —                        | Token to protect debug WebSocket endpoint |
+| `MEMORY_RETRY_COUNT`   | No        | `5`                      | Number of retries when connecting to memory server at startup |
+| `MEMORY_RETRY_DELAY_MS`| No        | `2000`                   | Delay between memory connection retries (ms) |
 
 ---
 

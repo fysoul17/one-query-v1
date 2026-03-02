@@ -84,6 +84,12 @@ class ClaudeProcess implements BackendProcess {
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
+    // Restore native session from a previously persisted ID so --resume works
+    // across process restarts (e.g., Docker rebuild, LRU eviction).
+    if (config.sessionId) {
+      this._nativeSessionId = config.sessionId;
+      this._firstCallDone = true;
+    }
   }
 
   get alive(): boolean {

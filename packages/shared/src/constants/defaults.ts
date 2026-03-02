@@ -17,4 +17,6 @@ export const DEFAULTS = {
   STREAM_TIMEOUT_MS: 300_000,
   /** Max characters to include in error preview strings (e.g. stderr truncation). */
   MAX_ERROR_PREVIEW_LENGTH: 500,
+  MEMORY_RETRY_COUNT: 5,
+  MEMORY_RETRY_DELAY_MS: 2000,
 } as const;

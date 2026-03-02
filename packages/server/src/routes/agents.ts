@@ -12,6 +12,8 @@ import { BadRequestError, NotFoundError, ServerError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
 
+const MAX_SYSTEM_PROMPT_LENGTH = 100_000;
+
 /** Tool names must be alphanumeric with underscores, colons, or dots — prevents CLI argument injection. */
 const TOOL_NAME_PATTERN = /^[a-zA-Z0-9_:.]+$/;
 
@@ -40,8 +42,11 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
         throw new BadRequestError('name, role, and systemPrompt are required');
       }
 
-      if (body.systemPrompt.length > 100_000) {
-        throw new ServerError('System prompt exceeds maximum length of 100,000 characters', 400);
+      if (body.systemPrompt.length > MAX_SYSTEM_PROMPT_LENGTH) {
+        throw new ServerError(
+          `System prompt exceeds maximum length of ${MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()} characters`,
+          400,
+        );
       }
 
       const validBackends = Object.values(AIBackend) as string[];
@@ -86,8 +91,11 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
 
       const body = await parseJsonBody<UpdateAgentRequest>(req);
 
-      if (body.systemPrompt && body.systemPrompt.length > 100_000) {
-        throw new ServerError('System prompt exceeds maximum length of 100,000 characters', 400);
+      if (body.systemPrompt && body.systemPrompt.length > MAX_SYSTEM_PROMPT_LENGTH) {
+        throw new ServerError(
+          `System prompt exceeds maximum length of ${MAX_SYSTEM_PROMPT_LENGTH.toLocaleString()} characters`,
+          400,
+        );
       }
 
       // Validate backend if provided

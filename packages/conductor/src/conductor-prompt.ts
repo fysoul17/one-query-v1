@@ -11,6 +11,7 @@ export function buildMemoryAugmentedPrompt(
   memoryContext: MemorySearchResult | null,
   agents: AgentRuntimeInfo[],
   cronEnabled: boolean,
+  memoryConnected: boolean,
 ): string {
   let prompt = message.content;
 
@@ -31,6 +32,7 @@ export function buildMemoryAugmentedPrompt(
   const systemContext = buildSystemContextPreamble({
     agents,
     cronEnabled,
+    memoryConnected,
   });
   prompt = `${systemContext}\n\n${prompt}`;
 

@@ -61,6 +61,18 @@ export function parseEnvConfig(): EnvironmentConfig {
     1000,
   );
   const trustProxy = env.TRUST_PROXY === 'true';
+  const memoryRetryCount = parseIntEnv(
+    env.MEMORY_RETRY_COUNT,
+    DEFAULTS.MEMORY_RETRY_COUNT,
+    'MEMORY_RETRY_COUNT',
+    0,
+  );
+  const memoryRetryDelayMs = parseIntEnv(
+    env.MEMORY_RETRY_DELAY_MS,
+    DEFAULTS.MEMORY_RETRY_DELAY_MS,
+    'MEMORY_RETRY_DELAY_MS',
+    0,
+  );
 
   return {
     ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
@@ -89,6 +101,8 @@ export function parseEnvConfig(): EnvironmentConfig {
     FALLBACK_BACKEND: parseFallbackBackend(env.FALLBACK_BACKEND),
     ENABLE_TERMINAL_WS: env.ENABLE_TERMINAL_WS !== 'false',
     ENABLE_ADVANCED_MEMORY: env.ENABLE_ADVANCED_MEMORY !== 'false',
+    MEMORY_RETRY_COUNT: memoryRetryCount,
+    MEMORY_RETRY_DELAY_MS: memoryRetryDelayMs,
   };
 }
 

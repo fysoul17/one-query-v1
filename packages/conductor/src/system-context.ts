@@ -7,6 +7,8 @@ export interface SystemContextConfig {
   agents: AgentRuntimeInfo[];
   /** Whether a CronManager is available */
   cronEnabled: boolean;
+  /** Whether the pyx-memory service is connected */
+  memoryConnected: boolean;
 }
 
 const PLATFORM_IDENTITY = [
@@ -16,11 +18,14 @@ const PLATFORM_IDENTITY = [
   'Use tools like WebFetch, Read, Write, and Bash directly without asking the user for permission.',
 ].join(' ');
 
-const MEMORY_RULES = [
+const MEMORY_RULES_CONNECTED = [
   'Memory is automatic — the Conductor stores your conversations in pyx-memory (a RAG memory system).',
   'Do NOT write files to manage memory. Do NOT confuse pyx-memory with CLAUDE.md or any local config.',
   'If you need to recall something, ask the user or use a <system-action type="search_memory" /> tag.',
 ].join(' ');
+
+const MEMORY_RULES_DISABLED =
+  'Memory is NOT connected — pyx-memory service is unavailable. Do NOT claim to store or search memory. Do NOT use search_memory actions. Conversations are ephemeral and will not be persisted.';
 
 const ACTION_DOCS_HEADER = 'You can request platform operations using self-closing XML tags:';
 
@@ -36,12 +41,13 @@ const CORE_ACTIONS: ActionDoc[] = [
     description: 'Spawn a new agent',
     attrs: 'name="..." role="..." systemPrompt="..."',
   },
-  {
-    type: 'search_memory',
-    description: 'Search long-term memory',
-    attrs: 'query="..." limit="5"',
-  },
 ];
+
+const MEMORY_ACTION: ActionDoc = {
+  type: 'search_memory',
+  description: 'Search long-term memory',
+  attrs: 'query="..." limit="5"',
+};
 
 const CRON_ACTION: ActionDoc = {
   type: 'create_cron',
@@ -65,14 +71,19 @@ function formatAgentList(agents: AgentRuntimeInfo[]): string {
  */
 export function buildSystemContextPreamble(config: SystemContextConfig): string {
   const actions = [...CORE_ACTIONS];
+  if (config.memoryConnected) {
+    actions.push(MEMORY_ACTION);
+  }
   if (config.cronEnabled) {
     actions.push(CRON_ACTION);
   }
 
+  const memoryRules = config.memoryConnected ? MEMORY_RULES_CONNECTED : MEMORY_RULES_DISABLED;
+
   const sections = [
     PLATFORM_IDENTITY,
     '',
-    MEMORY_RULES,
+    memoryRules,
     '',
     formatAgentList(config.agents),
     '',

@@ -242,7 +242,15 @@ function AuthUrlLink({ url }: { url: string }) {
         setTimeout(() => setCopied(false), 2000);
       })
       .catch(() => {
-        // fallback: select text
+        // Clipboard API unavailable — select text so user can copy manually
+        const selection = window.getSelection();
+        const range = document.createRange();
+        const urlEl = document.querySelector('[data-auth-url]');
+        if (selection && urlEl) {
+          range.selectNodeContents(urlEl);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
       });
   }, [url]);
 
@@ -253,6 +261,7 @@ function AuthUrlLink({ url }: { url: string }) {
         href={url}
         target="_blank"
         rel="noopener noreferrer"
+        data-auth-url
         className="text-xs text-blue-400 hover:text-blue-300 underline underline-offset-2 truncate min-w-0"
       >
         Open login page

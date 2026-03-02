@@ -51,6 +51,11 @@ class CodexProcess implements BackendProcess {
 
   constructor(config: BackendSpawnConfig) {
     this.config = config;
+    // Restore native session ID for resume across restarts.
+    // No _firstCallDone flag needed — Codex uses _nativeSessionId directly in buildArgs.
+    if (config.sessionId) {
+      this._nativeSessionId = config.sessionId;
+    }
   }
 
   get alive(): boolean {
