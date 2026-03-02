@@ -94,9 +94,8 @@ describe('CodexBackend.logout()', () => {
     await backend.logout();
 
     const spawnOpts = spawnMock.mock.calls[0][1] as Record<string, unknown> | undefined;
-    if (spawnOpts?.env) {
-      const env = spawnOpts.env as Record<string, string>;
-      expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');
-    }
+    expect(spawnOpts?.env).toBeDefined();
+    const env = spawnOpts!.env as Record<string, string>;
+    expect(env).not.toHaveProperty('ANTHROPIC_API_KEY');
   });
 });

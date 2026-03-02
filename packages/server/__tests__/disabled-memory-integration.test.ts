@@ -7,7 +7,7 @@ import { createMemoryRoutes } from '../src/routes/memory.ts';
 import { MockConductor } from './helpers/mock-conductor.ts';
 
 describe('DisabledMemory — health route integration', () => {
-  test('health route returns ok with zero memory stats', async () => {
+  test('health route returns ok status with memoryStatus disabled', async () => {
     const memory = new DisabledMemory();
     const conductor = new MockConductor();
     await conductor.initialize();
@@ -22,7 +22,7 @@ describe('DisabledMemory — health route integration', () => {
 
     expect(body.success).toBe(true);
     expect(body.data.status).toBe('ok');
-    expect(body.data.memoryStatus).toBe('ok');
+    expect(body.data.memoryStatus).toBe('disabled');
   });
 });
 
@@ -66,6 +66,7 @@ describe('DisabledMemory — memory route integration', () => {
     expect(body.success).toBe(true);
     expect(body.data.totalEntries).toBe(0);
     expect(body.data.vectorCount).toBe(0);
+    expect(body.data.connected).toBe(false);
   });
 
   test('entries returns empty list', async () => {

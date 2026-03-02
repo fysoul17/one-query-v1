@@ -1,4 +1,4 @@
-export interface RateLimiterConfig {
+interface RateLimiterConfig {
   maxRequests?: number;
   windowMs?: number;
   maxEntries?: number;
@@ -6,7 +6,7 @@ export interface RateLimiterConfig {
   excludedPaths?: string[];
 }
 
-export interface RateLimitResult {
+interface RateLimitResult {
   allowed: boolean;
   limit: number;
   remaining: number;

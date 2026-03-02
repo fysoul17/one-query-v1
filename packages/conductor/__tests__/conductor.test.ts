@@ -70,7 +70,7 @@ describe('Conductor', () => {
     test('throws ConductorNotInitializedError if handleMessage called before init', async () => {
       try {
         await conductor.handleMessage(makeMessage());
-        expect(true).toBe(false);
+        expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ConductorNotInitializedError);
       }
@@ -88,7 +88,7 @@ describe('Conductor', () => {
 
       try {
         await conductor.handleMessage(makeMessage());
-        expect(true).toBe(false);
+        expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ConductorNotInitializedError);
       }
@@ -206,7 +206,7 @@ describe('Conductor', () => {
       const c = new Conductor(pool as unknown as AgentPool, memory as unknown as MemoryInterface);
       try {
         await c.createAgent({ name: 'X', role: 'x', systemPrompt: 'x' });
-        expect(true).toBe(false);
+        expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(ConductorNotInitializedError);
       }

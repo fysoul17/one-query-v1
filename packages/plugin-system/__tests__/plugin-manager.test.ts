@@ -80,7 +80,7 @@ describe('PluginManager', () => {
 
       try {
         await manager.load(makePlugin({ name: 'dup' }));
-        expect(true).toBe(false); // should not reach
+        expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(DuplicatePluginError);
       }
@@ -201,7 +201,7 @@ describe('PluginManager', () => {
     test('throws PluginNotFoundError for non-existent plugin', async () => {
       try {
         await manager.unload('nonexistent');
-        expect(true).toBe(false); // should not reach
+        expect.unreachable('should have thrown');
       } catch (error) {
         expect(error).toBeInstanceOf(PluginNotFoundError);
       }

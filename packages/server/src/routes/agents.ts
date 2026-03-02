@@ -7,7 +7,7 @@ import {
   type CreateAgentRequest,
   type UpdateAgentRequest,
 } from '@autonomy/shared';
-import { nanoid } from 'nanoid';
+import crypto from 'node:crypto';
 import { BadRequestError, NotFoundError, ServerError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
@@ -53,7 +53,7 @@ export function createAgentRoutes(conductor: Conductor, pool: AgentPool) {
 
       validateToolNames(body.tools);
 
-      const id = nanoid();
+      const id = crypto.randomUUID();
       const persistent = body.persistent ?? false;
       const definition: AgentDefinition = {
         id,

@@ -15,7 +15,7 @@ export class DisabledMemory implements MemoryInterface {
 
   async store(entry: { content: string; type: string }): Promise<MemoryEntry> {
     return {
-      id: '',
+      id: 'disabled',
       content: entry.content,
       type: entry.type as MemoryEntry['type'],
       metadata: {},
@@ -44,7 +44,7 @@ export class DisabledMemory implements MemoryInterface {
   }
 
   async stats(): Promise<MemoryStats> {
-    return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0 };
+    return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0, connected: false };
   }
 
   async shutdown(): Promise<void> {}

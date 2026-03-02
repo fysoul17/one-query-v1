@@ -53,18 +53,6 @@ describe('Lifecycle routes — non-extended memory (501)', () => {
       routes.deleteBySource(new Request('http://localhost'), { source: 'test' }),
     ).toThrow(NotImplementedError);
   });
-
-  test('consolidationLog throws NotImplementedError', () => {
-    expect(() => routes.consolidationLog(new Request('http://localhost'))).toThrow(
-      NotImplementedError,
-    );
-  });
-
-  test('queryAsOf throws NotImplementedError', () => {
-    expect(() =>
-      routes.queryAsOf(new Request('http://localhost/api/memory/query-as-of?asOf=2025-01-01')),
-    ).toThrow(NotImplementedError);
-  });
 });
 
 describe('Lifecycle routes — extended memory', () => {

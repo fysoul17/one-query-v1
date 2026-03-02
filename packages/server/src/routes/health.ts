@@ -31,7 +31,10 @@ export function createHealthRoute(
 
     let memoryStatus = 'ok';
     try {
-      await memory.stats();
+      const memStats = await memory.stats();
+      if (memStats.connected === false) {
+        memoryStatus = 'disabled';
+      }
     } catch {
       memoryStatus = 'error';
     }

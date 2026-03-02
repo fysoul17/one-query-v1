@@ -22,16 +22,14 @@ export function createMemoryRoutes(memory: MemoryInterface) {
       const query = url.searchParams.get('query');
       if (!query) throw new BadRequestError('query parameter is required');
 
-      const hydeParam = url.searchParams.get('enableHyDE');
-      const rerankParam = url.searchParams.get('enableRerank');
+      // Note: enableHyDE and enableRerank are not forwarded by the pyx-memory
+      // HTTP API in sidecar mode — omitted to avoid a misleading API contract.
       const params: MemorySearchParams = {
         query,
         limit: validatePositiveInt(url.searchParams.get('limit'), 'limit', 10),
         type: validateMemoryType(url.searchParams.get('type')),
         agentId: url.searchParams.get('agentId') ?? undefined,
         strategy: validateRAGStrategy(url.searchParams.get('strategy')),
-        enableHyDE: hydeParam != null ? hydeParam === 'true' : undefined,
-        enableRerank: rerankParam != null ? rerankParam === 'true' : undefined,
       };
 
       const results = await memory.search(params);

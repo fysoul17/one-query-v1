@@ -18,11 +18,11 @@ import { DebugEventCategory, DebugEventLevel, Logger } from '@autonomy/shared';
 import { MemoryClient } from '@pyx-memory/client';
 import type { ServerWebSocket } from 'bun';
 import { AgentStore } from './agent-store.ts';
-import { DisabledMemory } from './disabled-memory.ts';
 import { parseEnvConfig } from './config.ts';
 import { ConfigManager } from './config-manager.ts';
 import { DebugBus, makeDebugEvent } from './debug-bus.ts';
 import { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
+import { DisabledMemory } from './disabled-memory.ts';
 import { RateLimiter } from './rate-limiter.ts';
 import { Router } from './router.ts';
 import { createActivityRoute } from './routes/activity.ts';
@@ -161,9 +161,10 @@ async function main() {
       category: DebugEventCategory.MEMORY,
       level: DebugEventLevel.INFO,
       source: 'memory.init',
-      message: memory instanceof DisabledMemory
-        ? 'Memory disabled — no MEMORY_URL configured'
-        : `Memory connected to ${config.MEMORY_URL}`,
+      message:
+        memory instanceof DisabledMemory
+          ? 'Memory disabled — no MEMORY_URL configured'
+          : `Memory connected to ${config.MEMORY_URL}`,
     }),
   );
 
@@ -381,15 +382,8 @@ async function main() {
   router.post('/api/memory/decay', lifecycleRoutes.decay);
   router.post('/api/memory/reindex', lifecycleRoutes.reindex);
   router.delete('/api/memory/source/:source', lifecycleRoutes.deleteBySource);
-  router.get('/api/memory/consolidation-log', lifecycleRoutes.consolidationLog);
-  router.get('/api/memory/query-as-of', lifecycleRoutes.queryAsOf);
-
   router.get('/api/memory/graph/nodes', graphRoutes.getNodes);
-  router.post('/api/memory/graph/nodes', graphRoutes.createNode);
-  router.delete('/api/memory/graph/nodes/:id', graphRoutes.deleteNode);
   router.get('/api/memory/graph/edges', graphRoutes.getEdges);
-  router.get('/api/memory/graph/relationships', graphRoutes.getRelationships);
-  router.post('/api/memory/graph/relationships', graphRoutes.createRelationship);
   router.post('/api/memory/graph/query', graphRoutes.query);
 
   router.get('/api/crons', cronRoutes.list);

@@ -74,7 +74,7 @@ export function parseEnvConfig(): EnvironmentConfig {
     QDRANT_URL: env.QDRANT_URL,
     LOG_LEVEL: logLevel,
     MODE: mode,
-    MEMORY_URL: env.MEMORY_URL,
+    MEMORY_URL: env.MEMORY_URL ?? (env.MEMORY_SERVER_PORT ? `http://localhost:${env.MEMORY_SERVER_PORT}` : undefined),
     RATE_LIMIT_MAX: rateLimitMax,
     RATE_LIMIT_WINDOW_MS: rateLimitWindowMs,
     TRUST_PROXY: trustProxy,

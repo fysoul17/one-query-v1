@@ -21,7 +21,6 @@
     "@pyx-memory/client": "workspace:*",
     "@pyx-memory/shared": "workspace:*",
     "@autonomy/plugin-system": "workspace:*",
-    "@autonomy/shared": "workspace:*",
-    "nanoid": "^5.1.6"
+    "@autonomy/shared": "workspace:*"
   }
 }

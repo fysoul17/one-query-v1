@@ -2,7 +2,6 @@ import type { ExtendedMemoryInterface, MemoryInterface } from '@pyx-memory/clien
 import { BadRequestError, ForbiddenError, NotImplementedError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';
-import { validateMemoryType, validatePositiveInt } from '../validation.ts';
 
 /** Type guard: does the memory instance support lifecycle ops? */
 export function isExtended(m: MemoryInterface): m is ExtendedMemoryInterface {
@@ -12,7 +11,9 @@ export function isExtended(m: MemoryInterface): m is ExtendedMemoryInterface {
 export function createLifecycleRoutes(memory: MemoryInterface, enableAdvanced = true) {
   if (!isExtended(memory)) {
     const unavailable = () => {
-      throw new NotImplementedError('Lifecycle operations not available — memory service not connected');
+      throw new NotImplementedError(
+        'Lifecycle operations not available — memory service not connected',
+      );
     };
     return {
       consolidate: unavailable,
@@ -21,8 +22,6 @@ export function createLifecycleRoutes(memory: MemoryInterface, enableAdvanced = 
       decay: unavailable,
       reindex: unavailable,
       deleteBySource: unavailable,
-      consolidationLog: unavailable,
-      queryAsOf: unavailable,
     };
   }
 
@@ -70,23 +69,6 @@ export function createLifecycleRoutes(memory: MemoryInterface, enableAdvanced = 
       if (!source) throw new BadRequestError('source is required');
       const count = await ext.deleteBySource(decodeURIComponent(source));
       return jsonResponse({ deletedCount: count });
-    },
-
-    consolidationLog: async (_req: Request): Promise<Response> => {
-      if (!enableAdvanced) return advancedDisabled();
-      // Consolidation log requires direct SQLite access — not available via MemoryClient.
-      // The pyx-memory dashboard has its own DashboardClient.consolidationLog() for this.
-      throw new NotImplementedError(
-        'Consolidation log is available via the pyx-memory dashboard',
-      );
-    },
-
-    queryAsOf: async (_req: Request): Promise<Response> => {
-      if (!enableAdvanced) return advancedDisabled();
-      // Bi-temporal queries require direct store access — not exposed via MemoryClient.
-      throw new NotImplementedError(
-        'Bi-temporal queries are available via the pyx-memory server directly',
-      );
     },
   };
 }

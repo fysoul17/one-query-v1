@@ -5,6 +5,7 @@ import { Copy, ExternalLink, LogIn, RefreshCw, RotateCcw, Square } from 'lucide-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { logoutBackend } from '@/lib/api';
+import { RUNTIME_URL } from '@/lib/constants';
 
 type LoginState = 'idle' | 'running' | 'success' | 'error' | 'cancelled';
 
@@ -15,8 +16,6 @@ interface CliLoginTerminalProps {
   isAuthenticated?: boolean;
   onComplete?: () => void;
 }
-
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820';
 
 /** Per-backend configuration for the login terminal. */
 const BACKEND_LOGIN_CONFIG: Record<

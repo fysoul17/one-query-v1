@@ -19,7 +19,7 @@ class MockMemoryWithGraph {
     return { stats: { nodeCount: this._nodes.length, edgeCount: 1 } };
   }
 
-  async graphQuery(query: { nodeId: string; depth?: number }) {
+  async graphQuery(_query: { nodeId: string; depth?: number }) {
     return {
       nodes: this._nodes,
       relationships: [{ id: 'e1', sourceId: 'n1', targetId: 'n2', type: 'knows', properties: {} }],
@@ -30,7 +30,13 @@ class MockMemoryWithGraph {
   // MemoryInterface methods (stubs)
   async initialize() {}
   async store(entry: { content: string; type: string }) {
-    return { id: '1', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
+    return {
+      id: '1',
+      content: entry.content,
+      type: entry.type,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
   }
   async search() {
     return { entries: [], totalCount: 0, strategy: 'naive' as const };
@@ -57,7 +63,13 @@ class MockMemoryWithGraph {
 class MockMemoryNoGraph {
   async initialize() {}
   async store(entry: { content: string; type: string }) {
-    return { id: '', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
+    return {
+      id: '',
+      content: entry.content,
+      type: entry.type,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
   }
   async search() {
     return { entries: [], totalCount: 0, strategy: 'naive' as const };
@@ -143,12 +155,6 @@ describe('Graph routes — memory with graph methods (MemoryClient)', () => {
     });
   });
 
-  describe('GET /api/memory/graph/relationships', () => {
-    test('throws NotImplementedError', async () => {
-      await expect(routes.getRelationships()).rejects.toBeInstanceOf(NotImplementedError);
-    });
-  });
-
   describe('POST /api/memory/graph/query', () => {
     test('returns traversal result for valid nodeId', async () => {
       const req = new Request('http://localhost/api/memory/graph/query', {
@@ -180,20 +186,6 @@ describe('Graph routes — memory with graph methods (MemoryClient)', () => {
       expect(res.status).toBe(200);
     });
   });
-
-  describe('Write operations (501)', () => {
-    test('createNode throws NotImplementedError', async () => {
-      await expect(routes.createNode()).rejects.toBeInstanceOf(NotImplementedError);
-    });
-
-    test('createRelationship throws NotImplementedError', async () => {
-      await expect(routes.createRelationship()).rejects.toBeInstanceOf(NotImplementedError);
-    });
-
-    test('deleteNode throws NotImplementedError', async () => {
-      await expect(routes.deleteNode()).rejects.toBeInstanceOf(NotImplementedError);
-    });
-  });
 });
 
 describe('Graph routes — memory without graph methods (DisabledMemory)', () => {
@@ -207,10 +199,6 @@ describe('Graph routes — memory without graph methods (DisabledMemory)', () =>
   test('all routes throw NotImplementedError', () => {
     expect(() => routes.getNodes(new Request('http://localhost'))).toThrow(NotImplementedError);
     expect(() => routes.getEdges()).toThrow(NotImplementedError);
-    expect(() => routes.getRelationships()).toThrow(NotImplementedError);
     expect(() => routes.query(new Request('http://localhost'))).toThrow(NotImplementedError);
-    expect(() => routes.createNode()).toThrow(NotImplementedError);
-    expect(() => routes.createRelationship()).toThrow(NotImplementedError);
-    expect(() => routes.deleteNode()).toThrow(NotImplementedError);
   });
 });

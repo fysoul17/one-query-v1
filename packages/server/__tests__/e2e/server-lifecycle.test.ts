@@ -530,27 +530,6 @@ describe('E2E: Server Lifecycle', () => {
       });
       expect(res.status).toBe(501);
     });
-
-    test('GET /api/memory/consolidation-log returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/consolidation-log`);
-      expect(res.status).toBe(501);
-    });
-
-    test('GET /api/memory/query-as-of returns 501', async () => {
-      const asOf = new Date().toISOString();
-      const res = await fetch(`${baseUrl}/api/memory/query-as-of?asOf=${encodeURIComponent(asOf)}`);
-      expect(res.status).toBe(501);
-    });
-
-    test('GET /api/memory/query-as-of without asOf returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/query-as-of`);
-      expect(res.status).toBe(501);
-    });
-
-    test('GET /api/memory/query-as-of with invalid date returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/query-as-of?asOf=not-a-date`);
-      expect(res.status).toBe(501);
-    });
   });
 
   // ----- Graph Endpoints -----
@@ -563,31 +542,8 @@ describe('E2E: Server Lifecycle', () => {
       expect(res.status).toBe(501);
     });
 
-    test('POST /api/memory/graph/nodes returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/graph/nodes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Test', type: 'CONCEPT' }),
-      });
-      expect(res.status).toBe(501);
-    });
-
     test('GET /api/memory/graph/edges returns 501', async () => {
       const res = await fetch(`${baseUrl}/api/memory/graph/edges`);
-      expect(res.status).toBe(501);
-    });
-
-    test('GET /api/memory/graph/relationships returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`);
-      expect(res.status).toBe(501);
-    });
-
-    test('POST /api/memory/graph/relationships returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/graph/relationships`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceId: 'a', targetId: 'b', type: 'RELATED_TO' }),
-      });
       expect(res.status).toBe(501);
     });
 
@@ -596,13 +552,6 @@ describe('E2E: Server Lifecycle', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodeId: 'n1' }),
-      });
-      expect(res.status).toBe(501);
-    });
-
-    test('DELETE /api/memory/graph/nodes/:id returns 501', async () => {
-      const res = await fetch(`${baseUrl}/api/memory/graph/nodes/some-id`, {
-        method: 'DELETE',
       });
       expect(res.status).toBe(501);
     });

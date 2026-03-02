@@ -8,15 +8,16 @@ import { useSlashCommands } from '@/hooks/use-backend-options';
 import { useDebugWebSocket } from '@/hooks/use-debug-websocket';
 import { useProcessingTimer } from '@/hooks/use-processing-timer';
 import { useShowSteps } from '@/hooks/use-show-steps';
+import type { ActivityFeed, PipelinePhase } from '@/hooks/use-websocket';
 import { useWebSocket } from '@/hooks/use-websocket';
+import { RUNTIME_WS_URL } from '@/lib/constants';
 import { AgentSelector } from './agent-selector';
 import { ChatInput } from './chat-input';
 import { ChatMessageBubble } from './chat-message';
 import { DebugConsole } from './debug-console';
 import { ModelSelector } from './model-selector';
 
-const RUNTIME_URL = process.env.NEXT_PUBLIC_RUNTIME_URL ?? 'http://localhost:7820';
-const WS_BASE = `${RUNTIME_URL.replace(/^http/, 'ws')}/ws/chat`;
+const WS_BASE = `${RUNTIME_WS_URL}/ws/chat`;
 
 /**
  * Regex to parse system confirmations like: **model** set to **opus** for this session.
@@ -29,7 +30,13 @@ const CONFIG_CONFIRM_RE = /\*\*(\w+)\*\* set to \*\*(.+?)\*\* for this session\.
 interface ChatInterfaceProps {
   initialAgents: AgentRuntimeInfo[];
   initialSessionId?: string;
-  initialMessages?: { role: string; content: string; agentId?: string; createdAt: string }[];
+  initialMessages?: {
+    role: string;
+    content: string;
+    agentId?: string;
+    createdAt: string;
+    metadata?: Record<string, unknown>;
+  }[];
   backendOptions?: BackendConfigOption[];
 }
 
@@ -62,13 +69,21 @@ export function ChatInterface({
   // biome-ignore lint/correctness/useExhaustiveDependencies: only compute seed messages once on mount
   const seedMessages = useMemo(
     () =>
-      initialMessages?.map((m, i) => ({
-        id: `seed-${i}-${Date.now()}`,
-        role: m.role as 'user' | 'assistant' | 'system',
-        content: m.content,
-        agentId: m.agentId,
-        timestamp: Date.parse(m.createdAt),
-      })),
+      initialMessages?.map((m, i) => {
+        // Restore pipeline and activityFeed from persisted metadata
+        const meta = m.metadata as
+          | { pipeline?: PipelinePhase[]; activityFeed?: ActivityFeed }
+          | undefined;
+        return {
+          id: `seed-${i}-${Date.now()}`,
+          role: m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+          agentId: m.agentId,
+          timestamp: Date.parse(m.createdAt),
+          pipeline: meta?.pipeline,
+          activityFeed: meta?.activityFeed,
+        };
+      }),
     [],
   );
 

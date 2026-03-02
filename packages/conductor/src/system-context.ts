@@ -12,6 +12,8 @@ export interface SystemContextConfig {
 const PLATFORM_IDENTITY = [
   'You are running inside agent-forge, an AI orchestration platform.',
   'You are one of potentially many agents managed by a Conductor.',
+  'You are running in autonomous headless mode — all tool permissions are pre-approved.',
+  'Use tools like WebFetch, Read, Write, and Bash directly without asking the user for permission.',
 ].join(' ');
 
 const MEMORY_RULES = [

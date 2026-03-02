@@ -378,7 +378,7 @@ Automated background processes manage memory health:
 | Provider   | Enum         | Dimensions | Notes                           |
 | ---------- | ------------ | ---------- | ------------------------------- |
 | Local      | `LOCAL`      | 384        | Default, no API key needed      |
-| Stub       | `STUB`       | 384        | For testing, random vectors     |
+| Stub       | `STUB`       | 1024       | For testing, random vectors     |
 | Anthropic  | `ANTHROPIC`  | varies     | Requires API key                |
 | OpenAI     | `OPENAI`     | varies     | Requires API key                |
 
@@ -606,6 +606,9 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `STREAM_TIMEOUT_MS`    | No        | `300000`                 | Max stream duration for AI responses (ms) |
 | `OLLAMA_BASE_URL`      | No        | `http://localhost:11434` | Ollama API base URL                  |
 | `OLLAMA_MODEL`         | No        | `llama3.2`               | Default Ollama model                 |
+| `PI_API_KEY`           | No        | —                        | API key for Pi backend               |
+| `PI_MODEL`             | No        | —                        | Pi model override (e.g., `openai/gpt-4.1`) |
+| `QDRANT_URL`           | No        | —                        | Qdrant vector DB URL (alternative to LanceDB) |
 | `CORS_ORIGIN`          | No        | —                        | Allowed CORS origin (e.g., `https://yourdomain.com`) |
 | `FALLBACK_BACKEND`     | No        | —                        | Fallback AI backend if primary fails to spawn |
 | `ENABLE_TERMINAL_WS`   | No        | `false`                  | Enable PTY-based CLI login WebSocket |

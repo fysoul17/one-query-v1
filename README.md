@@ -181,6 +181,7 @@ docker compose -f docker/docker-compose.yaml down
 | `CODEX_API_KEY` | *(empty)* | API key for OpenAI Codex CLI |
 | `GEMINI_API_KEY` | *(empty)* | API key for Google Gemini CLI |
 | `PI_API_KEY` | *(empty)* | API key for Pi backend |
+| `PI_MODEL` | *(empty)* | Pi model override (e.g., `openai/gpt-4.1`) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama API URL (no key needed) |
 | `MAX_AGENTS` | `10` | Maximum concurrent agents |
 

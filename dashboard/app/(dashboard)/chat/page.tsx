@@ -62,7 +62,13 @@ export default async function ChatPage({
 
   let initialSessionId: string | undefined;
   let initialMessages:
-    | { role: string; content: string; agentId?: string; createdAt: string }[]
+    | {
+        role: string;
+        content: string;
+        agentId?: string;
+        createdAt: string;
+        metadata?: Record<string, unknown>;
+      }[]
     | undefined;
 
   if (sessionId) {
@@ -74,6 +80,7 @@ export default async function ChatPage({
         content: m.content,
         agentId: m.agentId,
         createdAt: m.createdAt,
+        metadata: m.metadata,
       }));
     } catch {
       // session not found, proceed without

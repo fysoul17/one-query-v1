@@ -17,8 +17,14 @@ import {
   RAGStrategy,
 } from '@autonomy/shared';
 import type { MemoryInterface } from '@pyx-memory/client';
-import { nanoid } from 'nanoid';
+import crypto from 'node:crypto';
 import { ActivityLog } from './activity-log.ts';
+import {
+  runAfterMemorySearchHook,
+  runAfterResponseHook,
+  runBeforeMessageHook,
+} from './conductor-hooks.ts';
+import { buildMemoryAugmentedPrompt } from './conductor-prompt.ts';
 import {
   ConductorNotInitializedError,
   ConductorShutdownError,
@@ -33,7 +39,6 @@ import {
   formatActionResults,
 } from './system-action-executor.ts';
 import { parseSystemActions, stripSystemActions } from './system-action-parser.ts';
-import { buildSystemContextPreamble } from './system-context.ts';
 import {
   ConductorEventType,
   type ConductorOptions,
@@ -100,6 +105,7 @@ export class Conductor {
   private messageQueue: QueuedConductorMessage[] = [];
   private processing = false;
   private cronManager?: CronManagerLike;
+  private memoryConnected = true;
 
   constructor(
     pool: AgentPool,
@@ -120,6 +126,7 @@ export class Conductor {
     return 'Conductor';
   }
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: initialization requires sequential backend/pool setup with fallback logic
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
@@ -129,6 +136,7 @@ export class Conductor {
         this.backendProcess = await this.backend.spawn({
           agentId: 'conductor',
           systemPrompt,
+          skipPermissions: true,
         });
         this.activityLog.record(ActivityType.MESSAGE, 'Conductor AI process initialized');
       } catch (error) {
@@ -145,6 +153,7 @@ export class Conductor {
             this.backendProcess = await this.fallbackBackend.spawn({
               agentId: 'conductor',
               systemPrompt,
+              skipPermissions: true,
             });
             this.activityLog.record(
               ActivityType.MESSAGE,
@@ -161,6 +170,18 @@ export class Conductor {
 
     const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
     this.sessionPool = new SessionProcessPool(this.backend, this.fallbackBackend, systemPrompt);
+
+    // Detect memory connectivity via stats().connected flag
+    try {
+      const stats = await this.memory.stats();
+      this.memoryConnected = stats.connected !== false;
+    } catch (error) {
+      conductorLogger.debug('Memory stats check failed', { error: String(error) });
+      this.memoryConnected = false;
+    }
+    if (!this.memoryConnected) {
+      conductorLogger.warn('Memory service not connected — memory operations will be skipped');
+    }
 
     this.initialized = true;
     this.activityLog.record(ActivityType.MESSAGE, 'Conductor initialized');
@@ -228,7 +249,12 @@ export class Conductor {
         agentName: delegateAgent?.definition.name,
       });
 
-      const augmentedMessage = this.buildMemoryAugmentedPrompt(processedMessage, memoryContext);
+      const augmentedMessage = buildMemoryAugmentedPrompt(
+        processedMessage,
+        memoryContext,
+        this.pool.list(),
+        !!this.cronManager,
+      );
 
       try {
         for await (const event of this.pool.sendMessageStreaming(
@@ -461,7 +487,7 @@ export class Conductor {
   }): Promise<AgentRuntimeInfo> {
     this.ensureInitialized();
 
-    const id = nanoid();
+    const id = crypto.randomUUID();
     const definition = buildAgentDefinition(id, params);
 
     try {
@@ -560,34 +586,7 @@ export class Conductor {
     this.initialized = false;
   }
 
-  private buildMemoryAugmentedPrompt(
-    message: IncomingMessage,
-    memoryContext: MemorySearchResult | null,
-  ): string {
-    let prompt = message.content;
-
-    // Conversation history is no longer injected here — native session resume
-    // in each CLI backend (Claude --resume, Codex exec resume, Gemini --resume,
-    // Pi RPC mode) handles multi-turn context natively.
-
-    // Layer on RAG memory (long-term knowledge across sessions).
-    if (memoryContext && memoryContext.entries.length > 0) {
-      const contextSnippet = memoryContext.entries
-        .slice(0, 3)
-        .map((e) => e.content)
-        .join('\n---\n');
-      prompt = `<memory-context>\n${contextSnippet}\n</memory-context>\n\n${prompt}`;
-    }
-
-    // Prepend system context preamble (platform identity, agent list, available actions).
-    const systemContext = buildSystemContextPreamble({
-      agents: this.pool.list(),
-      cronEnabled: !!this.cronManager,
-    });
-    prompt = `${systemContext}\n\n${prompt}`;
-
-    return prompt;
-  }
+  // Prompt building extracted to conductor-prompt.ts
 
   /**
    * Build the final prompt for a direct conductor response: augment with memory
@@ -597,7 +596,12 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
   ): Promise<string> {
-    let prompt = this.buildMemoryAugmentedPrompt(message, memoryContext);
+    let prompt = buildMemoryAugmentedPrompt(
+      message,
+      memoryContext,
+      this.pool.list(),
+      !!this.cronManager,
+    );
 
     if (this.hookRegistry) {
       const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_RESPONSE, {
@@ -613,42 +617,7 @@ export class Conductor {
     return prompt;
   }
 
-  private async runBeforeMessageHook(message: IncomingMessage): Promise<IncomingMessage | null> {
-    if (!this.hookRegistry) return message;
-    const hookResult = await this.hookRegistry.emitWaterfall(HookName.BEFORE_MESSAGE, { message });
-    if (hookResult === null || hookResult === undefined) return null;
-    return (hookResult as { message: IncomingMessage }).message ?? message;
-  }
-
-  private async runAfterMemorySearchHook(
-    message: IncomingMessage,
-    memoryContext: MemorySearchResult | null,
-  ): Promise<MemorySearchResult | null> {
-    if (!this.hookRegistry) return memoryContext;
-    const hookResult = await this.hookRegistry.emitWaterfall(HookName.AFTER_MEMORY_SEARCH, {
-      message,
-      memoryResult: memoryContext,
-    });
-    if (hookResult && typeof hookResult === 'object' && 'memoryResult' in hookResult) {
-      return (hookResult as { memoryResult: MemorySearchResult | null }).memoryResult;
-    }
-    return memoryContext;
-  }
-
-  private async runAfterResponseHook(
-    responseContent: string,
-    responseAgentId: string | undefined,
-    decisions: ConductorDecision[],
-  ): Promise<string> {
-    if (!this.hookRegistry) return responseContent;
-    const hookResult = await this.hookRegistry.emitWaterfall(HookName.AFTER_RESPONSE, {
-      response: { content: responseContent, agentId: responseAgentId, decisions },
-    });
-    if (hookResult && typeof hookResult === 'object' && 'response' in hookResult) {
-      return (hookResult as { response: ConductorResponse }).response.content;
-    }
-    return responseContent;
-  }
+  // Hook runners extracted to conductor-hooks.ts
 
   /**
    * Common pipeline prefix: runs beforeMessage hook, memory search, and
@@ -661,22 +630,36 @@ export class Conductor {
     processedMessage: IncomingMessage;
     memoryContext: MemorySearchResult | null;
   } | null> {
-    const processedMessage = await this.runBeforeMessageHook(message);
+    const processedMessage = await runBeforeMessageHook(this.hookRegistry, message);
     if (processedMessage === null) return null;
 
-    const rawMemoryContext = await this.timedStep(
-      () => this.searchMemoryContext(processedMessage),
-      (durationMs, result) =>
-        onEvent?.({
-          type: ConductorEventType.MEMORY_SEARCH,
-          content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
-          durationMs,
-          memoryResults: result?.entries.length ?? 0,
-          memoryQuery: processedMessage.content,
-          memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
-        }),
-    );
-    const memoryContext = await this.runAfterMemorySearchHook(processedMessage, rawMemoryContext);
+    let memoryContext: MemorySearchResult | null = null;
+    if (this.memoryConnected) {
+      const rawMemoryContext = await this.timedStep(
+        () => this.searchMemoryContext(processedMessage),
+        (durationMs, result) =>
+          onEvent?.({
+            type: ConductorEventType.MEMORY_SEARCH,
+            content: result ? `Found ${result.entries.length} memory entries` : 'No memory results',
+            durationMs,
+            memoryResults: result?.entries.length ?? 0,
+            memoryQuery: processedMessage.content,
+            memoryEntryPreviews: result?.entries.slice(0, 5).map((e) => e.content.slice(0, 80)),
+          }),
+      );
+      memoryContext = await runAfterMemorySearchHook(
+        this.hookRegistry,
+        processedMessage,
+        rawMemoryContext,
+      );
+    } else {
+      onEvent?.({
+        type: ConductorEventType.MEMORY_SEARCH,
+        content: 'Memory not connected — skipped',
+        durationMs: 0,
+        memoryResults: 0,
+      });
+    }
 
     return { processedMessage, memoryContext };
   }
@@ -693,7 +676,12 @@ export class Conductor {
     decisions: ConductorDecision[],
     onEvent?: OnConductorEvent,
   ): Promise<string> {
-    let finalContent = await this.runAfterResponseHook(responseContent, responseAgentId, decisions);
+    let finalContent = await runAfterResponseHook(
+      this.hookRegistry,
+      responseContent,
+      responseAgentId,
+      decisions,
+    );
 
     // Parse and execute system actions from the response
     const systemActions = parseSystemActions(finalContent);
@@ -716,19 +704,27 @@ export class Conductor {
       });
     }
 
-    try {
-      await this.timedStep(
-        () => this.storeConversation(processedMessage, decisions, finalContent),
-        (durationMs) =>
-          onEvent?.({
-            type: ConductorEventType.MEMORY_STORE,
-            content: 'Conversation stored',
-            durationMs,
-          }),
-      );
-    } catch (error) {
-      const detail = getErrorDetail(error);
-      conductorLogger.warn('Memory store failed', { error: detail });
+    if (this.memoryConnected) {
+      try {
+        await this.timedStep(
+          () => this.storeConversation(processedMessage, decisions, finalContent),
+          (durationMs) =>
+            onEvent?.({
+              type: ConductorEventType.MEMORY_STORE,
+              content: 'Conversation stored',
+              durationMs,
+            }),
+        );
+      } catch (error) {
+        const detail = getErrorDetail(error);
+        conductorLogger.warn('Memory store failed', { error: detail });
+      }
+    } else {
+      onEvent?.({
+        type: ConductorEventType.MEMORY_STORE,
+        content: 'Memory not connected — skipped',
+        durationMs: 0,
+      });
     }
 
     this.activityLog.record(
@@ -761,7 +757,12 @@ export class Conductor {
     message: IncomingMessage,
     memoryContext: MemorySearchResult | null,
   ): Promise<string> {
-    const augmentedMessage = this.buildMemoryAugmentedPrompt(message, memoryContext);
+    const augmentedMessage = buildMemoryAugmentedPrompt(
+      message,
+      memoryContext,
+      this.pool.list(),
+      !!this.cronManager,
+    );
 
     try {
       const result = await this.pool.sendMessage(agentId, augmentedMessage);
@@ -778,6 +779,15 @@ export class Conductor {
     decisions: ConductorDecision[],
     responseContent?: string,
   ): Promise<void> {
+    if (!this.memoryConnected) {
+      decisions.push({
+        timestamp: new Date().toISOString(),
+        action: 'skip_memory',
+        reason: 'Memory service not connected',
+      });
+      return;
+    }
+
     if (message.content.trim().length === 0) {
       decisions.push({
         timestamp: new Date().toISOString(),

@@ -1,5 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { SERVER_RUNTIME_URL } from '@/lib/constants';
 
 export function RuntimeOffline() {
   return (
@@ -12,10 +13,8 @@ export function RuntimeOffline() {
           <h3 className="font-bold text-status-red">Runtime Offline</h3>
           <p className="text-sm text-muted-foreground">
             Cannot connect to the runtime at{' '}
-            <code className="font-mono text-xs">
-              {process.env.RUNTIME_URL ?? 'http://localhost:7820'}
-            </code>
-            . Make sure the server is running.
+            <code className="font-mono text-xs">{SERVER_RUNTIME_URL}</code>. Make sure the server is
+            running.
           </p>
         </div>
       </CardContent>

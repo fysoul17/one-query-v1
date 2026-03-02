@@ -1,7 +1,7 @@
 const BUFFER_TTL_MS = 30_000; // 30 seconds TTL after completion
 const CLEANUP_INTERVAL_MS = 15_000; // Cleanup check every 15 seconds
 
-export type StreamBufferStatus = 'streaming' | 'complete' | 'error' | 'abandoned';
+type StreamBufferStatus = 'streaming' | 'complete' | 'error' | 'abandoned';
 
 /** Per-session in-memory buffer that decouples conductor streaming from WebSocket connections. */
 export class StreamBuffer {

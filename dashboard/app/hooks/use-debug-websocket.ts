@@ -5,12 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type DebugConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
+import { RUNTIME_WS_URL } from '@/lib/constants';
+
 // Performance: 500 cap keeps DOM node count manageable without virtualization
 const MAX_CLIENT_EVENTS = 500;
-const RUNTIME_WS_URL =
-  typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_RUNTIME_WS_URL ?? 'ws://localhost:7820')
-    : 'ws://localhost:7820';
 const DEBUG_WS_TOKEN =
   typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_DEBUG_WS_TOKEN ?? '') : '';
 

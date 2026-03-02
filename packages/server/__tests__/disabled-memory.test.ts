@@ -22,7 +22,7 @@ describe('DisabledMemory', () => {
         metadata: { key: 'value' },
       });
 
-      expect(entry.id).toBe('');
+      expect(entry.id).toBe('disabled');
       expect(entry.content).toBe('test content');
       expect(entry.type).toBe('long-term');
       expect(entry.metadata).toEqual({});
@@ -66,7 +66,7 @@ describe('DisabledMemory', () => {
       expect(result).toBe(0);
     });
 
-    test('stats() returns all-zero statistics', async () => {
+    test('stats() returns all-zero statistics with connected: false', async () => {
       const memory = new DisabledMemory();
       const stats = await memory.stats();
 
@@ -74,6 +74,7 @@ describe('DisabledMemory', () => {
       expect(stats.storageUsedBytes).toBe(0);
       expect(stats.vectorCount).toBe(0);
       expect(stats.recentAccessCount).toBe(0);
+      expect(stats.connected).toBe(false);
     });
 
     test('shutdown() resolves without error', async () => {

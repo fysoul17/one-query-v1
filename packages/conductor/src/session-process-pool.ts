@@ -80,10 +80,15 @@ export class SessionProcessPool {
       }
     }
 
-    // Build spawn config with config overrides
+    // Build spawn config with config overrides.
+    // skipPermissions: true is required because the conductor runs headlessly
+    // (no interactive terminal for user to approve tool prompts).
+    // This is consistent with Codex (--full-auto) and Gemini (--approval-mode=yolo)
+    // which always auto-approve tool usage.
     const spawnConfig: BackendSpawnConfig = {
       agentId: 'conductor',
       systemPrompt: this.systemPrompt,
+      skipPermissions: true,
     };
 
     // Translate config overrides → spawn config fields
@@ -127,7 +132,11 @@ export class SessionProcessPool {
             sessionId,
             fallback: this.fallbackBackend.name,
           });
-          const fallbackConfig = { agentId: 'conductor', systemPrompt: this.systemPrompt };
+          const fallbackConfig = {
+            agentId: 'conductor',
+            systemPrompt: this.systemPrompt,
+            skipPermissions: true,
+          };
           const proc = await this.fallbackBackend.spawn(fallbackConfig);
           this.processes.set(sessionId, proc);
           logger.info('Session backend spawned via fallback', {

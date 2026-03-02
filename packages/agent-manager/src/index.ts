@@ -1,8 +1,6 @@
 // @autonomy/agent-manager — CLI AI process lifecycle management
 
-export type { StreamEvent } from '@autonomy/shared';
-export { AgentPool, type AgentPoolOptions } from './agent-pool.ts';
-export { AgentProcess, type AgentProcessOptions } from './agent-process.ts';
+export { AgentPool } from './agent-pool.ts';
 export {
   ClaudeBackend,
   CodexBackend,

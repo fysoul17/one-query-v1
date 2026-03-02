@@ -2,13 +2,10 @@ import type { MemoryInterface } from '@pyx-memory/client';
 import type { GraphNode, GraphTraversalResult } from '@pyx-memory/shared';
 import { BadRequestError, NotImplementedError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
-import type { RouteParams } from '../router.ts';
 import { validatePositiveInt } from '../validation.ts';
 
 /** Type guard: does the memory instance have graph query methods? (MemoryClient does) */
-function hasGraphMethods(
-  m: MemoryInterface,
-): m is MemoryInterface & {
+function hasGraphMethods(m: MemoryInterface): m is MemoryInterface & {
   graphNodes(): Promise<GraphNode[]>;
   graphEdges(): Promise<{ stats: { nodeCount: number; edgeCount: number } }>;
   graphQuery(query: { nodeId: string; depth?: number }): Promise<GraphTraversalResult>;
@@ -19,16 +16,14 @@ function hasGraphMethods(
 export function createGraphRoutes(memory: MemoryInterface) {
   if (!hasGraphMethods(memory)) {
     const unavailable = () => {
-      throw new NotImplementedError('Graph operations not available — memory service not connected');
+      throw new NotImplementedError(
+        'Graph operations not available — memory service not connected',
+      );
     };
     return {
       getNodes: unavailable,
       getEdges: unavailable,
-      getRelationships: unavailable,
       query: unavailable,
-      createNode: unavailable,
-      createRelationship: unavailable,
-      deleteNode: unavailable,
     };
   }
 
@@ -59,14 +54,6 @@ export function createGraphRoutes(memory: MemoryInterface) {
       return jsonResponse(result);
     },
 
-    getRelationships: async (): Promise<Response> => {
-      // MemoryClient does not expose graphRelationships() — that's on DashboardClient.
-      // Proxy to the pyx-memory server's relationships endpoint if available.
-      throw new NotImplementedError(
-        'Bulk relationship listing is available via the pyx-memory dashboard',
-      );
-    },
-
     query: async (req: Request): Promise<Response> => {
       const body = await parseJsonBody<{ nodeId?: string; depth?: number }>(req);
       if (!body.nodeId) {
@@ -75,25 +62,6 @@ export function createGraphRoutes(memory: MemoryInterface) {
       const depth = Math.min(5, Math.max(1, body.depth ?? 1));
       const result = await memory.graphQuery({ nodeId: body.nodeId, depth });
       return jsonResponse(result);
-    },
-
-    createNode: async (): Promise<Response> => {
-      // Graph write operations are internal to pyx-memory (entity extraction).
-      throw new NotImplementedError(
-        'Graph nodes are created automatically by the pyx-memory entity extraction pipeline',
-      );
-    },
-
-    createRelationship: async (): Promise<Response> => {
-      throw new NotImplementedError(
-        'Graph relationships are created automatically by the pyx-memory entity extraction pipeline',
-      );
-    },
-
-    deleteNode: async (): Promise<Response> => {
-      throw new NotImplementedError(
-        'Graph node deletion is managed by the pyx-memory server',
-      );
     },
   };
 }

@@ -1,5 +1,5 @@
 import type { ActivityEntry, ActivityType, AgentId } from '@autonomy/shared';
-import { nanoid } from 'nanoid';
+import crypto from 'node:crypto';
 
 const DEFAULT_MAX_SIZE = 1000;
 
@@ -18,7 +18,7 @@ export class ActivityLog {
     metadata?: Record<string, unknown>,
   ): ActivityEntry {
     const entry: ActivityEntry = {
-      id: nanoid(),
+      id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       type,
       details,
