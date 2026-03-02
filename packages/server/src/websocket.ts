@@ -1,17 +1,12 @@
 import type { BackendRegistry } from '@autonomy/agent-manager';
 import type { Conductor, ConductorEvent, IncomingMessage } from '@autonomy/conductor';
-import { ConductorEventType } from '@autonomy/conductor';
 import type {
-  BackendConfigOption,
-  ConductorDebugPayload,
-  DebugEvent,
   SessionMessage,
   WSClientMessage,
   WSServerAgentStatus,
   WSServerAgentStep,
   WSServerChunk,
   WSServerComplete,
-  WSServerConductorStatus,
   WSServerError,
   WSServerPong,
   WSServerSessionInit,
@@ -21,7 +16,6 @@ import {
   DebugEventCategory,
   DebugEventLevel,
   Logger,
-  MessageRole,
   WSClientMessageType,
   WSServerMessageType,
 } from '@autonomy/shared';
@@ -38,6 +32,14 @@ import {
 } from './step-metadata.ts';
 import type { StreamBuffer } from './stream-buffer.ts';
 import { SessionStreamBufferManager } from './stream-buffer.ts';
+import {
+  buildDebugPayload,
+  conductorEventToDebug,
+  emitResponseDebug,
+  sendConductorStatus,
+} from './ws-debug.ts';
+import { ensureSession, persistAssistantMessage, persistUserMessage } from './ws-session.ts';
+import { handleSlashCommand } from './ws-slash-commands.ts';
 
 const MAX_WS_MESSAGE_SIZE = 65_536; // 64 KB
 const MAX_WS_CLIENTS = 100;
@@ -88,199 +90,8 @@ function sendWSError(ws: ServerWebSocket<WSData>, message: string): void {
   }
 }
 
-function buildDebugPayload(event: ConductorEvent): ConductorDebugPayload | undefined {
-  const debug: ConductorDebugPayload = {};
-  let hasData = false;
-
-  if (event.durationMs !== undefined) {
-    debug.durationMs = event.durationMs;
-    hasData = true;
-  }
-  if (event.memoryResults !== undefined) {
-    debug.memoryResults = event.memoryResults;
-    hasData = true;
-  }
-  // routerType is not currently emitted by ConductorEvent; field intentionally omitted
-  if (event.content) {
-    debug.routingReason = event.content;
-    hasData = true;
-  }
-  if (event.decisions) {
-    debug.decisions = event.decisions;
-    hasData = true;
-  }
-  if (event.memoryQuery) {
-    debug.memoryQuery = event.memoryQuery;
-    hasData = true;
-  }
-  if (event.memoryEntryPreviews) {
-    debug.memoryEntryPreviews = event.memoryEntryPreviews;
-    hasData = true;
-  }
-  if (event.dispatchTarget) {
-    debug.dispatchTarget = event.dispatchTarget;
-    hasData = true;
-  }
-  if (event.historyTurnCount !== undefined) {
-    debug.historyTurnCount = event.historyTurnCount;
-    hasData = true;
-  }
-  if (event.historyChars !== undefined) {
-    debug.historyChars = event.historyChars;
-    hasData = true;
-  }
-
-  return hasData ? debug : undefined;
-}
-
-function conductorEventToDebug(event: ConductorEvent): DebugEvent {
-  const phaseMap: Record<string, string> = {
-    [ConductorEventType.QUEUED]: 'Message queued',
-    [ConductorEventType.DELEGATING]: 'Delegating to agent',
-    [ConductorEventType.MEMORY_SEARCH]: 'Searching memory',
-    [ConductorEventType.CONTEXT_INJECT]: 'Injecting conversation history',
-    [ConductorEventType.MEMORY_STORE]: 'Storing conversation',
-    [ConductorEventType.DELEGATION_COMPLETE]: 'Delegation complete',
-    [ConductorEventType.RESPONDING]: 'Conductor responding',
-  };
-
-  return makeDebugEvent({
-    category: DebugEventCategory.CONDUCTOR,
-    level: DebugEventLevel.INFO,
-    source: `conductor.${event.type}`,
-    message: event.content ?? phaseMap[event.type] ?? event.type,
-    agentId: event.agentId,
-    durationMs: event.durationMs,
-    data: {
-      ...(event.agentName && { agentName: event.agentName }),
-      ...(event.memoryResults !== undefined && { memoryResults: event.memoryResults }),
-      ...(event.memoryQuery && { memoryQuery: event.memoryQuery }),
-      // routerType not present on ConductorEvent
-      ...(event.decisions && { decisions: event.decisions }),
-      ...(event.dispatchTarget && { dispatchTarget: event.dispatchTarget }),
-    },
-  });
-}
-
-function sendConductorStatus(ws: ServerWebSocket<WSData>, event: ConductorEvent): void {
-  let phase: WSServerConductorStatus['phase'];
-  let message: string;
-
-  switch (event.type) {
-    case ConductorEventType.QUEUED:
-      phase = 'queued';
-      message = event.content ?? 'Message queued...';
-      break;
-    case ConductorEventType.DELEGATING:
-      phase = 'delegating';
-      message = 'Delegating to agent...';
-      break;
-    case ConductorEventType.MEMORY_SEARCH:
-      phase = 'memory_search';
-      message = event.content ?? 'Searching memory...';
-      break;
-    case ConductorEventType.CONTEXT_INJECT:
-      phase = 'context_inject';
-      message = event.content ?? 'Loading conversation history...';
-      break;
-    case ConductorEventType.MEMORY_STORE:
-      phase = 'memory_store';
-      message = event.content ?? 'Storing conversation...';
-      break;
-    case ConductorEventType.DELEGATION_COMPLETE:
-      phase = 'delegation_complete';
-      message = event.content ?? 'Delegation complete';
-      break;
-    case ConductorEventType.RESPONDING:
-      phase = 'responding';
-      message = event.content ?? 'Conductor is responding...';
-      break;
-    default:
-      return;
-  }
-
-  const status: WSServerConductorStatus = {
-    type: WSServerMessageType.CONDUCTOR_STATUS,
-    phase,
-    message,
-    agentName: event.agentName,
-    debug: buildDebugPayload(event),
-  };
-  try {
-    ws.send(JSON.stringify(status));
-  } catch {
-    // Client may have disconnected
-  }
-}
-
-function ensureSession(ws: ServerWebSocket<WSData>, sessionStore?: SessionStore): void {
-  if (!ws.data.sessionId && sessionStore) {
-    const session = sessionStore.create({ title: 'New Chat' });
-    ws.data.sessionId = session.id;
-    const sessionInit: WSServerSessionInit = {
-      type: WSServerMessageType.SESSION_INIT,
-      sessionId: session.id,
-    };
-    try {
-      ws.send(JSON.stringify(sessionInit));
-    } catch {
-      // Client may have disconnected
-    }
-  }
-}
-
-function persistUserMessage(sessionStore: SessionStore, sessionId: string, content: string): void {
-  try {
-    sessionStore.addMessage(sessionId, MessageRole.USER, content);
-    const session = sessionStore.getById(sessionId);
-    if (session && session.title === 'New Chat' && session.messageCount <= 1 && content) {
-      const title = content.length > 60 ? `${content.slice(0, 57)}...` : content;
-      sessionStore.update(sessionId, { title });
-    }
-  } catch (err) {
-    wsLogger.warn('Failed to persist user message', {
-      sessionId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
-function persistAssistantMessage(
-  sessionStore: SessionStore,
-  sessionId: string,
-  content: string,
-  targetAgent?: string,
-  metadata?: Record<string, unknown>,
-): void {
-  try {
-    sessionStore.addMessage(sessionId, MessageRole.ASSISTANT, content, targetAgent, metadata);
-  } catch (err) {
-    wsLogger.warn('Failed to persist assistant message', {
-      sessionId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
-function emitResponseDebug(
-  debugBus: DebugBus | undefined,
-  agentId: string,
-  targetAgent: string | undefined,
-  contentLength: number,
-): void {
-  const isEmpty = contentLength === 0;
-  debugBus?.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.CONDUCTOR,
-      level: isEmpty ? DebugEventLevel.WARN : DebugEventLevel.INFO,
-      source: isEmpty ? 'conductor.empty_response' : 'conductor.response',
-      message: isEmpty
-        ? `Empty response from ${agentId} — possible backend failure`
-        : `Response sent (${contentLength} chars) via ${agentId}`,
-      agentId: targetAgent,
-    }),
-  );
-}
+// Debug/status helpers extracted to ws-debug.ts
+// Session persistence functions extracted to ws-session.ts
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WebSocket message handler with multiple event types
 async function streamConductorResponse(
@@ -643,138 +454,7 @@ async function handleConductorMessage(
   }
 }
 
-/** Send a system message back to the client using the CHUNK + COMPLETE pattern. */
-function sendSystemMessage(ws: ServerWebSocket<WSData>, content: string): void {
-  const chunk: WSServerChunk = {
-    type: WSServerMessageType.CHUNK,
-    content,
-    agentId: 'system',
-  };
-  try {
-    ws.send(JSON.stringify(chunk));
-    ws.send(JSON.stringify({ type: WSServerMessageType.COMPLETE }));
-  } catch {
-    // Client may have disconnected
-  }
-}
-
-/**
- * Handle slash commands (e.g., /model, /help, /config).
- * Returns true if the message was handled as a slash command.
- */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: agent step handler with many event types
-function handleSlashCommand(
-  ws: ServerWebSocket<WSData>,
-  content: string,
-  backendRegistry?: BackendRegistry,
-  conductor?: Conductor,
-): boolean {
-  const trimmed = content.trim();
-  if (!trimmed.startsWith('/')) return false;
-
-  const parts = trimmed.slice(1).split(/\s+/);
-  const command = parts[0]?.toLowerCase();
-  const value = parts.slice(1).join(' ').trim();
-
-  if (!command) return false;
-
-  const configOptions: BackendConfigOption[] = backendRegistry
-    ? backendRegistry.getDefault().getConfigOptions()
-    : [];
-
-  if (command === 'help') {
-    if (configOptions.length === 0) {
-      sendSystemMessage(ws, 'No configurable options available for the current backend.');
-      return true;
-    }
-    const lines = ['**Available commands:**', ''];
-    for (const opt of configOptions) {
-      const valuesStr = opt.values ? ` (${opt.values.join(', ')})` : '';
-      const defaultStr = opt.defaultValue ? ` [default: ${opt.defaultValue}]` : '';
-      lines.push(`- \`/${opt.name} <value>\` — ${opt.description}${valuesStr}${defaultStr}`);
-    }
-    lines.push('', '- `/config` — Show current session overrides');
-    lines.push('- `/help` — Show this help message');
-    sendSystemMessage(ws, lines.join('\n'));
-    return true;
-  }
-
-  if (command === 'config') {
-    const overrides = ws.data.configOverrides;
-    if (!overrides || Object.keys(overrides).length === 0) {
-      sendSystemMessage(ws, 'No config overrides set for this session. Using defaults.');
-      return true;
-    }
-    const lines = ['**Current session overrides:**', ''];
-    for (const [key, val] of Object.entries(overrides)) {
-      lines.push(`- **${key}**: ${val}`);
-    }
-    sendSystemMessage(ws, lines.join('\n'));
-    return true;
-  }
-
-  // Check if command matches a config option
-  const option = configOptions.find((opt) => opt.name === command);
-  if (!option) {
-    sendSystemMessage(
-      ws,
-      `Unknown command \`/${command}\`. Type \`/help\` for available commands.`,
-    );
-    return true;
-  }
-
-  // Show current value if no argument given
-  if (!value) {
-    const current = ws.data.configOverrides?.[option.name] ?? option.defaultValue ?? 'not set';
-    const valuesStr = option.values ? `\nValid values: ${option.values.join(', ')}` : '';
-    sendSystemMessage(ws, `**${option.name}**: ${current}${valuesStr}`);
-    return true;
-  }
-
-  // Defense-in-depth: reject values with control characters or excessive length before any
-  // validation or persistence, even if all current options have enumerable values arrays.
-  const MAX_OPTION_VALUE_LENGTH = 256;
-  if (value.length > MAX_OPTION_VALUE_LENGTH) {
-    sendSystemMessage(
-      ws,
-      `Value for **${option.name}** is too long (max ${MAX_OPTION_VALUE_LENGTH} characters).`,
-    );
-    return true;
-  }
-  if (/[\n\r\t\0]/.test(value)) {
-    sendSystemMessage(
-      ws,
-      `Invalid value for **${option.name}**: control characters are not allowed.`,
-    );
-    return true;
-  }
-
-  // Validate value against known values (if enumerable)
-  if (option.values && !option.values.includes(value)) {
-    sendSystemMessage(
-      ws,
-      `Invalid value \`${value}\` for **${option.name}**. Valid values: ${option.values.join(', ')}`,
-    );
-    return true;
-  }
-
-  // Store the override
-  if (!ws.data.configOverrides) {
-    ws.data.configOverrides = {};
-  }
-  ws.data.configOverrides[option.name] = value;
-
-  // Invalidate existing session backend so next message spawns with new flags
-  if (conductor && ws.data.sessionId) {
-    conductor.invalidateSessionBackend(ws.data.sessionId);
-  }
-
-  // COUPLING: This message format is parsed by CONFIG_CONFIRM_RE in
-  // dashboard/app/components/chat/chat-interface.tsx. If this format changes,
-  // the regex in the client must be updated to match.
-  sendSystemMessage(ws, `**${option.name}** set to **${value}** for this session.`);
-  return true;
-}
+// Slash command handling extracted to ws-slash-commands.ts
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: delegation handler with streaming support
 function handleParsedMessage(

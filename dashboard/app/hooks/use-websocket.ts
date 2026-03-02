@@ -1,76 +1,32 @@
 'use client';
 
-import type {
-  AgentRuntimeInfo,
-  ConductorDebugPayload,
-  WSClientMessage,
-  WSServerMessage,
-} from '@autonomy/shared';
+import type { ConductorDebugPayload, WSClientMessage, WSServerMessage } from '@autonomy/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type {
+  ActivityFeed,
+  AgentActivity,
+  AgentThinking,
+  AgentToolCall,
+  ChatMessage,
+  ConnectionStatus,
+  PipelinePhase,
+  UseWebSocketOptions,
+} from './use-websocket-types.ts';
+
+// Re-export all types so consumers can keep importing from this file
+export type {
+  ActivityFeed,
+  AgentActivity,
+  AgentThinking,
+  AgentToolCall,
+  ChatMessage,
+  ConnectionStatus,
+  PipelinePhase,
+  ToolCallStatus,
+} from './use-websocket-types.ts';
 
 /** Maximum characters stored per tool's accumulated input before truncation. */
 const MAX_INPUT_BYTES = 10_240;
-
-export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
-
-export interface PipelinePhase {
-  phase: string;
-  message: string;
-  timestamp: number;
-  durationMs?: number;
-  debug?: ConductorDebugPayload;
-}
-
-export type ToolCallStatus = 'streaming' | 'complete';
-
-export interface AgentToolCall {
-  toolId: string;
-  toolName: string;
-  accumulatedInput: string;
-  status: ToolCallStatus;
-  durationMs?: number;
-  startedAt: number;
-  completedAt?: number;
-}
-
-export interface AgentThinking {
-  content: string;
-  timestamp: number;
-}
-
-export interface AgentActivity {
-  agentId: string;
-  agentName?: string;
-  toolCalls: AgentToolCall[];
-  thinkingBlocks: AgentThinking[];
-}
-
-export interface ActivityFeed {
-  agents: AgentActivity[];
-  totalSteps: number;
-  totalDurationMs: number;
-  isActive: boolean;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  agentId?: string;
-  agentName?: string;
-  timestamp: number;
-  streaming?: boolean;
-  pipeline?: PipelinePhase[];
-  activityFeed?: ActivityFeed;
-  isProcessing?: boolean;
-}
-
-interface UseWebSocketOptions {
-  url: string;
-  onAgentStatus?: (agents: AgentRuntimeInfo[], conductorName?: string) => void;
-  onSessionInit?: (sessionId: string) => void;
-  initialMessages?: ChatMessage[];
-}
 
 export function useWebSocket({
   url,
