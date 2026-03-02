@@ -127,9 +127,13 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
 │  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 │                                                                   │
 │  /data volume (persistent)                                       │
-│  ├── runtime.sqlite    # sessions + agents (WAL mode)            │
+│  ├── agents/           # agent-specific data                     │
+│  ├── cli-config/       # CLI backend config cache                │
+│  ├── config.json       # runtime config overrides                │
 │  ├── crons.json        # scheduled task definitions              │
-│  └── config.json       # runtime config                          │
+│  ├── memory/           # memory SQLite databases (WAL mode)      │
+│  ├── vectors/          # LanceDB vector store                    │
+│  └── workspaces/       # per-workspace session data              │
 └──────────────────────────────────────────────────────────────────┘
 
 Dashboard (Next.js 16.1, separate service in docker-compose)  :7821
@@ -502,8 +506,6 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | `POST`   | `/api/memory/decay`                           | Run memory decay                 |
 | `POST`   | `/api/memory/reindex`                         | Reindex vector embeddings        |
 | `DELETE` | `/api/memory/source/:source`                  | Delete memories by source        |
-| `GET`    | `/api/memory/consolidation-log`               | Consolidation log (501 — use pyx-memory dashboard) |
-| `GET`    | `/api/memory/query-as-of`                     | Bi-temporal query (501 — use pyx-memory server directly) |
 
 ### Memory Graph Routes
 
@@ -512,8 +514,6 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | `GET`    | `/api/memory/graph/nodes`         | List graph nodes (filter by name, type, limit) |
 | `GET`    | `/api/memory/graph/edges`         | Graph stats (node/edge counts)  |
 | `POST`   | `/api/memory/graph/query`         | Query the graph (traverse by nodeId + depth) |
-
-> **Note:** Graph write operations (`POST /nodes`, `DELETE /nodes/:id`, `POST /relationships`) and bulk relationship listing are registered as routes but return `501 Not Implemented`. Graph nodes and relationships are created automatically by the pyx-memory entity extraction pipeline.
 
 ### Cron Routes
 
@@ -542,7 +542,8 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | -------- | ----------------------------- | ----------------------------- |
 | `GET`    | `/api/backends/status`        | Status of all backends        |
 | `GET`    | `/api/backends/options`       | Config options per backend    |
-| `PUT`    | `/api/backends/:name/api-key` | Update backend API key        |
+| `PUT`    | `/api/backends/api-key`       | Update backend API key (name in body) |
+| `PUT`    | `/api/backends/:name/api-key` | Update backend API key (name in path) |
 | `POST`   | `/api/backends/:name/logout`  | Logout from backend           |
 
 ---
