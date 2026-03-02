@@ -1,6 +1,5 @@
 import type { AIBackend, BackendStatus } from './a2a.ts';
 import type { AgentId, Timestamp } from './base.ts';
-import type { PlatformConfig } from './config.ts';
 import type { CronWorkflow } from './cron.ts';
 
 export interface ApiResponse<T> {
@@ -62,8 +61,6 @@ export interface UpdateCronRequest {
   enabled?: boolean;
   workflow?: CronWorkflow;
 }
-
-export type UpdateConfigRequest = Partial<PlatformConfig>;
 
 export interface BackendStatusResponse {
   defaultBackend: AIBackend;

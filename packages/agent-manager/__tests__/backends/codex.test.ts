@@ -48,7 +48,7 @@ describe('CodexBackend', () => {
       const status = await backend.getStatus();
       expect(status.authenticated).toBe(true);
       expect(status.authMode).toBe('api_key');
-      expect(status.apiKeyMasked).toBe('sk-...9012');
+      expect(status.apiKeyMasked).toBe('...9012');
     });
 
     test('reports configured when OPENAI_API_KEY is set', async () => {

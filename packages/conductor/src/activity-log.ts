@@ -1,5 +1,5 @@
-import type { ActivityEntry, ActivityType, AgentId } from '@autonomy/shared';
 import crypto from 'node:crypto';
+import type { ActivityEntry, ActivityType, AgentId } from '@autonomy/shared';
 
 const DEFAULT_MAX_SIZE = 1000;
 

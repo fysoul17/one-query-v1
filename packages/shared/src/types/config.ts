@@ -8,18 +8,6 @@ export const RuntimeMode = {
 } as const;
 export type RuntimeMode = (typeof RuntimeMode)[keyof typeof RuntimeMode];
 
-export interface PlatformConfig {
-  backend: AIBackend;
-  apiKeys: Record<string, string>;
-  defaultModel?: string;
-  idleTimeoutMs: number;
-  maxAgents: number;
-  memory: {
-    vectorProvider: VectorProvider;
-    qdrantUrl?: string;
-  };
-}
-
 export interface EnvironmentConfig {
   ANTHROPIC_API_KEY?: string;
   DATA_DIR: string;

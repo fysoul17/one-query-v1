@@ -4,7 +4,6 @@
 
 export {
   DuplicatePluginError,
-  HookError,
   PluginError,
   PluginNotFoundError,
 } from './errors.ts';

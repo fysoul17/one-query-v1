@@ -1,4 +1,5 @@
 import type { StreamEvent } from '@autonomy/shared';
+import { DEFAULTS } from '@autonomy/shared';
 
 /**
  * Discriminated union for parsed NDJSON lines.
@@ -72,7 +73,7 @@ export function* finalizeProcess(
   hasContent: boolean,
 ): Generator<StreamEvent> {
   if (exitCode !== 0) {
-    const stderr = stderrText.trim().slice(0, 500);
+    const stderr = stderrText.trim().slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH);
     yield {
       type: 'error',
       error: stderr
@@ -82,7 +83,7 @@ export function* finalizeProcess(
   } else if (!hasContent && stderrText.trim()) {
     yield {
       type: 'error',
-      error: `Backend produced no output: ${stderrText.trim().slice(0, 500)}`,
+      error: `Backend produced no output: ${stderrText.trim().slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH)}`,
     };
   } else {
     yield { type: 'complete' };

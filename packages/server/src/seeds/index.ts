@@ -3,7 +3,7 @@
 import type { AgentPool } from '@autonomy/agent-manager';
 import type { CronManager } from '@autonomy/cron-manager';
 import type { AgentDefinition, AgentStoreInterface } from '@autonomy/shared';
-import { Logger } from '@autonomy/shared';
+import { getErrorDetail, Logger } from '@autonomy/shared';
 
 const logger = new Logger({ context: { source: 'seeds' } });
 
@@ -139,7 +139,7 @@ export async function runSeeds(_pool: AgentPool, store: AgentStoreInterface): Pr
         logger.info('Seeded agent', { id: agent.id, name: agent.name });
       }
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorDetail(error);
       logger.warn('Seed failed', { id: agent.id, error: detail });
     }
   }
@@ -181,7 +181,7 @@ export async function runCronSeeds(cronManager: CronManager): Promise<void> {
     });
     logger.info('Cron seed created', { name: CRON_SEED_NAME });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = getErrorDetail(error);
     logger.warn('Cron seed failed', { name: CRON_SEED_NAME, error: detail });
   }
 }

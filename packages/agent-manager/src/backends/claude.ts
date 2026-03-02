@@ -3,10 +3,17 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  DEFAULTS,
+  getErrorDetail,
   Logger,
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
+import {
+  buildSafeEnv as buildSafeEnvBase,
+  checkCliAuth,
+  getCliBackendStatus,
+} from './shared-utils.ts';
 import type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
 
 const claudeLogger = new Logger({ context: { source: 'claude-backend' } });
@@ -34,12 +41,6 @@ async function readBoundedStderr(stream: ReadableStream): Promise<string> {
     .slice(0, MAX_STDERR_BYTES);
 }
 
-/** Mask an API key: show only last 4 chars. Returns undefined for short/missing keys. */
-function maskApiKey(key: string | undefined): string | undefined {
-  if (!key || key.length < 12) return undefined;
-  return `sk-...${key.slice(-4)}`;
-}
-
 /** Env vars allowlisted for child processes. Only forward what claude CLI needs. */
 const ALLOWED_ENV_KEYS = [
   'PATH',
@@ -59,23 +60,19 @@ const ALLOWED_ENV_KEYS = [
   'XDG_CACHE_HOME',
   // macOS-specific
   'DISPLAY',
-];
+] as const;
 
 function buildSafeEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const key of ALLOWED_ENV_KEYS) {
-    const val = process.env[key];
-    if (val !== undefined) env[key] = val;
-  }
-  // Forward CLAUDE_* env vars but exclude vars that block nested sessions
-  for (const [key, val] of Object.entries(process.env)) {
-    if (key.startsWith('CLAUDE_') && val !== undefined) {
-      env[key] = val;
+  return buildSafeEnvBase(ALLOWED_ENV_KEYS, undefined, (env) => {
+    // Forward CLAUDE_* env vars but exclude vars that block nested sessions
+    for (const [key, val] of Object.entries(process.env)) {
+      if (key.startsWith('CLAUDE_') && val !== undefined) {
+        env[key] = val;
+      }
     }
-  }
-  // Never forward CLAUDECODE — it prevents the CLI from launching as a child process
-  delete env.CLAUDECODE;
-  return env;
+    // Never forward CLAUDECODE — it prevents the CLI from launching as a child process
+    delete env.CLAUDECODE;
+  });
 }
 
 class ClaudeProcess implements BackendProcess {
@@ -310,7 +307,7 @@ class ClaudeProcess implements BackendProcess {
       // streamDone means the 'result' event already yielded complete/error — don't double-emit.
       if (!streamDone) {
         if (exitCode !== 0) {
-          const stderr = stderrText.trim().slice(0, 500);
+          const stderr = stderrText.trim().slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH);
           claudeLogger.warn('Backend process failed', { exitCode, stderr });
           // Include stderr summary in error so it reaches debug console via DebugBus.
           // The websocket layer sanitizes what the chat client sees.
@@ -321,7 +318,7 @@ class ClaudeProcess implements BackendProcess {
               : `Backend process exited with code ${exitCode}`,
           };
         } else if (!hasContent && stderrText.trim()) {
-          const stderr = stderrText.trim().slice(0, 500);
+          const stderr = stderrText.trim().slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH);
           claudeLogger.warn('Backend produced no output', { stderr });
           yield {
             type: 'error',
@@ -332,8 +329,7 @@ class ClaudeProcess implements BackendProcess {
         }
       }
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      yield { type: 'error', error: msg };
+      yield { type: 'error', error: getErrorDetail(error) };
     } finally {
       signal?.removeEventListener('abort', onAbort);
       reader.releaseLock();
@@ -462,7 +458,7 @@ class ClaudeProcess implements BackendProcess {
         if (isError) {
           const result =
             typeof parsed.result === 'string'
-              ? parsed.result.trim().slice(0, 500)
+              ? parsed.result.trim().slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH)
               : 'Error during execution';
           return [{ type: 'error', error: result }];
         }
@@ -579,80 +575,18 @@ export class ClaudeBackend implements CLIBackend {
     }
   }
 
-  /**
-   * Check actual CLI login state by running `claude auth status --json`.
-   * Returns true only when the JSON response contains `{"loggedIn": true}`.
-   * Safe to call only when the CLI binary is known to be on PATH.
-   */
-  private async checkCliAuth(): Promise<boolean> {
-    const env = buildSafeEnv();
-    try {
-      const proc = Bun.spawn(['claude', 'auth', 'status', '--json'], {
-        cwd: process.cwd(),
-        env,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-
-      // Race against a 5-second timeout to avoid blocking status checks.
-      // Keep a handle so we can cancel the timer if the process exits first.
-      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-      const exitCode = await Promise.race([
-        proc.exited,
-        new Promise<number>((resolve) => {
-          timeoutHandle = setTimeout(() => {
-            try {
-              proc.kill();
-            } catch {
-              // ignore kill errors
-            }
-            resolve(1);
-          }, 5000);
-        }),
-      ]);
-      clearTimeout(timeoutHandle);
-
-      if (exitCode !== 0) return false;
-
-      const stdout = await new Response(proc.stdout as ReadableStream).text();
-      const parsed = JSON.parse(stdout.trim()) as { loggedIn?: boolean };
-      return parsed.loggedIn === true;
-    } catch {
-      return false;
-    }
-  }
-
   async getStatus(): Promise<BackendStatus> {
-    // Check if claude CLI is on PATH
-    const cliPath = typeof Bun !== 'undefined' ? Bun.which('claude') : null;
-    const available = cliPath !== null;
-
-    // API key takes precedence — no CLI auth check needed
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    const hasApiKey = !!apiKey;
-
-    // Check actual CLI authentication only when CLI is available and no API key is set
-    const cliAuthenticated = available && !hasApiKey ? await this.checkCliAuth() : false;
-
-    let authMode: BackendStatus['authMode'] = 'none';
-    if (hasApiKey) {
-      authMode = 'api_key';
-    } else if (cliAuthenticated) {
-      authMode = 'cli_login';
-    }
-
-    const authenticated = hasApiKey || cliAuthenticated;
-    const configured = authenticated;
-
-    return {
+    return getCliBackendStatus({
       name: this.name,
-      available,
-      configured,
-      authenticated,
-      apiKeyMasked: maskApiKey(apiKey),
-      authMode,
+      cliBinary: 'claude',
+      apiKeyEnvVars: ['ANTHROPIC_API_KEY'],
       capabilities: this.capabilities,
-      error: available ? undefined : 'claude CLI not found on PATH',
-    };
+      checkAuth: () =>
+        checkCliAuth(['claude', 'auth', 'status', '--json'], buildSafeEnv(), (exitCode, stdout) => {
+          if (exitCode !== 0) return false;
+          const parsed = JSON.parse(stdout.trim()) as { loggedIn?: boolean };
+          return parsed.loggedIn === true;
+        }),
+    });
   }
 }

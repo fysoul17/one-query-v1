@@ -40,7 +40,7 @@ class MockBackend {
       configured: true,
       authenticated: true,
       authMode: hasApiKey ? 'api_key' : 'cli_login',
-      apiKeyMasked: hasApiKey ? `sk-...${apiKey?.slice(-4)}` : undefined,
+      apiKeyMasked: hasApiKey ? `...${apiKey?.slice(-4)}` : undefined,
       capabilities: this.capabilities,
     };
   }

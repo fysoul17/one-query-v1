@@ -19,7 +19,13 @@ class MockMemoryWithIngest {
   // MemoryInterface stubs
   async initialize() {}
   async store(entry: { content: string; type: string }) {
-    return { id: '1', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
+    return {
+      id: '1',
+      content: entry.content,
+      type: entry.type,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
   }
   async search() {
     return { entries: [], totalCount: 0, strategy: 'naive' as const };
@@ -46,7 +52,13 @@ class MockMemoryWithIngest {
 class MockMemoryNoIngest {
   async initialize() {}
   async store(entry: { content: string; type: string }) {
-    return { id: '', content: entry.content, type: entry.type, metadata: {}, createdAt: new Date().toISOString() };
+    return {
+      id: '',
+      content: entry.content,
+      type: entry.type,
+      metadata: {},
+      createdAt: new Date().toISOString(),
+    };
   }
   async search() {
     return { entries: [], totalCount: 0, strategy: 'naive' as const };

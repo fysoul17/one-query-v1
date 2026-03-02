@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { BadRequestError, InternalError, NotFoundError, ServerError } from '../src/errors.ts';
+import { BadRequestError, NotFoundError, ServerError } from '../src/errors.ts';
 
 describe('ServerError', () => {
   test('has default status code 500', () => {
@@ -46,18 +46,5 @@ describe('NotFoundError', () => {
   test('has default message', () => {
     const err = new NotFoundError();
     expect(err.message).toBe('Not found');
-  });
-});
-
-describe('InternalError', () => {
-  test('has status 500', () => {
-    const err = new InternalError('crash');
-    expect(err.statusCode).toBe(500);
-    expect(err.name).toBe('InternalError');
-  });
-
-  test('has default message', () => {
-    const err = new InternalError();
-    expect(err.message).toBe('Internal server error');
   });
 });

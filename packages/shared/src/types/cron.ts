@@ -1,6 +1,6 @@
 import type { AgentId, Timestamp } from './base.ts';
 
-export interface CronWorkflowStep {
+interface CronWorkflowStep {
   agentId: AgentId;
   task: string;
 }
@@ -19,11 +19,6 @@ export interface CronEntry {
   workflow: CronWorkflow;
   createdBy: string;
   createdAt: Timestamp;
-}
-
-export interface CronConfig {
-  version: number;
-  crons: CronEntry[];
 }
 
 export interface CronExecutionLog {

@@ -3,6 +3,7 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  getErrorDetail,
   Logger,
   type StreamEvent,
 } from '@autonomy/shared';
@@ -152,7 +153,7 @@ class GeminiProcess implements BackendProcess {
         yield* finalizeProcess(exitCode, stderrText, hasContent);
       }
     } catch (error) {
-      yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
+      yield { type: 'error', error: getErrorDetail(error) };
     } finally {
       signal?.removeEventListener('abort', onAbort);
     }

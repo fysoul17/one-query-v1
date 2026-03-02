@@ -15,4 +15,6 @@ export const DEFAULTS = {
   RATE_LIMIT_WINDOW_MS: 60_000,
   TRUST_PROXY: false,
   STREAM_TIMEOUT_MS: 300_000,
+  /** Max characters to include in error preview strings (e.g. stderr truncation). */
+  MAX_ERROR_PREVIEW_LENGTH: 500,
 } as const;

@@ -14,7 +14,7 @@ import {
 import { Conductor } from '@autonomy/conductor';
 import { CronManager } from '@autonomy/cron-manager';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
-import { DebugEventCategory, DebugEventLevel, Logger } from '@autonomy/shared';
+import { DebugEventCategory, DebugEventLevel, getErrorDetail, Logger } from '@autonomy/shared';
 import { MemoryClient } from '@pyx-memory/client';
 import type { ServerWebSocket } from 'bun';
 import { AgentStore } from './agent-store.ts';
@@ -41,322 +41,36 @@ import { SessionStore } from './session-store.ts';
 import { createTerminalWebSocketHandler, type TerminalWSData } from './terminal-ws.ts';
 import { createWebSocketHandler, type WSData } from './websocket.ts';
 
-export { parseEnvConfig } from './config.ts';
-export { ConfigManager, ConfigUpdateError } from './config-manager.ts';
-export { DebugBus, makeDebugEvent } from './debug-bus.ts';
-export { createDebugWebSocketHandler, type DebugWSData } from './debug-websocket.ts';
-// --- Exports for library use ---
-export {
-  BadRequestError,
-  InternalError,
-  NotFoundError,
-  NotImplementedError,
-  ServerError,
-} from './errors.ts';
-export { createMemoryLLMCallback } from './memory-llm-bridge.ts';
-export {
-  corsHeaders,
-  errorResponse,
-  handlePreflight,
-  jsonResponse,
-  parseJsonBody,
-} from './middleware.ts';
-export { RateLimiter, type RateLimiterConfig, type RateLimitResult } from './rate-limiter.ts';
-export { type RouteHandler, type RouteParams, Router } from './router.ts';
-export { createActivityRoute } from './routes/activity.ts';
-export { createAgentRoutes } from './routes/agents.ts';
-export { createBackendRoutes } from './routes/backends.ts';
-export { createConfigRoutes } from './routes/config.ts';
-export { createCronRoutes } from './routes/crons.ts';
-export { createGraphRoutes } from './routes/graph.ts';
-export { createHealthRoute } from './routes/health.ts';
-export { createLifecycleRoutes } from './routes/lifecycle.ts';
-export { createMemoryRoutes } from './routes/memory.ts';
-export { createSessionRoutes } from './routes/sessions.ts';
-export { SecretStore } from './secret-store.ts';
-export { SessionStore } from './session-store.ts';
-export { createWebSocketHandler, type WSData } from './websocket.ts';
-
 // --- Bootstrap (only when run directly) ---
 
 // --- Combined WS data type for Bun.serve ---
 
 type CombinedWSData = (WSData & { type: 'chat' }) | DebugWSData | TerminalWSData;
 
-async function main() {
-  const startTime = Date.now();
-  const config = parseEnvConfig();
-  const logger = new Logger({ level: config.LOG_LEVEL, context: { source: 'server' } });
-  const configManager = new ConfigManager(config);
-  configManager.initialize();
-  const secretStore = new SecretStore(config.DATA_DIR);
-  secretStore.initialize();
-  const env = typeof Bun !== 'undefined' ? Bun.env : process.env;
-  const debugWsEnabled = env.ENABLE_DEBUG_WS !== 'false';
-  const debugWsToken = env.DEBUG_WS_TOKEN;
+interface RouteDeps {
+  conductor: Conductor;
+  pool: AgentPool;
+  memory: MemoryClient | DisabledMemory;
+  cronManager: CronManager;
+  configManager: ConfigManager;
+  registry: DefaultBackendRegistry;
+  secretStore: SecretStore;
+  sessionStore: SessionStore;
+  startTime: number;
+  enableAdvancedMemory: boolean;
+}
 
-  logger.info('Server starting', { port: config.PORT, backend: config.AI_BACKEND });
-
-  // Initialize DebugBus
-  const debugBus = new DebugBus(500);
-
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.SYSTEM,
-      level: DebugEventLevel.INFO,
-      source: 'server.startup',
-      message: 'Server starting',
-    }),
-  );
-
-  // Initialize Runtime Database (SQLite for sessions, agents)
-  const { mkdirSync, existsSync } = await import('node:fs');
-  if (!existsSync(config.DATA_DIR)) {
-    mkdirSync(config.DATA_DIR, { recursive: true });
-  }
-  // Ensure CLI config directories exist (for existing Docker volumes that predate this change)
-  for (const subdir of ['claude', 'codex', 'gemini', 'pi']) {
-    const cliConfigDir = join(config.DATA_DIR, 'cli-config', subdir);
-    if (!existsSync(cliConfigDir)) {
-      mkdirSync(cliConfigDir, { recursive: true });
-    }
-  }
-  const runtimeDb = new Database(join(config.DATA_DIR, 'runtime.sqlite'));
-  runtimeDb.exec('PRAGMA journal_mode = WAL;');
-  const sessionStore = new SessionStore(runtimeDb);
-  const agentStore = new AgentStore(runtimeDb);
-  logger.info('Runtime database initialized');
-
-  // Initialize Backend Registry
-  const registry = new DefaultBackendRegistry(config.AI_BACKEND);
-  registry.register(new ClaudeBackend());
-  registry.register(new CodexBackend());
-  registry.register(new GeminiBackend());
-  registry.register(new PiBackend());
-  registry.register(new OllamaBackend());
-
-  // Initialize Memory — consumer pattern: MemoryClient when MEMORY_URL is set, DisabledMemory otherwise.
-  // All memory features (graph, lifecycle, RAG) are provided by the pyx-memory server.
-  let memory: MemoryClient | DisabledMemory;
-  if (config.MEMORY_URL) {
-    const client = new MemoryClient(config.MEMORY_URL);
-    try {
-      await client.initialize();
-      memory = client;
-      logger.info('Memory connected', { url: config.MEMORY_URL });
-    } catch (error) {
-      logger.warn('Memory server unreachable — running without memory', {
-        error: error instanceof Error ? error.message : String(error),
-        url: config.MEMORY_URL,
-      });
-      memory = new DisabledMemory();
-      await memory.initialize();
-    }
-  } else {
-    memory = new DisabledMemory();
-    await memory.initialize();
-  }
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.MEMORY,
-      level: DebugEventLevel.INFO,
-      source: 'memory.init',
-      message:
-        memory instanceof DisabledMemory
-          ? 'Memory disabled — no MEMORY_URL configured'
-          : `Memory connected to ${config.MEMORY_URL}`,
-    }),
-  );
-
-  // Initialize Plugin System
-  const hookRegistry = new HookRegistry({
-    onError: (hookType, pluginId, error) => {
-      logger.warn('Plugin hook error', { hookType, pluginId, error: error.message });
-      debugBus.emit(
-        makeDebugEvent({
-          category: DebugEventCategory.SYSTEM,
-          level: DebugEventLevel.WARN,
-          source: 'plugin.hook_error',
-          message: `Hook "${hookType}" error in plugin "${pluginId ?? 'unknown'}": ${error.message}`,
-        }),
-      );
-    },
-  });
-  const pluginManager = new PluginManager(hookRegistry);
-  logger.info('Plugin system initialized');
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.SYSTEM,
-      level: DebugEventLevel.INFO,
-      source: 'plugin-system.init',
-      message: 'Plugin system initialized',
-    }),
-  );
-
-  // Initialize Agent Pool (with registry for per-agent backend selection)
-  const workspaceDir = join(config.DATA_DIR, 'workspaces');
-  mkdirSync(workspaceDir, { recursive: true });
-  const pool = new AgentPool(registry, {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
-    hookRegistry,
-    store: agentStore,
-    workspaceDir,
-  });
-  logger.info('Agent pool created', {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
-  });
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.AGENT,
-      level: DebugEventLevel.INFO,
-      source: 'agent-pool.init',
-      message: `Agent pool created (max=${config.MAX_AGENTS}, idleTimeout=${config.IDLE_TIMEOUT_MS}ms)`,
-    }),
-  );
-
-  // Restore persisted agents from SQLite
-  await pool.restore();
-  logger.info('Persisted agents restored');
-
-  // Resolve fallback backend (if configured)
-  const fallbackBackend = config.FALLBACK_BACKEND
-    ? registry.get(config.FALLBACK_BACKEND)
-    : undefined;
-  if (fallbackBackend) {
-    logger.info('Fallback backend configured', { fallback: config.FALLBACK_BACKEND });
-  }
-
-  // Initialize Conductor (with default backend for direct AI responses)
-  const conductor = new Conductor(pool, memory, registry.getDefault(), {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
-    hookRegistry,
-    fallbackBackend,
-  });
-  await conductor.initialize();
-  logger.info('Conductor initialized');
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.CONDUCTOR,
-      level: DebugEventLevel.INFO,
-      source: 'conductor.init',
-      message: 'Conductor initialized',
-    }),
-  );
-
-  // Seed pre-configured agents (idempotent)
-  await runSeeds(pool, agentStore);
-  // Restore newly seeded agents into the pool (restore() skips already-loaded agents)
-  await pool.restore();
-  logger.info('Agent seeds applied');
-
-  // Initialize CronManager
-  const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
-  await cronManager.initialize();
-  conductor.setCronManager(cronManager);
-  logger.info('CronManager initialized');
-
-  // Seed cron jobs (idempotent)
-  await runCronSeeds(cronManager);
-  logger.info('Cron seeds applied');
-
-  // Memory lifecycle: periodic consolidation and decay
-  const lifecycleIntervals: ReturnType<typeof setInterval>[] = [];
-  if (isExtended(memory)) {
-    let consolidating = false;
-    let decaying = false;
-
-    // Consolidation every 30 minutes (with overlap protection)
-    lifecycleIntervals.push(
-      setInterval(
-        async () => {
-          if (consolidating) return;
-          consolidating = true;
-          try {
-            const result = await memory.consolidate();
-            logger.info('Memory consolidation completed', {
-              processed: result.entriesProcessed,
-              merged: result.entriesMerged,
-              archived: result.entriesArchived,
-              durationMs: result.durationMs,
-            });
-          } catch (error) {
-            logger.warn('Memory consolidation failed', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          } finally {
-            consolidating = false;
-          }
-        },
-        30 * 60 * 1000,
-      ),
-    );
-
-    // Decay every 24 hours (with overlap protection)
-    lifecycleIntervals.push(
-      setInterval(
-        async () => {
-          if (decaying) return;
-          decaying = true;
-          try {
-            const archived = await memory.runDecay();
-            logger.info('Memory decay completed', { archived });
-          } catch (error) {
-            logger.warn('Memory decay failed', {
-              error: error instanceof Error ? error.message : String(error),
-            });
-          } finally {
-            decaying = false;
-          }
-        },
-        24 * 60 * 60 * 1000,
-      ),
-    );
-
-    logger.info('Memory lifecycle timers registered (consolidation: 30m, decay: 24h)');
-  }
-
-  // Initialize Rate Limiter
-  const rateLimiter = new RateLimiter({
-    maxRequests: config.RATE_LIMIT_MAX,
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    trustProxy: config.TRUST_PROXY,
-  });
-  logger.info('Rate limiter initialized', {
-    maxRequests: config.RATE_LIMIT_MAX,
-    windowMs: config.RATE_LIMIT_WINDOW_MS,
-    trustProxy: config.TRUST_PROXY,
-  });
-
-  // Create WebSocket handlers
-  const ws = createWebSocketHandler(
-    conductor,
-    debugBus,
-    sessionStore,
-    config.STREAM_TIMEOUT_MS,
-    registry,
-  );
-  const debugWs = createDebugWebSocketHandler(debugBus);
-  const terminalWs = createTerminalWebSocketHandler();
-  if (debugWsEnabled) {
-    logger.info('Debug WebSocket enabled', { path: '/ws/debug', tokenProtected: !!debugWsToken });
-  }
-
-  // Build HTTP router
-  const router = new Router(config.CORS_ORIGIN);
-
-  const healthRoute = createHealthRoute(conductor, memory, startTime, registry);
-  const agentRoutes = createAgentRoutes(conductor, pool);
-  const memoryRoutes = createMemoryRoutes(memory);
-  const lifecycleRoutes = createLifecycleRoutes(memory, config.ENABLE_ADVANCED_MEMORY);
-  const graphRoutes = createGraphRoutes(memory);
-  const cronRoutes = createCronRoutes(cronManager);
-  const activityRoute = createActivityRoute(conductor);
-  const configRoutes = createConfigRoutes(configManager);
-  const backendRoutes = createBackendRoutes(registry, secretStore);
-  const sessionRoutes = createSessionRoutes(sessionStore, memory);
+function registerRoutes(router: Router, deps: RouteDeps): void {
+  const healthRoute = createHealthRoute(deps.conductor, deps.memory, deps.startTime, deps.registry);
+  const agentRoutes = createAgentRoutes(deps.conductor, deps.pool);
+  const memoryRoutes = createMemoryRoutes(deps.memory);
+  const lifecycleRoutes = createLifecycleRoutes(deps.memory, deps.enableAdvancedMemory);
+  const graphRoutes = createGraphRoutes(deps.memory);
+  const cronRoutes = createCronRoutes(deps.cronManager);
+  const activityRoute = createActivityRoute(deps.conductor);
+  const configRoutes = createConfigRoutes(deps.configManager);
+  const backendRoutes = createBackendRoutes(deps.registry, deps.secretStore);
+  const sessionRoutes = createSessionRoutes(deps.sessionStore, deps.memory);
 
   router.get('/health', healthRoute);
 
@@ -398,7 +112,6 @@ async function main() {
   router.get('/api/config', configRoutes.get);
   router.put('/api/config', configRoutes.update);
 
-  // Backend routes
   router.get('/api/backends/status', backendRoutes.status);
   router.get('/api/backends/options', backendRoutes.options);
   router.put('/api/backends/api-key', (req: Request) => backendRoutes.updateApiKey(req));
@@ -410,12 +123,292 @@ async function main() {
     backendRoutes.logout(params.name!),
   );
 
-  // Session routes
   router.get('/api/sessions', sessionRoutes.list);
   router.post('/api/sessions', sessionRoutes.create);
   router.get('/api/sessions/:id', sessionRoutes.get);
   router.put('/api/sessions/:id', sessionRoutes.update);
   router.delete('/api/sessions/:id', sessionRoutes.remove);
+}
+
+function startMemoryLifecycle(
+  memory: MemoryClient | DisabledMemory,
+  logger: Logger,
+): ReturnType<typeof setInterval>[] {
+  const intervals: ReturnType<typeof setInterval>[] = [];
+  if (!isExtended(memory)) return intervals;
+
+  let consolidating = false;
+  let decaying = false;
+
+  intervals.push(
+    setInterval(
+      async () => {
+        if (consolidating) return;
+        consolidating = true;
+        try {
+          const result = await memory.consolidate();
+          logger.info('Memory consolidation completed', {
+            processed: result.entriesProcessed,
+            merged: result.entriesMerged,
+            archived: result.entriesArchived,
+            durationMs: result.durationMs,
+          });
+        } catch (error) {
+          logger.warn('Memory consolidation failed', {
+            error: getErrorDetail(error),
+          });
+        } finally {
+          consolidating = false;
+        }
+      },
+      30 * 60 * 1000,
+    ),
+  );
+
+  intervals.push(
+    setInterval(
+      async () => {
+        if (decaying) return;
+        decaying = true;
+        try {
+          const archived = await memory.runDecay();
+          logger.info('Memory decay completed', { archived });
+        } catch (error) {
+          logger.warn('Memory decay failed', {
+            error: getErrorDetail(error),
+          });
+        } finally {
+          decaying = false;
+        }
+      },
+      24 * 60 * 60 * 1000,
+    ),
+  );
+
+  logger.info('Memory lifecycle timers registered (consolidation: 30m, decay: 24h)');
+  return intervals;
+}
+
+async function initMemory(
+  memoryUrl: string | undefined,
+  logger: Logger,
+): Promise<MemoryClient | DisabledMemory> {
+  if (memoryUrl) {
+    const client = new MemoryClient(memoryUrl);
+    try {
+      await client.initialize();
+      logger.info('Memory connected', { url: memoryUrl });
+      return client;
+    } catch (error) {
+      logger.warn('Memory server unreachable — running without memory', {
+        error: getErrorDetail(error),
+        url: memoryUrl,
+      });
+    }
+  }
+  const disabled = new DisabledMemory();
+  await disabled.initialize();
+  return disabled;
+}
+
+async function main() {
+  const startTime = Date.now();
+  const config = parseEnvConfig();
+  const logger = new Logger({ level: config.LOG_LEVEL, context: { source: 'server' } });
+  const configManager = new ConfigManager(config);
+  configManager.initialize();
+  const secretStore = new SecretStore(config.DATA_DIR);
+  secretStore.initialize();
+  const env = typeof Bun !== 'undefined' ? Bun.env : process.env;
+  const debugWsEnabled = env.ENABLE_DEBUG_WS !== 'false';
+  const debugWsToken = env.DEBUG_WS_TOKEN;
+
+  logger.info('Server starting', { port: config.PORT, backend: config.AI_BACKEND });
+
+  // Initialize DebugBus
+  const debugBus = new DebugBus(500);
+
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.SYSTEM,
+      level: DebugEventLevel.INFO,
+      source: 'server.startup',
+      message: 'Server starting',
+    }),
+  );
+
+  // Initialize Runtime Database (SQLite for sessions, agents)
+  const { mkdirSync, existsSync } = await import('node:fs');
+  if (!existsSync(config.DATA_DIR)) {
+    mkdirSync(config.DATA_DIR, { recursive: true });
+  }
+  for (const subdir of ['claude', 'codex', 'gemini', 'pi']) {
+    const cliConfigDir = join(config.DATA_DIR, 'cli-config', subdir);
+    if (!existsSync(cliConfigDir)) {
+      mkdirSync(cliConfigDir, { recursive: true });
+    }
+  }
+  const runtimeDb = new Database(join(config.DATA_DIR, 'runtime.sqlite'));
+  runtimeDb.exec('PRAGMA journal_mode = WAL;');
+  const sessionStore = new SessionStore(runtimeDb);
+  const agentStore = new AgentStore(runtimeDb);
+  logger.info('Runtime database initialized');
+
+  // Initialize Backend Registry
+  const registry = new DefaultBackendRegistry(config.AI_BACKEND);
+  registry.register(new ClaudeBackend());
+  registry.register(new CodexBackend());
+  registry.register(new GeminiBackend());
+  registry.register(new PiBackend());
+  registry.register(new OllamaBackend());
+
+  // Initialize Memory
+  const memory = await initMemory(config.MEMORY_URL, logger);
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.MEMORY,
+      level: DebugEventLevel.INFO,
+      source: 'memory.init',
+      message:
+        memory instanceof DisabledMemory
+          ? 'Memory disabled — no MEMORY_URL configured'
+          : `Memory connected to ${config.MEMORY_URL}`,
+    }),
+  );
+
+  // Initialize Plugin System
+  const hookRegistry = new HookRegistry({
+    onError: (hookType, pluginId, error) => {
+      logger.warn('Plugin hook error', { hookType, pluginId, error: error.message });
+      debugBus.emit(
+        makeDebugEvent({
+          category: DebugEventCategory.SYSTEM,
+          level: DebugEventLevel.WARN,
+          source: 'plugin.hook_error',
+          message: `Hook "${hookType}" error in plugin "${pluginId ?? 'unknown'}": ${error.message}`,
+        }),
+      );
+    },
+  });
+  const pluginManager = new PluginManager(hookRegistry);
+  logger.info('Plugin system initialized');
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.SYSTEM,
+      level: DebugEventLevel.INFO,
+      source: 'plugin-system.init',
+      message: 'Plugin system initialized',
+    }),
+  );
+
+  // Initialize Agent Pool
+  const workspaceDir = join(config.DATA_DIR, 'workspaces');
+  mkdirSync(workspaceDir, { recursive: true });
+  const pool = new AgentPool(registry, {
+    maxAgents: config.MAX_AGENTS,
+    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+    hookRegistry,
+    store: agentStore,
+    workspaceDir,
+  });
+  logger.info('Agent pool created', {
+    maxAgents: config.MAX_AGENTS,
+    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+  });
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.AGENT,
+      level: DebugEventLevel.INFO,
+      source: 'agent-pool.init',
+      message: `Agent pool created (max=${config.MAX_AGENTS}, idleTimeout=${config.IDLE_TIMEOUT_MS}ms)`,
+    }),
+  );
+
+  await pool.restore();
+  logger.info('Persisted agents restored');
+
+  // Resolve fallback backend
+  const fallbackBackend = config.FALLBACK_BACKEND
+    ? registry.get(config.FALLBACK_BACKEND)
+    : undefined;
+  if (fallbackBackend) {
+    logger.info('Fallback backend configured', { fallback: config.FALLBACK_BACKEND });
+  }
+
+  // Initialize Conductor
+  const conductor = new Conductor(pool, memory, registry.getDefault(), {
+    maxAgents: config.MAX_AGENTS,
+    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+    hookRegistry,
+    fallbackBackend,
+  });
+  await conductor.initialize();
+  logger.info('Conductor initialized');
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.CONDUCTOR,
+      level: DebugEventLevel.INFO,
+      source: 'conductor.init',
+      message: 'Conductor initialized',
+    }),
+  );
+
+  // Seed agents and crons
+  await runSeeds(pool, agentStore);
+  await pool.restore();
+  logger.info('Agent seeds applied');
+
+  const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
+  await cronManager.initialize();
+  conductor.setCronManager(cronManager);
+  logger.info('CronManager initialized');
+
+  await runCronSeeds(cronManager);
+  logger.info('Cron seeds applied');
+
+  // Memory lifecycle timers
+  const lifecycleIntervals = startMemoryLifecycle(memory, logger);
+
+  // Initialize Rate Limiter
+  const rateLimiter = new RateLimiter({
+    maxRequests: config.RATE_LIMIT_MAX,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    trustProxy: config.TRUST_PROXY,
+  });
+  logger.info('Rate limiter initialized', {
+    maxRequests: config.RATE_LIMIT_MAX,
+    windowMs: config.RATE_LIMIT_WINDOW_MS,
+    trustProxy: config.TRUST_PROXY,
+  });
+
+  // Create WebSocket handlers
+  const ws = createWebSocketHandler(
+    conductor,
+    debugBus,
+    sessionStore,
+    config.STREAM_TIMEOUT_MS,
+    registry,
+  );
+  const debugWs = createDebugWebSocketHandler(debugBus);
+  const terminalWs = createTerminalWebSocketHandler();
+  if (debugWsEnabled) {
+    logger.info('Debug WebSocket enabled', { path: '/ws/debug', tokenProtected: !!debugWsToken });
+  }
+
+  // Build HTTP router
+  const router = new Router(config.CORS_ORIGIN);
+  registerRoutes(router, {
+    conductor,
+    pool,
+    memory,
+    cronManager,
+    configManager,
+    registry,
+    secretStore,
+    sessionStore,
+    startTime,
+    enableAdvancedMemory: config.ENABLE_ADVANCED_MEMORY,
+  });
 
   function handleDebugUpgrade(
     req: Request,
@@ -571,7 +564,7 @@ if (isMainModule) {
   main().catch((error) => {
     const fatalLogger = new Logger({ level: 'error', context: { source: 'server' } });
     fatalLogger.error('Fatal error', {
-      error: error instanceof Error ? error.message : String(error),
+      error: getErrorDetail(error),
     });
     process.exit(1);
   });

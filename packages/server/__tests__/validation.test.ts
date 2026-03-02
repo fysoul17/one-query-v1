@@ -27,12 +27,8 @@ describe('validateMemoryType()', () => {
   });
 
   test('error message lists valid types', () => {
-    try {
-      validateMemoryType('invalid');
-    } catch (e) {
-      expect((e as BadRequestError).message).toContain('Invalid type');
-      expect((e as BadRequestError).message).toContain('long-term');
-    }
+    expect(() => validateMemoryType('invalid')).toThrow(/Invalid type/);
+    expect(() => validateMemoryType('invalid')).toThrow(/long-term/);
   });
 });
 
@@ -59,12 +55,8 @@ describe('validateRAGStrategy()', () => {
   });
 
   test('error message lists valid strategies', () => {
-    try {
-      validateRAGStrategy('invalid');
-    } catch (e) {
-      expect((e as BadRequestError).message).toContain('Invalid strategy');
-      expect((e as BadRequestError).message).toContain('naive');
-    }
+    expect(() => validateRAGStrategy('invalid')).toThrow(/Invalid strategy/);
+    expect(() => validateRAGStrategy('invalid')).toThrow(/naive/);
   });
 });
 
@@ -98,11 +90,7 @@ describe('validatePositiveInt()', () => {
   });
 
   test('error message includes field name', () => {
-    try {
-      validatePositiveInt('abc', 'limit', 10);
-    } catch (e) {
-      expect((e as BadRequestError).message).toContain('limit');
-      expect((e as BadRequestError).message).toContain('positive integer');
-    }
+    expect(() => validatePositiveInt('abc', 'limit', 10)).toThrow(/limit/);
+    expect(() => validatePositiveInt('abc', 'limit', 10)).toThrow(/positive integer/);
   });
 });

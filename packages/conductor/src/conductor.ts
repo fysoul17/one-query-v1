@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { AgentPool, BackendProcess, CLIBackend } from '@autonomy/agent-manager';
 import type { StreamEvent } from '@autonomy/shared';
 import {
@@ -17,7 +18,6 @@ import {
   RAGStrategy,
 } from '@autonomy/shared';
 import type { MemoryInterface } from '@pyx-memory/client';
-import crypto from 'node:crypto';
 import { ActivityLog } from './activity-log.ts';
 import {
   runAfterMemorySearchHook,
@@ -272,8 +272,7 @@ export class Conductor {
           yield event;
         }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        yield { type: 'error', error: msg };
+        yield { type: 'error', error: getErrorDetail(error) };
         return;
       }
       decisions.push({
@@ -329,8 +328,7 @@ export class Conductor {
           yield { type: 'complete' };
         }
       } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        yield { type: 'error', error: msg };
+        yield { type: 'error', error: getErrorDetail(error) };
         return;
       }
     }
@@ -770,7 +768,7 @@ export class Conductor {
       return result;
     } catch (error) {
       this.activityLog.record(ActivityType.ERROR, `Delegation to "${agentId}" failed`, agentId);
-      throw new DelegationError(agentId, error instanceof Error ? error.message : String(error));
+      throw new DelegationError(agentId, getErrorDetail(error));
     }
   }
 

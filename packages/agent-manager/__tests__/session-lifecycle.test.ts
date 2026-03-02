@@ -1,7 +1,6 @@
 /**
- * Session Lifecycle — Tests that prove agent-manager lacks session support.
+ * Session Lifecycle — Tests for agent-manager session support.
  *
- * These tests are expected to FAIL until V2 Phase 1 is implemented.
  * They validate that:
  *  - BackendSpawnConfig accepts sessionId and sessionPersistence fields
  *  - AgentProcess passes session fields through to backend.spawn()

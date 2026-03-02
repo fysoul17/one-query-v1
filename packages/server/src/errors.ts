@@ -35,10 +35,3 @@ export class ForbiddenError extends ServerError {
     this.name = 'ForbiddenError';
   }
 }
-
-export class InternalError extends ServerError {
-  constructor(message = 'Internal server error') {
-    super(message, 500);
-    this.name = 'InternalError';
-  }
-}

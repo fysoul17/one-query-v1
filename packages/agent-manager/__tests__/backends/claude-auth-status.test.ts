@@ -274,7 +274,7 @@ describe('ClaudeBackend.getStatus() — auth detection', () => {
 
       const status = await backend.getStatus();
 
-      expect(status.apiKeyMasked).toBe('sk-...cdef');
+      expect(status.apiKeyMasked).toBe('...cdef');
     });
   });
 

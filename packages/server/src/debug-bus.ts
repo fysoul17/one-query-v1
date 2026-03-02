@@ -33,8 +33,12 @@ export class DebugBus {
     for (const cb of this.subscribers) {
       try {
         cb(event);
-      } catch {
-        // Subscriber errors should not break emission
+      } catch (error) {
+        // Subscriber errors should not break emission; use console to avoid recursion
+        console.warn(
+          '[DebugBus] Subscriber threw:',
+          error instanceof Error ? error.message : error,
+        );
       }
     }
   }

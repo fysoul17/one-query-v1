@@ -8,7 +8,7 @@
  * recorded with 'error' status and its hooks are cleaned up.
  */
 
-import { Logger } from '@autonomy/shared';
+import { getErrorDetail, Logger } from '@autonomy/shared';
 import { DuplicatePluginError, PluginNotFoundError } from './errors.ts';
 import type { HookRegistry } from './hook-registry.ts';
 import type { PluginDefinition, PluginInfo, PluginStatus } from './types.ts';
@@ -79,7 +79,7 @@ export class PluginManager {
         hookCount: 0,
       });
 
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorDetail(error);
       this.logger.warn('Failed to load plugin', { plugin: definition.name, error: detail });
     }
   }
@@ -95,7 +95,7 @@ export class PluginManager {
       try {
         await loaded.definition.shutdown();
       } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
+        const detail = getErrorDetail(error);
         this.logger.warn('Plugin shutdown error', { plugin: pluginName, error: detail });
       }
     }

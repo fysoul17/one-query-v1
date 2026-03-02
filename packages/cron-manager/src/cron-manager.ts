@@ -6,7 +6,7 @@ import type {
   CronExecutionLog,
   CronWorkflow,
 } from '@autonomy/shared';
-import { Logger } from '@autonomy/shared';
+import { getErrorDetail, Logger } from '@autonomy/shared';
 import { Cron } from 'croner';
 import { CronNotFoundError, CronNotInitializedError, CronScheduleError } from './errors.ts';
 
@@ -243,7 +243,7 @@ export class CronManager {
       this.addExecutionLog(log);
       return log;
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = getErrorDetail(error);
       const log: CronExecutionLog = {
         cronId: entry.id,
         executedAt: new Date().toISOString(),

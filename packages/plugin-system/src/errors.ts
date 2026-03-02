@@ -24,10 +24,3 @@ export class DuplicatePluginError extends PluginError {
     this.name = 'DuplicatePluginError';
   }
 }
-
-export class HookError extends PluginError {
-  constructor(hookType: string, detail: string) {
-    super(`Hook error [${hookType}]: ${detail}`);
-    this.name = 'HookError';
-  }
-}

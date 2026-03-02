@@ -3,6 +3,8 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  DEFAULTS,
+  getErrorDetail,
   Logger,
   type StreamEvent,
 } from '@autonomy/shared';
@@ -122,7 +124,7 @@ class OllamaProcess implements BackendProcess {
         signal: combinedSignal,
       });
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
+      const msg = getErrorDetail(error);
       if (msg.includes('aborted') || msg.includes('abort')) {
         yield { type: 'error', error: 'Aborted' };
       } else {
@@ -135,7 +137,7 @@ class OllamaProcess implements BackendProcess {
       const body = await response.text().catch(() => '');
       yield {
         type: 'error',
-        error: `Ollama API error (${response.status}): ${body.slice(0, 500)}`,
+        error: `Ollama API error (${response.status}): ${body.slice(0, DEFAULTS.MAX_ERROR_PREVIEW_LENGTH)}`,
       };
       return;
     }
@@ -189,8 +191,7 @@ class OllamaProcess implements BackendProcess {
       }
       yield { type: 'complete' };
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      yield { type: 'error', error: msg };
+      yield { type: 'error', error: getErrorDetail(error) };
     } finally {
       this._abortController = null;
     }

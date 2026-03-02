@@ -15,6 +15,7 @@ import type {
 import {
   DebugEventCategory,
   DebugEventLevel,
+  getErrorDetail,
   Logger,
   WSClientMessageType,
   WSServerMessageType,
@@ -431,7 +432,7 @@ async function handleConductorMessage(
 
     emitResponseDebug(debugBus, agentId, parsed.targetAgent, result.content.length);
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
+    const msg = getErrorDetail(error);
     wsLogger.error('Error handling conductor message', { error: msg });
     if (buffer) buffer.markError();
     sendWSError(ws, 'An internal error occurred');

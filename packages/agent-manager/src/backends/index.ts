@@ -1,4 +1,3 @@
-export type { BackendConfigOption } from '@autonomy/shared';
 export { ClaudeBackend } from './claude.ts';
 export { CodexBackend } from './codex.ts';
 export { GeminiBackend } from './gemini.ts';

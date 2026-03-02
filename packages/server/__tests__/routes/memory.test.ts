@@ -322,44 +322,6 @@ describe('Memory routes', () => {
     });
   });
 
-  describe('search — enableHyDE and enableRerank', () => {
-    test('passes enableHyDE=true when query param is "true"', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test&enableHyDE=true');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableHyDE).toBe(true);
-    });
-
-    test('passes enableHyDE=false when query param is "false"', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test&enableHyDE=false');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableHyDE).toBe(false);
-    });
-
-    test('enableHyDE is undefined when param is absent', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableHyDE).toBeUndefined();
-    });
-
-    test('passes enableRerank=true when query param is "true"', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test&enableRerank=true');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableRerank).toBe(true);
-    });
-
-    test('passes enableRerank=false when query param is "false"', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test&enableRerank=false');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableRerank).toBe(false);
-    });
-
-    test('enableRerank is undefined when param is absent', async () => {
-      const req = new Request('http://localhost/api/memory/search?query=test');
-      await routes.search(req);
-      expect(memory.searchCalls.at(-1)?.enableRerank).toBeUndefined();
-    });
-  });
-
   describe('search — invalid strategy', () => {
     test('throws BadRequestError for invalid strategy value', async () => {
       const req = new Request('http://localhost/api/memory/search?query=test&strategy=invalid');

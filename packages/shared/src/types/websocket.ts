@@ -25,13 +25,7 @@ export const WSServerMessageType = {
   AGENT_STEP: 'agent_step',
 } as const;
 
-export const AgentStepType = {
-  TOOL_START: 'tool_start',
-  TOOL_INPUT: 'tool_input',
-  TOOL_COMPLETE: 'tool_complete',
-  THINKING: 'thinking',
-} as const;
-export type AgentStepType = (typeof AgentStepType)[keyof typeof AgentStepType];
+export type AgentStepType = 'tool_start' | 'tool_input' | 'tool_complete' | 'thinking';
 export type WSServerMessageType = (typeof WSServerMessageType)[keyof typeof WSServerMessageType];
 
 export interface WSClientMessage {

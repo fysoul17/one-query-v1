@@ -1,4 +1,5 @@
 import type { ApiResponse } from '@autonomy/shared';
+import { getErrorDetail } from '@autonomy/shared';
 import { ServerError } from './errors.ts';
 
 export function corsHeaders(origin: string = '*'): Record<string, string> {
@@ -22,7 +23,7 @@ export function jsonResponse<T>(data: T, status = 200, origin: string = '*'): Re
 }
 
 export function errorResponse(error: unknown, status?: number, origin: string = '*'): Response {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = getErrorDetail(error);
   const statusCode = status ?? (error instanceof ServerError ? error.statusCode : 500);
   const body: ApiResponse<never> = { success: false, error: message };
   return new Response(JSON.stringify(body), {

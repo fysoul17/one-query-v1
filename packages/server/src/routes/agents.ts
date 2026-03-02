@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { AgentPool } from '@autonomy/agent-manager';
 import type { Conductor } from '@autonomy/conductor';
 import {
@@ -7,7 +8,6 @@ import {
   type CreateAgentRequest,
   type UpdateAgentRequest,
 } from '@autonomy/shared';
-import crypto from 'node:crypto';
 import { BadRequestError, NotFoundError, ServerError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';

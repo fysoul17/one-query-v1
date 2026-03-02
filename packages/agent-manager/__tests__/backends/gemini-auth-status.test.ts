@@ -245,7 +245,7 @@ describe('GeminiBackend.getStatus() — auth detection', () => {
 
       const status = await backend.getStatus();
 
-      expect(status.apiKeyMasked).toBe('sk-...7890');
+      expect(status.apiKeyMasked).toBe('...7890');
     });
 
     test('skips CLI auth check when API key is present', async () => {

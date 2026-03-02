@@ -46,7 +46,7 @@ describe('GeminiBackend', () => {
       const status = await backend.getStatus();
       expect(status.authenticated).toBe(true);
       expect(status.authMode).toBe('api_key');
-      expect(status.apiKeyMasked).toBe('sk-...1234');
+      expect(status.apiKeyMasked).toBe('...1234');
     });
 
     test('reports configured when GOOGLE_API_KEY is set', async () => {

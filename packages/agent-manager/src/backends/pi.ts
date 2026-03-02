@@ -3,10 +3,12 @@ import {
   BACKEND_CAPABILITIES,
   type BackendConfigOption,
   type BackendStatus,
+  getErrorDetail,
   Logger,
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
+import { buildSafeEnv as buildSafeEnvBase, maskApiKey } from './shared-utils.ts';
 import type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
 
 const piLogger = new Logger({ context: { source: 'pi-backend' } });
@@ -15,11 +17,6 @@ const DEFAULT_MODEL = 'openai/gpt-4.1';
 
 function getDefaultModel(): string {
   return process.env.PI_MODEL || DEFAULT_MODEL;
-}
-
-function maskApiKey(key: string | undefined): string | undefined {
-  if (!key || key.length < 12) return undefined;
-  return `...${key.slice(-4)}`;
 }
 
 /** Env vars allowlisted for Pi child processes. */
@@ -39,15 +36,10 @@ const ALLOWED_ENV_KEYS = [
   'XDG_CONFIG_HOME',
   'XDG_CACHE_HOME',
   'DISPLAY',
-];
+] as const;
 
 function buildSafeEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const key of ALLOWED_ENV_KEYS) {
-    const val = process.env[key];
-    if (val !== undefined) env[key] = val;
-  }
-  return env;
+  return buildSafeEnvBase(ALLOWED_ENV_KEYS);
 }
 
 /**
@@ -187,7 +179,7 @@ class PiProcess implements BackendProcess {
     } catch (error) {
       yield {
         type: 'error',
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorDetail(error),
       };
       return;
     }

@@ -1,6 +1,6 @@
+import { Logger } from '@autonomy/shared';
 import type { MemoryInterface, MemoryListResult } from '@pyx-memory/client';
 import type { MemoryEntry, MemorySearchResult, MemoryStats } from '@pyx-memory/shared';
-import { Logger } from '@autonomy/shared';
 
 const log = new Logger({ context: { source: 'disabled-memory' } });
 
@@ -44,7 +44,13 @@ export class DisabledMemory implements MemoryInterface {
   }
 
   async stats(): Promise<MemoryStats> {
-    return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0, connected: false };
+    return {
+      totalEntries: 0,
+      storageUsedBytes: 0,
+      vectorCount: 0,
+      recentAccessCount: 0,
+      connected: false,
+    };
   }
 
   async shutdown(): Promise<void> {}

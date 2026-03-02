@@ -1,6 +1,5 @@
 import { type MemoryIngestRequest, type MemorySearchParams, MemoryType } from '@autonomy/shared';
-import type { MemoryInterface } from '@pyx-memory/client';
-import type { IngestionResult } from '@pyx-memory/client';
+import type { IngestionResult, MemoryInterface } from '@pyx-memory/client';
 import { BadRequestError, NotFoundError, NotImplementedError } from '../errors.ts';
 import { jsonResponse, parseJsonBody } from '../middleware.ts';
 import type { RouteParams } from '../router.ts';

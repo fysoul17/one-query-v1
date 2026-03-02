@@ -1,10 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import {
-  DuplicatePluginError,
-  HookError,
-  PluginError,
-  PluginNotFoundError,
-} from '../src/errors.ts';
+import { DuplicatePluginError, PluginError, PluginNotFoundError } from '../src/errors.ts';
 
 describe('PluginError', () => {
   test('is an instance of Error', () => {
@@ -51,20 +46,5 @@ describe('DuplicatePluginError', () => {
     const err = new DuplicatePluginError('logger');
     expect(err.name).toBe('DuplicatePluginError');
     expect(err.message).toContain('logger');
-  });
-});
-
-describe('HookError', () => {
-  test('extends PluginError', () => {
-    const err = new HookError('onMessage', 'handler crashed');
-    expect(err).toBeInstanceOf(PluginError);
-    expect(err).toBeInstanceOf(Error);
-  });
-
-  test('has correct name and includes hook type and detail', () => {
-    const err = new HookError('onMessage', 'handler crashed');
-    expect(err.name).toBe('HookError');
-    expect(err.message).toContain('onMessage');
-    expect(err.message).toContain('handler crashed');
   });
 });

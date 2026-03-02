@@ -26,7 +26,7 @@ describe('ClaudeBackend.getStatus()', () => {
 
       expect(status.authMode).toBe('api_key');
       expect(status.configured).toBe(true);
-      expect(status.apiKeyMasked).toBe('sk-...cdef');
+      expect(status.apiKeyMasked).toBe('...cdef');
     } finally {
       if (originalKey !== undefined) {
         process.env.ANTHROPIC_API_KEY = originalKey;
@@ -44,7 +44,7 @@ describe('ClaudeBackend.getStatus()', () => {
       const backend = new ClaudeBackend();
       const status = await backend.getStatus();
 
-      expect(status.apiKeyMasked).toBe('sk-...mnop');
+      expect(status.apiKeyMasked).toBe('...mnop');
     } finally {
       if (originalKey !== undefined) {
         process.env.ANTHROPIC_API_KEY = originalKey;
