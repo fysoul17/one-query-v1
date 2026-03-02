@@ -7,6 +7,7 @@ import {
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
+import { readNDJSONStream } from './ndjson-stream.ts';
 import type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
 
 const ollamaLogger = new Logger({ context: { source: 'ollama-backend' } });
@@ -145,84 +146,44 @@ class OllamaProcess implements BackendProcess {
     }
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let lineBuffer = '';
     const assistantChunks: string[] = [];
 
     try {
-      while (true) {
+      for await (const line of readNDJSONStream(reader)) {
         if (combinedSignal.aborted) {
           yield { type: 'error', error: 'Aborted' };
           return;
         }
 
-        const { done, value } = await reader.read();
-        if (done) break;
+        if (line.type === 'text') {
+          ollamaLogger.debug('Failed to parse Ollama NDJSON line', { line: line.data });
+          continue;
+        }
 
-        lineBuffer += decoder.decode(value, { stream: true });
+        const parsed = line.data as {
+          message?: { role?: string; content?: string };
+          done?: boolean;
+          error?: string;
+        };
 
-        let newlineIdx: number = lineBuffer.indexOf('\n');
-        while (newlineIdx !== -1) {
-          const line = lineBuffer.slice(0, newlineIdx).trim();
-          lineBuffer = lineBuffer.slice(newlineIdx + 1);
-          if (!line) {
-            newlineIdx = lineBuffer.indexOf('\n');
-            continue;
-          }
+        if (parsed.error) {
+          yield { type: 'error', error: parsed.error };
+          return;
+        }
 
-          try {
-            const parsed = JSON.parse(line) as {
-              message?: { role?: string; content?: string };
-              done?: boolean;
-              error?: string;
-            };
+        if (parsed.message?.content) {
+          assistantChunks.push(parsed.message.content);
+          yield { type: 'chunk', content: parsed.message.content };
+        }
 
-            if (parsed.error) {
-              yield { type: 'error', error: parsed.error };
-              return;
-            }
-
-            if (parsed.message?.content) {
-              assistantChunks.push(parsed.message.content);
-              yield { type: 'chunk', content: parsed.message.content };
-            }
-
-            if (parsed.done) {
-              // Add assistant response to history for multi-turn
-              this.messages.push({ role: 'assistant', content: assistantChunks.join('') });
-              yield { type: 'complete' };
-              return;
-            }
-          } catch {
-            ollamaLogger.debug('Failed to parse Ollama NDJSON line', { line });
-          }
-          newlineIdx = lineBuffer.indexOf('\n');
+        if (parsed.done) {
+          this.messages.push({ role: 'assistant', content: assistantChunks.join('') });
+          yield { type: 'complete' };
+          return;
         }
       }
 
-      // Process remaining buffer
-      const remaining = lineBuffer.trim();
-      if (remaining) {
-        try {
-          const parsed = JSON.parse(remaining) as {
-            message?: { role?: string; content?: string };
-            done?: boolean;
-            error?: string;
-          };
-          if (parsed.error) {
-            yield { type: 'error', error: parsed.error };
-            return;
-          }
-          if (parsed.message?.content) {
-            assistantChunks.push(parsed.message.content);
-            yield { type: 'chunk', content: parsed.message.content };
-          }
-        } catch {
-          ollamaLogger.debug('Failed to parse remaining Ollama buffer', { remaining });
-        }
-      }
-
-      // Store assistant response
+      // Stream ended without explicit done=true — store and complete
       if (assistantChunks.length > 0) {
         this.messages.push({ role: 'assistant', content: assistantChunks.join('') });
       }
@@ -231,7 +192,6 @@ class OllamaProcess implements BackendProcess {
       const msg = error instanceof Error ? error.message : String(error);
       yield { type: 'error', error: msg };
     } finally {
-      reader.releaseLock();
       this._abortController = null;
     }
   }

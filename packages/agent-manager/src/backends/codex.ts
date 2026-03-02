@@ -7,12 +7,13 @@ import {
   type StreamEvent,
 } from '@autonomy/shared';
 import { BackendError } from '../errors.ts';
+import { finalizeProcess, readNDJSONStream } from './ndjson-stream.ts';
+import {
+  buildSafeEnv as buildSafeEnvBase,
+  checkCliAuth,
+  getCliBackendStatus,
+} from './shared-utils.ts';
 import type { BackendProcess, BackendSpawnConfig, CLIBackend } from './types.ts';
-
-function maskApiKey(key: string | undefined): string | undefined {
-  if (!key || key.length < 12) return undefined;
-  return `sk-...${key.slice(-4)}`;
-}
 
 /** Env vars allowlisted for Codex child processes. */
 const ALLOWED_ENV_KEYS = [
@@ -33,19 +34,10 @@ const ALLOWED_ENV_KEYS = [
   'XDG_CONFIG_HOME',
   'XDG_CACHE_HOME',
   'DISPLAY',
-];
+] as const;
 
 function buildSafeEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const key of ALLOWED_ENV_KEYS) {
-    const val = process.env[key];
-    if (val !== undefined) env[key] = val;
-  }
-  // Codex uses OPENAI_API_KEY; map CODEX_API_KEY if OPENAI_API_KEY isn't set
-  if (!env.OPENAI_API_KEY && env.CODEX_API_KEY) {
-    env.OPENAI_API_KEY = env.CODEX_API_KEY;
-  }
-  return env;
+  return buildSafeEnvBase(ALLOWED_ENV_KEYS, { CODEX_API_KEY: 'OPENAI_API_KEY' });
 }
 
 const codexLogger = new Logger({ context: { source: 'codex-backend' } });
@@ -114,103 +106,38 @@ class CodexProcess implements BackendProcess {
         stderr: 'pipe',
       });
 
-      const reader = (
-        this._process.stdout as ReadableStream<Uint8Array>
-      ).getReader() as ReadableStreamDefaultReader<Uint8Array>;
-      const decoder = new TextDecoder();
-      let lineBuffer = '';
+      const reader = (this._process.stdout as ReadableStream<Uint8Array>).getReader();
       let hasContent = false;
 
       // Collect stderr in background
       const stderrPromise = new Response(this._process.stderr as ReadableStream).text();
 
-      while (true) {
+      for await (const line of readNDJSONStream(reader)) {
         if (signal?.aborted) {
           yield { type: 'error', error: 'Aborted' };
-          reader.releaseLock();
           return;
         }
 
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        lineBuffer += decoder.decode(value, { stream: true });
-
-        // Process complete NDJSON lines
-        let newlineIdx: number = lineBuffer.indexOf('\n');
-        while (newlineIdx !== -1) {
-          const line = lineBuffer.slice(0, newlineIdx).trim();
-          lineBuffer = lineBuffer.slice(newlineIdx + 1);
-          if (!line) continue;
-
-          try {
-            const parsed = JSON.parse(line) as Record<string, unknown>;
-
-            // Capture session_id from any event that carries it
-            if (typeof parsed.session_id === 'string' && parsed.session_id) {
-              this._nativeSessionId = parsed.session_id;
-            }
-
-            // Map Codex NDJSON events to StreamEvent
-            const events = this.parseCodexEvent(parsed);
-            for (const event of events) {
-              if (event.type === 'chunk') hasContent = true;
-              yield event;
-            }
-          } catch {
-            // Not valid JSON — emit as raw text chunk
-            if (line) {
-              hasContent = true;
-              yield { type: 'chunk', content: line };
-            }
+        if (line.type === 'json') {
+          if (typeof line.data.session_id === 'string' && line.data.session_id) {
+            this._nativeSessionId = line.data.session_id;
           }
-          newlineIdx = lineBuffer.indexOf('\n');
-        }
-      }
-
-      // Process any remaining buffer
-      const remaining = lineBuffer.trim();
-      if (remaining) {
-        try {
-          const parsed = JSON.parse(remaining) as Record<string, unknown>;
-          if (typeof parsed.session_id === 'string' && parsed.session_id) {
-            this._nativeSessionId = parsed.session_id;
-          }
-          const events = this.parseCodexEvent(parsed);
+          const events = this.parseCodexEvent(line.data);
           for (const event of events) {
             if (event.type === 'chunk') hasContent = true;
             yield event;
           }
-        } catch {
-          if (remaining) {
-            hasContent = true;
-            yield { type: 'chunk', content: remaining };
-          }
+        } else {
+          hasContent = true;
+          yield { type: 'chunk', content: line.data };
         }
       }
-
-      reader.releaseLock();
 
       const exitCode = await this._process.exited;
       const stderrText = await stderrPromise;
       this._process = null;
 
-      if (exitCode !== 0) {
-        const stderr = stderrText.trim().slice(0, 500);
-        yield {
-          type: 'error',
-          error: stderr
-            ? `Backend exited with code ${exitCode}: ${stderr}`
-            : `Backend process exited with code ${exitCode}`,
-        };
-      } else if (!hasContent && stderrText.trim()) {
-        yield {
-          type: 'error',
-          error: `Backend produced no output: ${stderrText.trim().slice(0, 500)}`,
-        };
-      } else {
-        yield { type: 'complete' };
-      }
+      yield* finalizeProcess(exitCode, stderrText, hasContent);
     } catch (error) {
       yield { type: 'error', error: error instanceof Error ? error.message : String(error) };
     } finally {
@@ -340,71 +267,13 @@ export class CodexBackend implements CLIBackend {
     }
   }
 
-  /**
-   * Check CLI login state by running `codex login status`.
-   * Exit code 0 means logged in; non-zero means not authenticated.
-   */
-  private async checkCliAuth(): Promise<boolean> {
-    const env = buildSafeEnv();
-    try {
-      const proc = Bun.spawn(['codex', 'login', 'status'], {
-        cwd: process.cwd(),
-        env,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-
-      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-      const exitCode = await Promise.race([
-        proc.exited,
-        new Promise<number>((resolve) => {
-          timeoutHandle = setTimeout(() => {
-            try {
-              proc.kill();
-            } catch {
-              // ignore kill errors
-            }
-            resolve(1);
-          }, 5000);
-        }),
-      ]);
-      clearTimeout(timeoutHandle);
-
-      return exitCode === 0;
-    } catch {
-      return false;
-    }
-  }
-
   async getStatus(): Promise<BackendStatus> {
-    const cliPath = typeof Bun !== 'undefined' ? Bun.which('codex') : null;
-    const available = cliPath !== null;
-
-    const apiKey = process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY;
-    const hasApiKey = !!apiKey;
-
-    // Check actual CLI authentication only when CLI is available and no API key is set
-    const cliAuthenticated = available && !hasApiKey ? await this.checkCliAuth() : false;
-
-    let authMode: BackendStatus['authMode'] = 'none';
-    if (hasApiKey) {
-      authMode = 'api_key';
-    } else if (cliAuthenticated) {
-      authMode = 'cli_login';
-    }
-
-    const authenticated = hasApiKey || cliAuthenticated;
-    const configured = authenticated;
-
-    return {
+    return getCliBackendStatus({
       name: this.name,
-      available,
-      configured,
-      authenticated,
-      apiKeyMasked: maskApiKey(apiKey),
-      authMode,
+      cliBinary: 'codex',
+      apiKeyEnvVars: ['CODEX_API_KEY', 'OPENAI_API_KEY'],
       capabilities: this.capabilities,
-      error: available ? undefined : 'codex CLI not found on PATH',
-    };
+      checkAuth: () => checkCliAuth(['codex', 'login', 'status'], buildSafeEnv()),
+    });
   }
 }
