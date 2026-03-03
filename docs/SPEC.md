@@ -2,7 +2,7 @@
 
 > Single source of truth. Everything needed to understand and extend this template.
 >
-> Last synced with codebase: 2026-03-03
+> Last synced with codebase: 2026-03-03 (P2 refactoring update)
 
 ---
 
@@ -204,6 +204,19 @@ agent-forge/
 │   ├── cron-manager/            # Scheduled task workflows
 │   ├── plugin-system/           # Event hooks, middleware pipeline, plugin manager
 │   └── server/                  # Bun.serve — wires everything, HTTP + WebSocket + routes
+│       └── src/
+│           ├── index.ts             # main() entry point, Bun.serve composition root
+│           ├── server-factory.ts    # Factory functions for subsystem init (DB, backends, plugins, pool, conductor)
+│           ├── websocket.ts         # Chat WS handler, streaming, StreamContext
+│           ├── ws-utils.ts          # safeSend/safeSendRaw — shared WS send helpers
+│           ├── ws-debug.ts          # Conductor event → WS debug payload helpers
+│           ├── ws-session.ts        # Session creation + message persistence helpers
+│           ├── ws-slash-commands.ts  # Slash command handler (/model, /help, /config)
+│           ├── debug-websocket.ts   # /ws/debug handler
+│           ├── terminal-ws.ts       # /ws/terminal PTY bridge handler
+│           ├── stream-buffer.ts     # Per-session stream buffer for reconnect replay
+│           ├── step-metadata.ts     # Agent step metadata accumulation
+│           └── routes/              # REST route handlers (agents, memory, crons, etc.)
 │
 ├── vendor/
 │   └── pyx-memory/              # Git submodule → fysoul17/pyx-memory-v1
@@ -286,6 +299,11 @@ The Conductor's logic is split across focused modules:
 - `conductor-memory.ts` — memory search and conversation storage (extracted free functions)
 - `conductor-hooks.ts` — hook execution helpers (before_message, after_memory_search, after_response)
 - `conductor-prompt.ts` — memory-augmented prompt builder with system context
+- `session-process-pool.ts` — per-session backend process lifecycle (LRU, spawn, resume)
+- `system-context.ts` — system awareness layer for agent platform context
+- `system-action-executor.ts` — executes structured system actions (agent create/delete, cron ops)
+- `system-action-parser.ts` — parses system action blocks from AI responses
+- `activity-log.ts` — in-memory activity ring buffer
 
 ### Agent Management
 
@@ -574,15 +592,27 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | `chunk`            | Streaming response content + agent id                 |
 | `complete`         | Response finished                                     |
 | `error`            | Error message                                         |
-| `thinking`         | Model thinking/reasoning content                      |
-| `tool_start`       | Tool use started (name, id)                           |
-| `tool_input`       | Tool input data                                       |
-| `tool_complete`    | Tool use finished (result)                            |
+| `agent_step`       | Agent tool/thinking events with `stepType` discriminant: `tool_start`, `tool_input`, `tool_complete`, `thinking` |
 | `agent_status`     | All agent statuses (broadcast every 5s)               |
-| `conductor_status` | Pipeline phase: QUEUED, MEMORY_SEARCH, CONTEXT_INJECT, DELEGATING, RESPONDING, MEMORY_STORE, DELEGATION_COMPLETE |
-| `SESSION_INIT`     | Session ID assigned                                   |
-| `STREAM_RESUME`    | Replay buffered content on reconnect                  |
+| `conductor_status` | Pipeline phase (see below)                            |
+| `session_init`     | Session ID assigned                                   |
+| `stream_resume`    | Replay buffered content on reconnect                  |
+| `debug_event`      | Real-time debug event (also on `/ws/debug`)           |
+| `debug_history`    | Debug event history replay on connect                 |
 | `pong`             | Keepalive response                                    |
+
+**`agent_step` sub-types** (via `stepType` field):
+
+| stepType        | Description                                |
+| --------------- | ------------------------------------------ |
+| `tool_start`    | Tool use started (name, id)                |
+| `tool_input`    | Tool input data (incremental delta)        |
+| `tool_complete` | Tool use finished (duration, result)       |
+| `thinking`      | Model thinking/reasoning content           |
+
+**`conductor_status` phases:**
+
+`queued`, `analyzing`, `creating_agent`, `delegating`, `memory_search`, `context_inject`, `routing_complete`, `memory_store`, `delegation_complete`, `responding`
 
 **Limits:**
 - Per-socket rate limit: 10 messages / 60 seconds
@@ -631,6 +661,8 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `DEBUG_WS_TOKEN`       | No        | —                        | Token to protect debug WebSocket endpoint |
 | `MEMORY_RETRY_COUNT`   | No        | `5`                      | Number of retries when connecting to memory server at startup |
 | `MEMORY_RETRY_DELAY_MS`| No        | `2000`                   | Delay between memory connection retries (ms) |
+
+> **Note:** `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PI_API_KEY`, and `PI_MODEL` are consumed directly by their respective backend implementations (not by `parseEnvConfig()`). Similarly, `ENABLE_DEBUG_WS` and `DEBUG_WS_TOKEN` are read ad-hoc in `main()`. All are functionally correct but not part of the typed `EnvironmentConfig` object.
 
 ---
 
