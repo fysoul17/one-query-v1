@@ -13,6 +13,7 @@ import {
 } from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
 import type { DebugBus, DebugEventCallback } from './debug-bus.ts';
+import { safeSend } from './ws-utils.ts';
 
 const MAX_DEBUG_CLIENTS = 20;
 const MAX_DEBUG_MESSAGE_SIZE = 4096;
@@ -63,7 +64,7 @@ export function createDebugWebSocketHandler(debugBus: DebugBus) {
   const handler = {
     open(ws: ServerWebSocket<DebugWSData>): void {
       if (clients.size >= MAX_DEBUG_CLIENTS) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Too many debug connections' }));
+        safeSend(ws, { type: 'error', message: 'Too many debug connections' });
         ws.close();
         return;
       }
@@ -74,7 +75,7 @@ export function createDebugWebSocketHandler(debugBus: DebugBus) {
         type: WSServerMessageType.DEBUG_HISTORY,
         events: history,
       };
-      ws.send(JSON.stringify(historyMsg));
+      safeSend(ws, historyMsg);
 
       // Subscribe to live events
       const callback: DebugEventCallback = (event) => {
@@ -83,11 +84,7 @@ export function createDebugWebSocketHandler(debugBus: DebugBus) {
           type: WSServerMessageType.DEBUG_EVENT,
           event,
         };
-        try {
-          ws.send(JSON.stringify(msg));
-        } catch {
-          // Client may have disconnected
-        }
+        safeSend(ws, msg);
       };
 
       clients.set(ws, callback);

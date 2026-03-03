@@ -4,6 +4,7 @@ import type { BackendConfigOption, WSServerChunk } from '@autonomy/shared';
 import { WSServerMessageType } from '@autonomy/shared';
 import type { ServerWebSocket } from 'bun';
 import type { WSData } from './websocket.ts';
+import { safeSend } from './ws-utils.ts';
 
 function sendSystemMessage(ws: ServerWebSocket<WSData>, content: string): void {
   const chunk: WSServerChunk = {
@@ -11,12 +12,8 @@ function sendSystemMessage(ws: ServerWebSocket<WSData>, content: string): void {
     content,
     agentId: 'system',
   };
-  try {
-    ws.send(JSON.stringify(chunk));
-    ws.send(JSON.stringify({ type: WSServerMessageType.COMPLETE }));
-  } catch {
-    // Client may have disconnected
-  }
+  safeSend(ws, chunk);
+  safeSend(ws, { type: WSServerMessageType.COMPLETE });
 }
 
 /**

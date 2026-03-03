@@ -1,23 +1,11 @@
 // @autonomy/server — Bun.serve HTTP/WS entry point
 
-import { Database } from 'bun:sqlite';
-import { join } from 'node:path';
-import {
-  AgentPool,
-  ClaudeBackend,
-  CodexBackend,
-  DefaultBackendRegistry,
-  GeminiBackend,
-  OllamaBackend,
-  PiBackend,
-} from '@autonomy/agent-manager';
-import { Conductor } from '@autonomy/conductor';
-import { CronManager } from '@autonomy/cron-manager';
-import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
+import type { AgentPool, DefaultBackendRegistry } from '@autonomy/agent-manager';
+import type { Conductor } from '@autonomy/conductor';
+import type { CronManager } from '@autonomy/cron-manager';
 import { DebugEventCategory, DebugEventLevel, getErrorDetail, Logger } from '@autonomy/shared';
 import { MemoryClient } from '@pyx-memory/client';
 import type { ServerWebSocket } from 'bun';
-import { AgentStore } from './agent-store.ts';
 import { parseEnvConfig } from './config.ts';
 import { ConfigManager } from './config-manager.ts';
 import { DebugBus, makeDebugEvent } from './debug-bus.ts';
@@ -36,8 +24,14 @@ import { createLifecycleRoutes, isExtended } from './routes/lifecycle.ts';
 import { createMemoryRoutes } from './routes/memory.ts';
 import { createSessionRoutes } from './routes/sessions.ts';
 import { SecretStore } from './secret-store.ts';
-import { runCronSeeds, runSeeds } from './seeds/index.ts';
-import { SessionStore } from './session-store.ts';
+import {
+  initAgentPool,
+  initBackendRegistry,
+  initConductor,
+  initPluginSystem,
+  initRuntimeDatabase,
+} from './server-factory.ts';
+import type { SessionStore } from './session-store.ts';
 import { createTerminalWebSocketHandler, type TerminalWSData } from './terminal-ws.ts';
 import { createWebSocketHandler, type WSData } from './websocket.ts';
 
@@ -236,9 +230,7 @@ async function main() {
 
   logger.info('Server starting', { port: config.PORT, backend: config.AI_BACKEND });
 
-  // Initialize DebugBus
   const debugBus = new DebugBus(500);
-
   debugBus.emit(
     makeDebugEvent({
       category: DebugEventCategory.SYSTEM,
@@ -248,32 +240,10 @@ async function main() {
     }),
   );
 
-  // Initialize Runtime Database (SQLite for sessions, agents)
-  const { mkdirSync, existsSync } = await import('node:fs');
-  if (!existsSync(config.DATA_DIR)) {
-    mkdirSync(config.DATA_DIR, { recursive: true });
-  }
-  for (const subdir of ['claude', 'codex', 'gemini', 'pi']) {
-    const cliConfigDir = join(config.DATA_DIR, 'cli-config', subdir);
-    if (!existsSync(cliConfigDir)) {
-      mkdirSync(cliConfigDir, { recursive: true });
-    }
-  }
-  const runtimeDb = new Database(join(config.DATA_DIR, 'runtime.sqlite'));
-  runtimeDb.exec('PRAGMA journal_mode = WAL;');
-  const sessionStore = new SessionStore(runtimeDb);
-  const agentStore = new AgentStore(runtimeDb);
-  logger.info('Runtime database initialized');
+  // Initialize subsystems
+  const { db: runtimeDb, sessionStore, agentStore } = initRuntimeDatabase(config, logger);
+  const registry = initBackendRegistry(config.AI_BACKEND);
 
-  // Initialize Backend Registry
-  const registry = new DefaultBackendRegistry(config.AI_BACKEND);
-  registry.register(new ClaudeBackend());
-  registry.register(new CodexBackend());
-  registry.register(new GeminiBackend());
-  registry.register(new PiBackend());
-  registry.register(new OllamaBackend());
-
-  // Initialize Memory
   const memory = await initMemory(
     config.MEMORY_URL,
     logger,
@@ -292,100 +262,23 @@ async function main() {
     }),
   );
 
-  // Initialize Plugin System
-  const hookRegistry = new HookRegistry({
-    onError: (hookType, pluginId, error) => {
-      logger.warn('Plugin hook error', { hookType, pluginId, error: error.message });
-      debugBus.emit(
-        makeDebugEvent({
-          category: DebugEventCategory.SYSTEM,
-          level: DebugEventLevel.WARN,
-          source: 'plugin.hook_error',
-          message: `Hook "${hookType}" error in plugin "${pluginId ?? 'unknown'}": ${error.message}`,
-        }),
-      );
-    },
-  });
-  const pluginManager = new PluginManager(hookRegistry);
-  logger.info('Plugin system initialized');
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.SYSTEM,
-      level: DebugEventLevel.INFO,
-      source: 'plugin-system.init',
-      message: 'Plugin system initialized',
-    }),
-  );
-
-  // Initialize Agent Pool
-  const workspaceDir = join(config.DATA_DIR, 'workspaces');
-  mkdirSync(workspaceDir, { recursive: true });
-  const pool = new AgentPool(registry, {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
+  const { hookRegistry, pluginManager } = initPluginSystem(logger, debugBus);
+  const pool = await initAgentPool(config, registry, hookRegistry, agentStore, logger, debugBus);
+  const { conductor, cronManager } = await initConductor(
+    config,
+    pool,
+    memory,
+    registry,
     hookRegistry,
-    store: agentStore,
-    workspaceDir,
-  });
-  logger.info('Agent pool created', {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
-  });
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.AGENT,
-      level: DebugEventLevel.INFO,
-      source: 'agent-pool.init',
-      message: `Agent pool created (max=${config.MAX_AGENTS}, idleTimeout=${config.IDLE_TIMEOUT_MS}ms)`,
-    }),
+    agentStore,
+    logger,
+    debugBus,
   );
-
-  await pool.restore();
-  logger.info('Persisted agents restored');
-
-  // Resolve fallback backend
-  const fallbackBackend = config.FALLBACK_BACKEND
-    ? registry.get(config.FALLBACK_BACKEND)
-    : undefined;
-  if (fallbackBackend) {
-    logger.info('Fallback backend configured', { fallback: config.FALLBACK_BACKEND });
-  }
-
-  // Initialize Conductor
-  const conductor = new Conductor(pool, memory, registry.getDefault(), {
-    maxAgents: config.MAX_AGENTS,
-    idleTimeoutMs: config.IDLE_TIMEOUT_MS,
-    hookRegistry,
-    fallbackBackend,
-  });
-  await conductor.initialize();
-  logger.info('Conductor initialized');
-  debugBus.emit(
-    makeDebugEvent({
-      category: DebugEventCategory.CONDUCTOR,
-      level: DebugEventLevel.INFO,
-      source: 'conductor.init',
-      message: 'Conductor initialized',
-    }),
-  );
-
-  // Seed agents and crons
-  await runSeeds(pool, agentStore);
-  await pool.restore();
-  logger.info('Agent seeds applied');
-
-  const cronManager = new CronManager(conductor, { dataDir: config.DATA_DIR });
-  await cronManager.initialize();
-  conductor.setCronManager(cronManager);
-  logger.info('CronManager initialized');
-
-  await runCronSeeds(cronManager);
-  logger.info('Cron seeds applied');
 
   // Memory lifecycle timers
   const lifecycleIntervals = startMemoryLifecycle(memory, logger);
 
-  // Initialize Rate Limiter
+  // Rate limiter
   const rateLimiter = new RateLimiter({
     maxRequests: config.RATE_LIMIT_MAX,
     windowMs: config.RATE_LIMIT_WINDOW_MS,
@@ -397,7 +290,7 @@ async function main() {
     trustProxy: config.TRUST_PROXY,
   });
 
-  // Create WebSocket handlers
+  // WebSocket handlers
   const ws = createWebSocketHandler(
     conductor,
     debugBus,
@@ -411,7 +304,7 @@ async function main() {
     logger.info('Debug WebSocket enabled', { path: '/ws/debug', tokenProtected: !!debugWsToken });
   }
 
-  // Build HTTP router
+  // HTTP router
   const router = new Router(config.CORS_ORIGIN);
   registerRoutes(router, {
     conductor,

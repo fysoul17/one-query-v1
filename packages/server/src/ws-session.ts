@@ -3,6 +3,7 @@ import { getErrorDetail, Logger, MessageRole, WSServerMessageType } from '@auton
 import type { ServerWebSocket } from 'bun';
 import type { SessionStore } from './session-store.ts';
 import type { WSData } from './websocket.ts';
+import { safeSend } from './ws-utils.ts';
 
 const wsSessionLogger = new Logger({ context: { source: 'websocket' } });
 
@@ -14,11 +15,7 @@ export function ensureSession(ws: ServerWebSocket<WSData>, sessionStore?: Sessio
       type: WSServerMessageType.SESSION_INIT,
       sessionId: session.id,
     };
-    try {
-      ws.send(JSON.stringify(sessionInit));
-    } catch {
-      // Client may have disconnected
-    }
+    safeSend(ws, sessionInit);
   }
 }
 

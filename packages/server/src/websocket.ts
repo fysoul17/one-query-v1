@@ -2,13 +2,13 @@ import type { BackendRegistry } from '@autonomy/agent-manager';
 import type { Conductor, ConductorEvent, IncomingMessage } from '@autonomy/conductor';
 import type {
   SessionMessage,
+  StreamEvent,
   WSClientMessage,
   WSServerAgentStatus,
   WSServerAgentStep,
   WSServerChunk,
   WSServerComplete,
   WSServerError,
-  WSServerPong,
   WSServerSessionInit,
   WSServerStreamResume,
 } from '@autonomy/shared';
@@ -41,6 +41,7 @@ import {
 } from './ws-debug.ts';
 import { ensureSession, persistAssistantMessage, persistUserMessage } from './ws-session.ts';
 import { handleSlashCommand } from './ws-slash-commands.ts';
+import { safeSend, safeSendRaw } from './ws-utils.ts';
 
 const MAX_WS_MESSAGE_SIZE = 65_536; // 64 KB
 const MAX_WS_CLIENTS = 100;
@@ -84,29 +85,105 @@ interface WebSocketContext {
 }
 
 function sendWSError(ws: ServerWebSocket<WSData>, message: string): void {
-  const err: WSServerError = { type: WSServerMessageType.ERROR, message };
-  try {
-    ws.send(JSON.stringify(err));
-  } catch {
-    // Client may have disconnected
-  }
+  safeSend(ws, { type: WSServerMessageType.ERROR, message });
 }
 
 // Debug/status helpers extracted to ws-debug.ts
 // Session persistence functions extracted to ws-session.ts
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WebSocket message handler with multiple event types
-async function streamConductorResponse(
-  ws: ServerWebSocket<WSData>,
-  ctx: WebSocketContext,
-  incoming: IncomingMessage,
+/** Emit agent step debug events to the debug bus. */
+function emitAgentStepDebug(
+  debugBus: DebugBus,
+  event: StreamEvent,
   agentId: string,
   targetAgent: string | undefined,
-  buffer?: StreamBuffer,
-  sessionId?: string,
-  signal?: AbortSignal,
+): void {
+  let dbgMessage: string;
+  let dbgLevel: DebugEventLevel = DebugEventLevel.DEBUG;
+  if (event.type === 'tool_start') {
+    dbgMessage = `→ ${event.toolName ?? 'tool'}`;
+    dbgLevel = DebugEventLevel.INFO;
+  } else if (event.type === 'tool_complete') {
+    dbgMessage = `✓ ${event.toolName ?? 'tool'} (${event.durationMs ?? 0}ms)`;
+    dbgLevel = DebugEventLevel.INFO;
+  } else if (event.type === 'thinking') {
+    dbgMessage = 'thinking…';
+  } else {
+    // tool_input — skip to avoid flooding the debug console with large JSON deltas
+    return;
+  }
+  debugBus.emit(
+    makeDebugEvent({
+      category: DebugEventCategory.AGENT,
+      level: dbgLevel,
+      source: `agent.${event.type}`,
+      message: dbgMessage,
+      agentId: targetAgent ?? agentId,
+      durationMs: event.durationMs,
+      data: {
+        ...(event.toolId && { toolId: event.toolId }),
+        ...(event.toolName && { toolName: event.toolName }),
+      },
+    }),
+  );
+}
+
+/** Handle a stream error event — complete normally if content was already sent, or emit error. */
+function handleStreamError(
+  event: StreamEvent,
+  state: StreamState,
+  agentId: string,
+  targetAgent: string | undefined,
+  buffer: StreamBuffer | undefined,
+  debugBus: DebugBus | undefined,
+  broadcastMsg: (msg: object) => void,
+): void {
+  if (state.accumulatedContent.length > 0) {
+    state.completeSent = true;
+    if (buffer) buffer.markComplete();
+    wsLogger.warn('Stream error after content delivery — completing normally', {
+      agentId,
+      error: event.error,
+    });
+    broadcastMsg({ type: WSServerMessageType.COMPLETE });
+  } else {
+    state.errorSent = true;
+    if (buffer) buffer.markError();
+    wsLogger.warn('Stream error from backend', { agentId, error: event.error });
+    debugBus?.emit(
+      makeDebugEvent({
+        category: DebugEventCategory.CONDUCTOR,
+        level: DebugEventLevel.ERROR,
+        source: 'conductor.stream_error',
+        message: `Stream error from ${agentId}: ${event.error ?? 'Unknown error'}`,
+        agentId: targetAgent,
+      }),
+    );
+    broadcastMsg({
+      type: WSServerMessageType.ERROR,
+      message: 'An error occurred while generating the response.',
+    });
+  }
+}
+
+/** Per-request context for a single streaming response. */
+interface StreamContext {
+  ws: ServerWebSocket<WSData>;
+  incoming: IncomingMessage;
+  agentId: string;
+  targetAgent?: string;
+  buffer?: StreamBuffer;
+  sessionId?: string;
+  signal?: AbortSignal;
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WebSocket message handler with multiple event types
+async function streamConductorResponse(
+  ctx: WebSocketContext,
+  stream: StreamContext,
 ): Promise<{ content: string; stepMetadata?: StepMetadata }> {
   const { conductor, debugBus, streamTimeoutMs, sessionClientsMap } = ctx;
+  const { ws, incoming, agentId, targetAgent, buffer, sessionId, signal } = stream;
 
   // Resolve agent display name once before the streaming loop so step events can carry it.
   // Falls back to undefined for 'conductor' (which has no pool entry).
@@ -142,27 +219,18 @@ async function streamConductorResponse(
    * Looks up the current client set on each call so reconnecting clients are included automatically.
    * When buffer exists, the message is also appended to the buffer for replay on reconnect.
    */
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WebSocket message handler with multiple event types
   function broadcastMsg(msg: object): void {
-    const data = JSON.stringify(msg);
     if (buffer && sessionId && sessionClientsMap) {
       buffer.append(msg);
+      const data = JSON.stringify(msg);
       const sessionClients = sessionClientsMap.get(sessionId);
       if (sessionClients) {
         for (const client of sessionClients) {
-          try {
-            client.send(data);
-          } catch {
-            // Client disconnected — buffer keeps accumulating
-          }
+          safeSendRaw(client, data);
         }
       }
     } else {
-      try {
-        ws.send(data);
-      } catch {
-        // Client disconnected
-      }
+      safeSend(ws, msg);
     }
   }
 
@@ -194,31 +262,24 @@ async function streamConductorResponse(
       if (signal?.aborted) break;
 
       if (event.type === 'chunk') {
-        const content = event.content ?? '';
-        state.accumulatedContent += content;
-        const chunk: WSServerChunk = {
+        state.accumulatedContent += event.content ?? '';
+        broadcastMsg({
           type: WSServerMessageType.CHUNK,
-          content,
+          content: event.content ?? '',
           agentId,
-        };
-        broadcastMsg(chunk);
+        } satisfies WSServerChunk);
       } else if (event.type === 'complete') {
         state.completeSent = true;
         if (buffer) buffer.markComplete();
-        const complete: WSServerComplete = { type: WSServerMessageType.COMPLETE };
-        broadcastMsg(complete);
+        broadcastMsg({ type: WSServerMessageType.COMPLETE } satisfies WSServerComplete);
       } else if (
         event.type === 'tool_start' ||
         event.type === 'tool_input' ||
         event.type === 'tool_complete' ||
         event.type === 'thinking'
       ) {
-        // Accumulate agent step data for metadata persistence
         accumulateAgentStep(state, event, agentId, agentDisplayName);
-
-        // Agent-level step events: broadcast to live clients but do NOT accumulate
-        // in the stream buffer (buffer only tracks chunk content for reconnect replay).
-        const step: WSServerAgentStep = {
+        broadcastMsg({
           type: WSServerMessageType.AGENT_STEP,
           stepType: event.type,
           agentId,
@@ -229,71 +290,12 @@ async function streamConductorResponse(
           content: event.content,
           durationMs: event.durationMs,
           timestamp: new Date().toISOString(),
-        };
-        broadcastMsg(step);
-
-        // Emit to debug bus so tool events appear in the debug console in real-time.
+        } satisfies WSServerAgentStep);
         if (debugBus) {
-          let dbgMessage: string;
-          let dbgLevel: DebugEventLevel = DebugEventLevel.DEBUG;
-          if (event.type === 'tool_start') {
-            dbgMessage = `→ ${event.toolName ?? 'tool'}`;
-            dbgLevel = DebugEventLevel.INFO;
-          } else if (event.type === 'tool_complete') {
-            dbgMessage = `✓ ${event.toolName ?? 'tool'} (${event.durationMs ?? 0}ms)`;
-            dbgLevel = DebugEventLevel.INFO;
-          } else if (event.type === 'thinking') {
-            dbgMessage = 'thinking…';
-          } else {
-            // tool_input — skip to avoid flooding the debug console with large JSON deltas
-            dbgMessage = '';
-          }
-          if (dbgMessage) {
-            debugBus.emit(
-              makeDebugEvent({
-                category: DebugEventCategory.AGENT,
-                level: dbgLevel,
-                source: `agent.${event.type}`,
-                message: dbgMessage,
-                agentId: targetAgent ?? agentId,
-                durationMs: event.durationMs,
-                data: {
-                  ...(event.toolId && { toolId: event.toolId }),
-                  ...(event.toolName && { toolName: event.toolName }),
-                },
-              }),
-            );
-          }
+          emitAgentStepDebug(debugBus, event, agentId, targetAgent);
         }
       } else if (event.type === 'error') {
-        if (state.accumulatedContent.length > 0) {
-          // Content was already streamed — complete normally.
-          state.completeSent = true;
-          if (buffer) buffer.markComplete();
-          wsLogger.warn('Stream error after content delivery — completing normally', {
-            agentId,
-            error: event.error,
-          });
-          broadcastMsg({ type: WSServerMessageType.COMPLETE });
-        } else {
-          state.errorSent = true;
-          if (buffer) buffer.markError();
-          wsLogger.warn('Stream error from backend', { agentId, error: event.error });
-          debugBus?.emit(
-            makeDebugEvent({
-              category: DebugEventCategory.CONDUCTOR,
-              level: DebugEventLevel.ERROR,
-              source: 'conductor.stream_error',
-              message: `Stream error from ${agentId}: ${event.error ?? 'Unknown error'}`,
-              agentId: targetAgent,
-            }),
-          );
-          const errMsg: WSServerError = {
-            type: WSServerMessageType.ERROR,
-            message: 'An error occurred while generating the response.',
-          };
-          broadcastMsg(errMsg);
-        }
+        handleStreamError(event, state, agentId, targetAgent, buffer, debugBus, broadcastMsg);
       }
     }
   } finally {
@@ -425,16 +427,15 @@ async function handleConductorMessage(
   }
 
   try {
-    const result = await streamConductorResponse(
+    const result = await streamConductorResponse(ctx, {
       ws,
-      ctx,
       incoming,
       agentId,
-      parsed.targetAgent,
+      targetAgent: parsed.targetAgent,
       buffer,
       sessionId,
-      abortController?.signal,
-    );
+      signal: abortController?.signal,
+    });
 
     if (sessionStore && sessionId && result.content) {
       persistAssistantMessage(
@@ -491,12 +492,7 @@ function handleParsedMessage(
 ): Promise<void> | void {
   const { conductor, debugBus, backendRegistry, bufferManager, sessionAbortControllers } = ctx;
   if (parsed.type === WSClientMessageType.PING) {
-    const pong: WSServerPong = { type: WSServerMessageType.PONG };
-    try {
-      ws.send(JSON.stringify(pong));
-    } catch {
-      // Client may have disconnected
-    }
+    safeSend(ws, { type: WSServerMessageType.PONG });
     return;
   }
 
@@ -578,11 +574,7 @@ export function createWebSocketHandler(
   function broadcast(message: object): void {
     const data = JSON.stringify(message);
     for (const ws of clients) {
-      try {
-        ws.send(data);
-      } catch {
-        // Client may have disconnected
-      }
+      safeSendRaw(ws, data);
     }
   }
 
@@ -648,30 +640,20 @@ export function createWebSocketHandler(
 
       // Send session_init if this connection has a sessionId
       if (ws.data.sessionId) {
-        const sessionInit: WSServerSessionInit = {
+        safeSend(ws, {
           type: WSServerMessageType.SESSION_INIT,
           sessionId: ws.data.sessionId,
-        };
-        try {
-          ws.send(JSON.stringify(sessionInit));
-        } catch {
-          // Client may have disconnected
-        }
+        } satisfies WSServerSessionInit);
 
         // Replay buffered content for reconnecting clients
         const buffer = bufferManager.get(ws.data.sessionId);
         if (buffer && (buffer.accumulatedContent.length > 0 || buffer.status === 'streaming')) {
-          const resume: WSServerStreamResume = {
+          safeSend(ws, {
             type: WSServerMessageType.STREAM_RESUME,
             content: buffer.accumulatedContent,
             agentId: buffer.agentId,
             streaming: buffer.status === 'streaming',
-          };
-          try {
-            ws.send(JSON.stringify(resume));
-          } catch {
-            // Client may have disconnected
-          }
+          } satisfies WSServerStreamResume);
         }
       }
 

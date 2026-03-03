@@ -6,6 +6,7 @@ import type { ServerWebSocket } from 'bun';
 import type { DebugBus } from './debug-bus.ts';
 import { makeDebugEvent } from './debug-bus.ts';
 import type { WSData } from './websocket.ts';
+import { safeSend } from './ws-utils.ts';
 
 export function buildDebugPayload(event: ConductorEvent): ConductorDebugPayload | undefined {
   const debug: ConductorDebugPayload = {};
@@ -125,11 +126,7 @@ export function sendConductorStatus(ws: ServerWebSocket<WSData>, event: Conducto
     agentName: event.agentName,
     debug: buildDebugPayload(event),
   };
-  try {
-    ws.send(JSON.stringify(status));
-  } catch {
-    // Client may have disconnected
-  }
+  safeSend(ws, status);
 }
 
 export function emitResponseDebug(
