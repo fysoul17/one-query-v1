@@ -12,6 +12,8 @@ function hasGraphMethods(m: MemoryInterface): m is MemoryInterface & {
   return 'graphNodes' in m && 'graphEdges' in m && 'graphQuery' in m;
 }
 
+const MAX_GRAPH_NODES = 100;
+
 export function createGraphRoutes(memory: MemoryInterface) {
   if (!hasGraphMethods(memory)) {
     const unavailable = () => {
@@ -44,7 +46,6 @@ export function createGraphRoutes(memory: MemoryInterface) {
       if (type) {
         filtered = filtered.filter((n) => n.type === type);
       }
-      const MAX_GRAPH_NODES = 100;
       filtered = filtered.slice(0, Math.min(MAX_GRAPH_NODES, limit));
       return jsonResponse({ nodes: filtered, totalCount: filtered.length });
     },

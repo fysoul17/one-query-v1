@@ -49,10 +49,10 @@ function redact(value: unknown): unknown {
 }
 
 /** Extract a human-readable error message from an unknown caught value. */
-export function getErrorDetail(error: unknown): string {
+export function getErrorDetail(error: unknown, fallback = 'Unknown error'): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
-  return 'Unknown error';
+  return fallback;
 }
 
 interface LoggerConfig {

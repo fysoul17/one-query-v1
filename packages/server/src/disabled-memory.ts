@@ -5,9 +5,10 @@ import type {
   MemorySearchResult,
   MemoryStats,
 } from '@autonomy/shared';
-import { Logger } from '@autonomy/shared';
+import { Logger, RAGStrategy } from '@autonomy/shared';
 
 const log = new Logger({ context: { source: 'disabled-memory' } });
+const DEFAULT_PAGE_LIMIT = 20;
 
 /**
  * No-op memory implementation for when MEMORY_URL is not configured.
@@ -29,11 +30,10 @@ export class DisabledMemory implements MemoryInterface {
   }
 
   async search(): Promise<MemorySearchResult> {
-    return { entries: [], totalCount: 0, strategy: 'naive' };
+    return { entries: [], totalCount: 0, strategy: RAGStrategy.NAIVE };
   }
 
   async list(): Promise<MemoryListResult> {
-    const DEFAULT_PAGE_LIMIT = 20;
     return { entries: [], totalCount: 0, page: 1, limit: DEFAULT_PAGE_LIMIT };
   }
 
