@@ -11,6 +11,8 @@ const EXTRACTION_TIMEOUT_MS = 10_000;
 
 const EXTRACTION_MODEL = 'claude-haiku-4-5-20251001';
 
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
 const MAX_ENTITY_NAME_LENGTH = 200;
 
 const VALID_ENTITY_TYPES = new Set([
@@ -61,7 +63,7 @@ export async function extractEntities(content: string, apiKey: string): Promise<
   const timeout = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
