@@ -173,6 +173,7 @@ export async function initConductor(deps: ConductorInitDeps): Promise<ConductorD
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
     hookRegistry,
     fallbackBackend,
+    llmApiKey: config.ANTHROPIC_API_KEY,
   });
   await conductor.initialize();
   logger.info('Conductor initialized');

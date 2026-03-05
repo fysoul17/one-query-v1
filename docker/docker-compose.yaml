@@ -69,6 +69,8 @@ services:
       - "7822:7822"
     volumes:
       - memory-data:/data
+    mem_limit: 3g
+    memswap_limit: 3g
     environment:
       - DATA_DIR=/data
       - MEMORY_SERVER_PORT=7822
@@ -90,7 +92,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 90s
     profiles:
       - full
 

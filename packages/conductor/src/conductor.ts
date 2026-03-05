@@ -770,9 +770,12 @@ export class Conductor {
     responseContent?: string,
   ): Promise<void> {
     return storeConversationFn(
-      this.memory,
-      this.hookRegistry,
-      this.memoryConnected,
+      {
+        memory: this.memory,
+        hookRegistry: this.hookRegistry,
+        memoryConnected: this.memoryConnected,
+        llmApiKey: this.options.llmApiKey,
+      },
       message,
       decisions,
       responseContent,

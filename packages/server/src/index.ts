@@ -183,8 +183,8 @@ function startMemoryLifecycle(
 async function initMemory(
   memoryUrl: string | undefined,
   logger: Logger,
-  retries = 5,
-  retryDelayMs = 2000,
+  retries = 30,
+  retryDelayMs = 3000,
 ): Promise<MemoryClient | DisabledMemory> {
   if (memoryUrl) {
     for (let attempt = 1; attempt <= retries; attempt++) {
