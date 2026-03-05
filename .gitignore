@@ -14,3 +14,4 @@ data/agents/*
 **/secrets.json
 bun.lock
 .superset/
+vendor/
