@@ -7,7 +7,11 @@
  * This avoids mock.module contamination while still validating all branches.
  */
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import { extractEntities } from '../src/entity-extractor.ts';
+import {
+  extractEntities,
+  extractEntitiesViaApi,
+  extractEntitiesViaBackend,
+} from '../src/entity-extractor.ts';
 
 const API_KEY = 'test-api-key';
 
@@ -30,8 +34,8 @@ const mockFetch = mock<typeof fetch>(() =>
   Promise.resolve(makeApiResponse({ entities: [], relationships: [] })),
 );
 
-describe('extractEntities (isolated)', () => {
-  const isRealImpl = extractEntities.length === 2; // real function has 2 params
+describe('extractEntitiesViaApi (isolated)', () => {
+  const isRealImpl = extractEntitiesViaApi.length === 2; // real function has 2 params
 
   beforeEach(() => {
     mockFetch.mockReset();
@@ -45,19 +49,19 @@ describe('extractEntities (isolated)', () => {
   const realTest = isRealImpl ? test : test.skip;
 
   realTest('returns empty when API key is missing', async () => {
-    const result = await extractEntities('Alice works at Acme Corp', '');
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp', '');
     expect(result).toEqual({ entities: [], relationships: [] });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   realTest('returns empty when content is too short', async () => {
-    const result = await extractEntities('Hi', API_KEY);
+    const result = await extractEntitiesViaApi('Hi', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
   realTest('calls Anthropic API with correct parameters', async () => {
-    await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, options] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -82,7 +86,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Alice works at Acme Corp in the city', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in the city', API_KEY);
     expect(result.entities).toEqual([
       { name: 'Alice', type: 'PERSON' },
       { name: 'Acme Corp', type: 'ORGANIZATION' },
@@ -105,7 +109,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Alice and Foo are important entities here', API_KEY);
+    const result = await extractEntitiesViaApi('Alice and Foo are important entities here', API_KEY);
     expect(result.entities).toEqual([{ name: 'Alice', type: 'PERSON' }]);
   });
 
@@ -122,7 +126,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Bob is a person mentioned in this text', API_KEY);
+    const result = await extractEntitiesViaApi('Bob is a person mentioned in this text', API_KEY);
     expect(result.entities).toEqual([{ name: 'Bob', type: 'PERSON' }]);
   });
 
@@ -140,7 +144,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Bob and a very long named entity here', API_KEY);
+    const result = await extractEntitiesViaApi('Bob and a very long named entity here', API_KEY);
     expect(result.entities).toEqual([{ name: 'Bob', type: 'PERSON' }]);
   });
 
@@ -158,7 +162,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Bob and Alice are mentioned in this text', API_KEY);
+    const result = await extractEntitiesViaApi('Bob and Alice are mentioned in this text', API_KEY);
     expect(result.entities).toEqual([{ name: 'Bob', type: 'PERSON' }]);
   });
 
@@ -175,7 +179,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Alice has some relationships in this text', API_KEY);
+    const result = await extractEntitiesViaApi('Alice has some relationships in this text', API_KEY);
     expect(result.entities).toHaveLength(1);
     expect(result.relationships).toHaveLength(0);
   });
@@ -196,21 +200,21 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Alice and Bob know each other in this story', API_KEY);
+    const result = await extractEntitiesViaApi('Alice and Bob know each other in this story', API_KEY);
     expect(result.relationships).toEqual([{ source: 'Alice', target: 'Bob', type: 'KNOWS' }]);
   });
 
   realTest('returns empty on non-ok API response', async () => {
     mockFetch.mockImplementation(() => Promise.resolve(new Response(null, { status: 429 })));
 
-    const result = await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
   });
 
   realTest('returns empty on malformed JSON from LLM', async () => {
     mockFetch.mockImplementation(() => Promise.resolve(makeApiResponse('not valid json {{{')));
 
-    const result = await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
   });
 
@@ -224,7 +228,7 @@ describe('extractEntities (isolated)', () => {
       ),
     );
 
-    const result = await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
   });
 
@@ -233,7 +237,7 @@ describe('extractEntities (isolated)', () => {
       Promise.resolve(makeApiResponse({ entities: 'not an array', relationships: [] })),
     );
 
-    const result = await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
   });
 
@@ -242,7 +246,7 @@ describe('extractEntities (isolated)', () => {
       Promise.resolve(makeApiResponse({ entities: [{ name: 'Alice', type: 'PERSON' }] })),
     );
 
-    const result = await extractEntities('Alice is mentioned in this longer text here', API_KEY);
+    const result = await extractEntitiesViaApi('Alice is mentioned in this longer text here', API_KEY);
     expect(result.entities).toHaveLength(1);
     expect(result.relationships).toEqual([]);
   });
@@ -250,13 +254,13 @@ describe('extractEntities (isolated)', () => {
   realTest('returns empty on network error', async () => {
     mockFetch.mockImplementation(() => Promise.reject(new Error('Network error')));
 
-    const result = await extractEntities('Alice works at Acme Corp in Seattle', API_KEY);
+    const result = await extractEntitiesViaApi('Alice works at Acme Corp in Seattle', API_KEY);
     expect(result).toEqual({ entities: [], relationships: [] });
   });
 
   realTest('truncates content exceeding max input chars', async () => {
     const longContent = 'A'.repeat(5000);
-    await extractEntities(longContent, API_KEY);
+    await extractEntitiesViaApi(longContent, API_KEY);
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -265,5 +269,168 @@ describe('extractEntities (isolated)', () => {
     expect(sentContent.length).toBeLessThan(longContent.length);
     expect(sentContent).toContain('A'.repeat(4000));
     expect(sentContent).not.toContain('A'.repeat(4001));
+  });
+
+  realTest('extractEntities is a unified dispatcher function', () => {
+    expect(typeof extractEntities).toBe('function');
+    expect(extractEntities).not.toBe(extractEntitiesViaApi);
+  });
+});
+
+describe('extractEntitiesViaBackend', () => {
+  const isRealImpl = extractEntitiesViaBackend.length === 2;
+  const realTest = isRealImpl ? test : test.skip;
+
+  realTest('returns empty when content is too short', async () => {
+    const sendFn = mock(() => Promise.resolve('{}'));
+    const result = await extractEntitiesViaBackend('Hi', sendFn);
+    expect(result).toEqual({ entities: [], relationships: [] });
+    expect(sendFn).not.toHaveBeenCalled();
+  });
+
+  realTest('calls sendFn with extraction prompt and parses response', async () => {
+    const sendFn = mock(() =>
+      Promise.resolve(
+        JSON.stringify({
+          entities: [
+            { name: 'Alice', type: 'PERSON' },
+            { name: 'Acme Corp', type: 'ORGANIZATION' },
+          ],
+          relationships: [{ source: 'Alice', target: 'Acme Corp', type: 'WORKS_AT' }],
+        }),
+      ),
+    );
+
+    const result = await extractEntitiesViaBackend(
+      'Alice works at Acme Corp in Seattle',
+      sendFn,
+    );
+
+    expect(sendFn).toHaveBeenCalledTimes(1);
+    const sentPrompt = sendFn.mock.calls[0][0];
+    expect(sentPrompt).toContain('Alice works at Acme Corp');
+    expect(sentPrompt).toContain('Extract named entities');
+    expect(result.entities).toEqual([
+      { name: 'Alice', type: 'PERSON' },
+      { name: 'Acme Corp', type: 'ORGANIZATION' },
+    ]);
+    expect(result.relationships).toEqual([
+      { source: 'Alice', target: 'Acme Corp', type: 'WORKS_AT' },
+    ]);
+  });
+
+  realTest('returns empty on sendFn error', async () => {
+    const sendFn = mock(() => Promise.reject(new Error('Backend crashed')));
+    const result = await extractEntitiesViaBackend(
+      'Alice works at Acme Corp in Seattle',
+      sendFn,
+    );
+    expect(result).toEqual({ entities: [], relationships: [] });
+  });
+
+  realTest('returns empty on malformed JSON from backend', async () => {
+    const sendFn = mock(() => Promise.resolve('not valid json {{{'));
+    const result = await extractEntitiesViaBackend(
+      'Alice works at Acme Corp in Seattle',
+      sendFn,
+    );
+    expect(result).toEqual({ entities: [], relationships: [] });
+  });
+
+  realTest('filters invalid entity types from backend response', async () => {
+    const sendFn = mock(() =>
+      Promise.resolve(
+        JSON.stringify({
+          entities: [
+            { name: 'Alice', type: 'PERSON' },
+            { name: 'Foo', type: 'INVALID_TYPE' },
+          ],
+          relationships: [],
+        }),
+      ),
+    );
+
+    const result = await extractEntitiesViaBackend(
+      'Alice and Foo are important entities here',
+      sendFn,
+    );
+    expect(result.entities).toEqual([{ name: 'Alice', type: 'PERSON' }]);
+  });
+
+  realTest('truncates content exceeding max input chars', async () => {
+    const sendFn = mock(() =>
+      Promise.resolve(JSON.stringify({ entities: [], relationships: [] })),
+    );
+    const longContent = 'A'.repeat(5000);
+    await extractEntitiesViaBackend(longContent, sendFn);
+
+    expect(sendFn).toHaveBeenCalledTimes(1);
+    const sentPrompt = sendFn.mock.calls[0][0] as string;
+    // Prompt prefix + 4000 chars (not the full 5000)
+    expect(sentPrompt).toContain('A'.repeat(4000));
+    expect(sentPrompt).not.toContain('A'.repeat(4001));
+  });
+});
+
+describe('extractEntities (unified dispatcher)', () => {
+  const isRealImpl = extractEntities.length === 2;
+  const realTest = isRealImpl ? test : test.skip;
+
+  beforeEach(() => {
+    mockFetch.mockReset();
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(makeApiResponse({ entities: [], relationships: [] })),
+    );
+    globalThis.fetch = mockFetch;
+  });
+
+  realTest('prefers backendSendFn over apiKey when both are provided', async () => {
+    const sendFn = mock(() =>
+      Promise.resolve(
+        JSON.stringify({
+          entities: [{ name: 'Alice', type: 'PERSON' }],
+          relationships: [],
+        }),
+      ),
+    );
+
+    const result = await extractEntities(
+      'Alice works at Acme Corp in this longer text',
+      { apiKey: 'test-key', backendSendFn: sendFn },
+    );
+
+    // Backend path used, not the API
+    expect(sendFn).toHaveBeenCalledTimes(1);
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result.entities).toEqual([{ name: 'Alice', type: 'PERSON' }]);
+  });
+
+  realTest('falls back to API when no backendSendFn', async () => {
+    mockFetch.mockImplementation(() =>
+      Promise.resolve(
+        makeApiResponse({
+          entities: [{ name: 'Bob', type: 'PERSON' }],
+          relationships: [],
+        }),
+      ),
+    );
+
+    const result = await extractEntities(
+      'Bob works at Acme Corp in this longer text',
+      { apiKey: 'test-key' },
+    );
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result.entities).toEqual([{ name: 'Bob', type: 'PERSON' }]);
+  });
+
+  realTest('returns empty when neither option is provided', async () => {
+    const result = await extractEntities(
+      'Some text that is long enough for extraction',
+      {},
+    );
+
+    expect(mockFetch).not.toHaveBeenCalled();
+    expect(result).toEqual({ entities: [], relationships: [] });
   });
 });

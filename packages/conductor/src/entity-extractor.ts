@@ -31,6 +31,8 @@ export interface ExtractionResult {
   relationships: IngestRelationship[];
 }
 
+const EMPTY_EXTRACTION: ExtractionResult = { entities: [], relationships: [] };
+
 const EXTRACTION_PROMPT = `Extract named entities and relationships from the following text. Return ONLY valid JSON matching this schema — no markdown, no explanation:
 
 {"entities":[{"name":"...","type":"PERSON|ORGANIZATION|LOCATION|TOOL|CONCEPT|EVENT|PRODUCT|OTHER"}],"relationships":[{"source":"...","target":"...","type":"WORKS_AT|USES|LOCATED_IN|PART_OF|RELATED_TO|CREATED|MANAGES|DEPENDS_ON|..."}]}
@@ -46,18 +48,88 @@ Text:
 `;
 
 /**
- * Extract entities and relationships from text using the Anthropic Messages API.
+ * Parse and validate the raw JSON text returned by the extraction LLM.
+ * Shared between the API and backend extraction paths.
+ */
+function parseExtractionResponse(text: string): ExtractionResult {
+  const parsed = JSON.parse(text) as ExtractionResult;
+
+  if (!Array.isArray(parsed.entities)) return EMPTY_EXTRACTION;
+
+  const entities = parsed.entities.filter(
+    (e): e is IngestEntity =>
+      typeof e.name === 'string' &&
+      typeof e.type === 'string' &&
+      e.name.length > 0 &&
+      e.name.length <= MAX_ENTITY_NAME_LENGTH &&
+      VALID_ENTITY_TYPES.has(e.type),
+  );
+
+  const entityNames = new Set(entities.map((e) => e.name));
+  const relationships = Array.isArray(parsed.relationships)
+    ? parsed.relationships.filter(
+        (r): r is IngestRelationship =>
+          typeof r.source === 'string' &&
+          typeof r.target === 'string' &&
+          typeof r.type === 'string' &&
+          entityNames.has(r.source) &&
+          entityNames.has(r.target),
+      )
+    : [];
+
+  if (entities.length > 0) {
+    logger.info('Entities extracted', {
+      entityCount: entities.length,
+      relationshipCount: relationships.length,
+    });
+  }
+
+  return { entities, relationships };
+}
+
+/** Truncate content to the extraction input limit. */
+function truncateForExtraction(content: string): string {
+  return content.length > MAX_EXTRACTION_INPUT_CHARS
+    ? content.slice(0, MAX_EXTRACTION_INPUT_CHARS)
+    : content;
+}
+
+/**
+ * Extract entities via a backend send function (e.g. conductor's CLI backend).
+ * This is the **default** path — no API key required.
  * Returns empty arrays on failure (non-fatal).
  */
-export async function extractEntities(content: string, apiKey: string): Promise<ExtractionResult> {
-  const empty: ExtractionResult = { entities: [], relationships: [] };
+export async function extractEntitiesViaBackend(
+  content: string,
+  sendFn: (msg: string) => Promise<string>,
+): Promise<ExtractionResult> {
+  if (content.trim().length < 20) return EMPTY_EXTRACTION;
 
-  if (!apiKey || content.trim().length < 20) return empty;
+  const truncated = truncateForExtraction(content);
 
-  const truncated =
-    content.length > MAX_EXTRACTION_INPUT_CHARS
-      ? content.slice(0, MAX_EXTRACTION_INPUT_CHARS)
-      : content;
+  try {
+    const response = await Promise.race([
+      sendFn(EXTRACTION_PROMPT + truncated),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Backend extraction timed out')), EXTRACTION_TIMEOUT_MS),
+      ),
+    ]);
+    return parseExtractionResponse(response);
+  } catch (error) {
+    logger.warn('Entity extraction via backend failed', { error: getErrorDetail(error) });
+    return EMPTY_EXTRACTION;
+  }
+}
+
+/**
+ * Extract entities and relationships from text using the Anthropic Messages API (direct).
+ * This is the **fast-path** when an API key is available.
+ * Returns empty arrays on failure (non-fatal).
+ */
+export async function extractEntitiesViaApi(content: string, apiKey: string): Promise<ExtractionResult> {
+  if (!apiKey || content.trim().length < 20) return EMPTY_EXTRACTION;
+
+  const truncated = truncateForExtraction(content);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EXTRACTION_TIMEOUT_MS);
@@ -80,52 +152,40 @@ export async function extractEntities(content: string, apiKey: string): Promise<
 
     if (!response.ok) {
       logger.warn('Entity extraction API error', { status: response.status });
-      return empty;
+      return EMPTY_EXTRACTION;
     }
 
     const data = (await response.json()) as {
       content: Array<{ type: string; text?: string }>;
     };
     const text = data.content?.[0]?.text;
-    if (!text) return empty;
+    if (!text) return EMPTY_EXTRACTION;
 
-    const parsed = JSON.parse(text) as ExtractionResult;
-
-    if (!Array.isArray(parsed.entities)) return empty;
-
-    const entities = parsed.entities.filter(
-      (e): e is IngestEntity =>
-        typeof e.name === 'string' &&
-        typeof e.type === 'string' &&
-        e.name.length > 0 &&
-        e.name.length <= MAX_ENTITY_NAME_LENGTH &&
-        VALID_ENTITY_TYPES.has(e.type),
-    );
-
-    const entityNames = new Set(entities.map((e) => e.name));
-    const relationships = Array.isArray(parsed.relationships)
-      ? parsed.relationships.filter(
-          (r): r is IngestRelationship =>
-            typeof r.source === 'string' &&
-            typeof r.target === 'string' &&
-            typeof r.type === 'string' &&
-            entityNames.has(r.source) &&
-            entityNames.has(r.target),
-        )
-      : [];
-
-    if (entities.length > 0) {
-      logger.info('Entities extracted', {
-        entityCount: entities.length,
-        relationshipCount: relationships.length,
-      });
-    }
-
-    return { entities, relationships };
+    return parseExtractionResponse(text);
   } catch (error) {
     logger.warn('Entity extraction failed', { error: getErrorDetail(error) });
-    return empty;
+    return EMPTY_EXTRACTION;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export interface ExtractEntitiesOptions {
+  apiKey?: string;
+  backendSendFn?: (msg: string) => Promise<string>;
+}
+
+/**
+ * Unified extraction entry point with priority dispatch:
+ *  1. Backend send function (default path, uses conductor's CLI backend)
+ *  2. Direct API (fast-path optimization when an API key is set)
+ *  3. Skip (empty result) when neither is available
+ */
+export async function extractEntities(
+  content: string,
+  options: ExtractEntitiesOptions,
+): Promise<ExtractionResult> {
+  if (options.backendSendFn) return extractEntitiesViaBackend(content, options.backendSendFn);
+  if (options.apiKey) return extractEntitiesViaApi(content, options.apiKey);
+  return EMPTY_EXTRACTION;
 }

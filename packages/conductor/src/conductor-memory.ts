@@ -22,6 +22,8 @@ export interface StoreConversationContext {
   hookRegistry?: HookRegistryInterface;
   memoryConnected: boolean;
   llmApiKey?: string;
+  /** Backend send function for entity extraction (default path, no API key needed). */
+  backendSendFn?: (msg: string) => Promise<string>;
 }
 
 /**
@@ -76,7 +78,7 @@ async function applyMemoryHook(
 
 /**
  * Store conversation turn (user message + optional assistant response) in memory.
- * Extracts entities via LLM for knowledge graph population when an API key is available.
+ * Extracts entities via LLM for knowledge graph population (backend or direct API).
  * Pushes decision entries describing what happened.
  */
 export async function storeConversation(
@@ -121,7 +123,10 @@ export async function storeConversation(
 
   try {
     const fullText = responseContent ? `${content}\n\nAssistant: ${responseContent}` : content;
-    const { entities, relationships } = await extractEntities(fullText, ctx.llmApiKey ?? '');
+    const { entities, relationships } = await extractEntities(fullText, {
+      apiKey: ctx.llmApiKey,
+      backendSendFn: ctx.backendSendFn,
+    });
     const hasGraphData = entities.length > 0;
     const graphTargets = hasGraphData
       ? [StoreTarget.SQLITE, StoreTarget.VECTOR, StoreTarget.GRAPH]

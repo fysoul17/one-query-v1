@@ -9,11 +9,14 @@ import { makeMessage } from './helpers/mock-registry.ts';
 /**
  * Tests that storeConversation() extracts entities via LLM and passes them
  * to memory.store() with graph targets for knowledge graph population.
- * Without an API key, falls back to default targets (sqlite+vector).
+ * Without an API key or backendSendFn, falls back to default targets (sqlite+vector).
  */
 
-// Mock the entity extractor to avoid real API calls in tests
-const mockExtractEntities = mock(() => Promise.resolve({ entities: [], relationships: [] }));
+// Mock the unified extractEntities to avoid real API/backend calls in tests.
+// conductor-memory.ts calls only extractEntities(content, options).
+const mockExtractEntities = mock(() =>
+  Promise.resolve({ entities: [], relationships: [] }),
+);
 mock.module('../src/entity-extractor.ts', () => ({
   extractEntities: mockExtractEntities,
 }));
@@ -84,7 +87,48 @@ describe('storeConversation — graph ingestion', () => {
     expect(text).toContain('Alice is a developer at Acme Corp.');
   });
 
-  test('store call falls back to defaults without API key', async () => {
+  test('passes apiKey in options when llmApiKey is set', async () => {
+    ctx.llmApiKey = 'test-api-key';
+    const msg = makeMessage({ content: 'Alice works at Acme Corp' });
+    await storeConversation(ctx, msg, decisions);
+
+    expect(mockExtractEntities).toHaveBeenCalledTimes(1);
+    const [, options] = mockExtractEntities.mock.calls[0];
+    expect(options).toEqual({ apiKey: 'test-api-key', backendSendFn: undefined });
+  });
+
+  test('passes backendSendFn in options when set', async () => {
+    const backendSendFn = mock(() => Promise.resolve('{}'));
+    ctx = makeCtx({
+      memory: memory as unknown as MemoryInterface,
+      backendSendFn,
+    });
+    const msg = makeMessage({ content: 'Carol joined the project today' });
+    await storeConversation(ctx, msg, decisions);
+
+    expect(mockExtractEntities).toHaveBeenCalledTimes(1);
+    const [, options] = mockExtractEntities.mock.calls[0];
+    expect(options.apiKey).toBeUndefined();
+    expect(options.backendSendFn).toBe(backendSendFn);
+  });
+
+  test('passes both apiKey and backendSendFn when both are set', async () => {
+    const backendSendFn = mock(() => Promise.resolve('{}'));
+    ctx = makeCtx({
+      memory: memory as unknown as MemoryInterface,
+      llmApiKey: 'test-api-key',
+      backendSendFn,
+    });
+    const msg = makeMessage({ content: 'Dave works on the frontend team' });
+    await storeConversation(ctx, msg, decisions);
+
+    expect(mockExtractEntities).toHaveBeenCalledTimes(1);
+    const [, options] = mockExtractEntities.mock.calls[0];
+    expect(options.apiKey).toBe('test-api-key');
+    expect(options.backendSendFn).toBe(backendSendFn);
+  });
+
+  test('store call falls back to defaults without API key or backendSendFn', async () => {
     const msg = makeMessage({ content: 'Alice works at Acme Corp' });
     await storeConversation(ctx, msg, decisions);
 
