@@ -82,8 +82,8 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 Every message flows through a simple pipeline:
 
 ```
-Message In ──▶ Memory Search ──▶ Respond or Delegate ──▶ Memory Store ──▶ Response Out
-                 (context)       (AI backend / agent)     (if valuable)    (stream WS)
+Message In ──▶ Memory Search ──▶ Respond or Delegate ──▶ Entity Extract ──▶ Memory Store ──▶ Response Out
+                 (context)       (AI backend / agent)    (LLM → graph)     (if valuable)    (stream WS)
 ```
 
 The Conductor is a simple AI agent: it searches memory for context, then either responds directly via its AI backend or delegates to a specific agent when `targetAgentId` is set.
@@ -96,7 +96,7 @@ The Conductor is a simple AI agent: it searches memory for context, then either 
 Swap AI providers without changing code. `claude -p` is the default. Codex CLI, Gemini CLI, Pi, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry. Custom tool support is wired up for Claude (`--allowed-tools`), Codex (`--enable`), Gemini (`--allowed-tools`), and Ollama (API `tools` parameter).
 
 ### Persistent Memory (pyx-memory)
-Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via the [`@pyxmate/memory`](https://www.npmjs.com/package/@pyxmate/memory) npm SDK. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). The runtime connects to pyx-memory as a **sidecar** (standalone HTTP service via Docker) using `MemoryClient` when `MEMORY_URL` is configured. Memory persists across sessions and agent restarts.
+Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via the [`@pyxmate/memory`](https://www.npmjs.com/package/@pyxmate/memory) npm SDK. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). The runtime connects to pyx-memory as a **sidecar** (standalone HTTP service via Docker) using `MemoryClient` when `MEMORY_URL` is configured. Memory persists across sessions and agent restarts. Conversations are automatically enriched with **LLM-powered entity extraction** — named entities and relationships are extracted at store time and fed into the knowledge graph for Graph RAG.
 
 ### Agent Lifecycle Management
 Full CRUD for AI agents with serial message queues, idle timeout auto-shutdown, configurable pool limits, session persistence (`--resume` flags), and ownership-based permissions (user-created vs conductor-created agents).
