@@ -18,7 +18,7 @@
     "@autonomy/agent-manager": "workspace:*",
     "@autonomy/conductor": "workspace:*",
     "@autonomy/cron-manager": "workspace:*",
-    "@pyxmate/memory": "^0.1.1-beta",
+    "@pyxmate/memory": "^0.1.3-beta",
     "@autonomy/plugin-system": "workspace:*",
     "@autonomy/shared": "workspace:*"
   }
