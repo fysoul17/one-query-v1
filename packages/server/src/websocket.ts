@@ -325,7 +325,7 @@ async function handleConductorMessage(
   ctx: WebSocketContext,
   parsed: WSClientMessage,
 ): Promise<void> {
-  const { debugBus, sessionStore, bufferManager, sessionClientsMap, sessionAbortControllers } = ctx;
+  const { conductor, debugBus, sessionStore, bufferManager, sessionClientsMap, sessionAbortControllers } = ctx;
   ensureSession(ws, sessionStore);
 
   // After ensureSession, ws.data.sessionId may have just been set (lazy session creation).

@@ -18,7 +18,7 @@ import {
 import { Conductor } from '@autonomy/conductor';
 import { CronManager } from '@autonomy/cron-manager';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
-import { DebugEventCategory, DebugEventLevel, type Logger } from '@autonomy/shared';
+import { DebugEventCategory, DebugEventLevel, type AIBackend, type Logger } from '@autonomy/shared';
 import type { MemoryClient } from '@pyxmate/memory';
 import { AgentStore } from './agent-store.ts';
 import type { parseEnvConfig } from './config.ts';
@@ -58,7 +58,7 @@ export function initRuntimeDatabase(config: EnvConfig, logger: Logger): RuntimeD
 
 // ── Backend Registry ────────────────────────────────────────────────────────
 
-export function initBackendRegistry(defaultBackend: string): DefaultBackendRegistry {
+export function initBackendRegistry(defaultBackend: AIBackend): DefaultBackendRegistry {
   const registry = new DefaultBackendRegistry(defaultBackend);
   registry.register(new ClaudeBackend());
   registry.register(new CodexBackend());

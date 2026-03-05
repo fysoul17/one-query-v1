@@ -1,4 +1,4 @@
-import type { BackendCapabilities, BackendStatus } from '@autonomy/shared';
+import type { AIBackend, BackendCapabilities, BackendStatus } from '@autonomy/shared';
 
 /** Mask an API key: show only last 4 chars. Returns undefined for short/missing keys. */
 export function maskApiKey(key: string | undefined): string | undefined {
@@ -89,7 +89,7 @@ export async function checkCliAuth(
 
 export interface GetStatusOptions {
   /** The backend instance name (e.g., 'claude'). */
-  name: string;
+  name: AIBackend;
   /** CLI binary name to look up via Bun.which (e.g., 'claude'). */
   cliBinary: string;
   /** Env var names that hold the API key (checked in order). */

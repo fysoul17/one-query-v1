@@ -12,7 +12,8 @@ export interface ConductorDecision {
     | 'ai_route'
     | 'ai_fallback'
     | 'direct_response'
-    | 'plugin_reject';
+    | 'plugin_reject'
+    | 'system_actions';
   targetAgentId?: AgentId;
   reason: string;
 }

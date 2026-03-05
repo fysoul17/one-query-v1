@@ -64,7 +64,7 @@ services:
     restart: unless-stopped
 
   memory:
-    image: ghcr.io/fysoul17/pyx-memory:0.1.3-beta
+    image: ghcr.io/fysoul17/pyx-memory:0.1.5-beta
     ports:
       - "7822:7822"
     volumes:
