@@ -90,6 +90,14 @@ export class MockMemory implements MemoryInterface {
     };
   }
 
+  async queryAsOf(): Promise<MemoryEntry[]> {
+    return [];
+  }
+
+  async queryByEventTime(): Promise<MemoryEntry[]> {
+    return [];
+  }
+
   async shutdown(): Promise<void> {
     this.entries.clear();
     this.initialized = false;

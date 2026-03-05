@@ -60,6 +60,14 @@ export class MockMemory implements MemoryInterface {
     return { totalEntries: 0, storageUsedBytes: 0, vectorCount: 0, recentAccessCount: 0 };
   }
 
+  async queryAsOf(): Promise<MemoryEntry[]> {
+    return [];
+  }
+
+  async queryByEventTime(): Promise<MemoryEntry[]> {
+    return [];
+  }
+
   async shutdown(): Promise<void> {
     this.initialized = false;
   }
