@@ -211,3 +211,51 @@
   pointer-events: none;
   z-index: 0;
 }
+
+/* Force-directed graph canvas */
+.graph-canvas-container {
+  height: 560px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background:
+    radial-gradient(
+      ellipse at 50% 50%,
+      color-mix(in srgb, var(--neon-cyan) 2%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px), var(--background);
+  background-size:
+    100% 100%,
+    40px 40px,
+    40px 40px,
+    100% 100%;
+  border: 1px solid var(--border);
+}
+
+@media (min-width: 1024px) {
+  .graph-canvas-container {
+    height: 720px;
+  }
+}
+
+/* Graph vignette overlay — darkens edges for depth */
+.graph-vignette {
+  background: radial-gradient(ellipse at 50% 50%, transparent 50%, rgba(0, 0, 0, 0.3) 100%);
+}
+
+/* Scanline effect overlay */
+.scanlines::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 50;
+}

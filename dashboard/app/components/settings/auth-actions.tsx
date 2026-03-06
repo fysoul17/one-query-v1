@@ -33,8 +33,8 @@ const API_KEY_META: Record<string, { placeholder: string; label: string; descrip
   },
 };
 
-/** Backend display names for UI labels. */
-const BACKEND_LABELS: Record<string, string> = {
+/** CLI product names — intentionally different from display labels (e.g. "Claude Code" vs "Claude"). */
+const CLI_PRODUCT_NAMES: Record<string, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   gemini: 'Gemini',
@@ -50,8 +50,8 @@ function getKeyMeta(backendName: string) {
   );
 }
 
-function getBackendLabel(backendName: string) {
-  return BACKEND_LABELS[backendName] ?? backendName;
+function getCliProductName(backendName: string) {
+  return CLI_PRODUCT_NAMES[backendName] ?? backendName;
 }
 
 function ApiKeyInput({
@@ -305,7 +305,7 @@ function NoCliAvailableActions({
   const { showForm, setShowForm, apiKeyValue, setApiKeyValue, saving, error, handleSave } =
     useApiKeyActions(backendName, onAuthChange);
   const meta = getKeyMeta(backendName);
-  const label = getBackendLabel(backendName);
+  const label = getCliProductName(backendName);
 
   return (
     <div className="space-y-2 border-t border-border/50 pt-3">

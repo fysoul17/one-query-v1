@@ -5,36 +5,8 @@ import { Check, Cpu, FileText, MessageSquare, Shield, Wrench } from 'lucide-reac
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getBackendConfig } from '@/lib/backend-config';
 import { AuthActions } from './auth-actions';
-
-const backendStyles: Record<string, { label: string; color: string; badgeClass: string }> = {
-  claude: {
-    label: 'Claude',
-    color: 'text-status-purple',
-    badgeClass: 'bg-status-purple/10 text-status-purple border-status-purple/20',
-  },
-  codex: {
-    label: 'Codex',
-    color: 'text-status-green',
-    badgeClass: 'bg-status-green/10 text-status-green border-status-green/20',
-  },
-  gemini: {
-    label: 'Gemini',
-    color: 'text-primary',
-    badgeClass: 'bg-primary/10 text-primary border-primary/20',
-  },
-  pi: {
-    label: 'Pi',
-    color: 'text-status-amber',
-    badgeClass: 'bg-status-amber/10 text-status-amber border-status-amber/20',
-  },
-};
-
-const defaultStyle = {
-  label: 'Unknown',
-  color: 'text-muted-foreground',
-  badgeClass: 'bg-muted text-muted-foreground border-border',
-};
 
 function StatusBadge({ backend }: { backend: BackendStatus }) {
   if (!backend.available) {
@@ -151,7 +123,7 @@ export function ProviderCard({
   onSetDefault,
   onAuthChange,
 }: ProviderCardProps) {
-  const style = backendStyles[backend.name] ?? defaultStyle;
+  const style = getBackendConfig(backend.name);
 
   return (
     <Card className={`${isDefault ? 'ring-1 ring-primary/30' : ''}`}>

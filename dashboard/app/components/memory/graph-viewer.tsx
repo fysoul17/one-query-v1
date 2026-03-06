@@ -1,6 +1,5 @@
 import type { GraphVizData } from '@pyxmate/memory/dashboard';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { GraphForceCanvas } from './graph-force-canvas';
 
 interface GraphViewerProps {
   data: GraphVizData | null;
@@ -35,59 +34,24 @@ export function GraphViewer({ data, isLoading, error }: GraphViewerProps) {
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-        <span>
-          {data.nodeCount} node{data.nodeCount !== 1 ? 's' : ''}
-        </span>
-        <span>
-          {data.edgeCount} edge{data.edgeCount !== 1 ? 's' : ''}
-        </span>
-      </div>
-
-      {Object.keys(data.nodeTypes).length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Node types:</span>
-          {Object.entries(data.nodeTypes).map(([type, count]) => (
-            <Badge key={type} variant="outline" className="text-[10px]">
-              {type} ({count})
-            </Badge>
-          ))}
+  if (data.nodeCount > 0 && data.edgeCount === 0) {
+    return (
+      <div className="relative h-full w-full">
+        <GraphForceCanvas data={data} />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+          <div className="rounded-lg border border-neon-cyan/30 bg-black/40 px-6 py-4 text-center backdrop-blur">
+            <p className="text-sm text-neon-cyan mb-2">
+              Graph loaded with {data.nodeCount} entities
+            </p>
+            <p className="text-xs text-muted-foreground">
+              No relationships found yet — relationships will appear as you ingest more content and
+              link entities together.
+            </p>
+          </div>
         </div>
-      )}
-
-      {Object.keys(data.edgeTypes).length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Edge types:</span>
-          {Object.entries(data.edgeTypes).map(([type, count]) => (
-            <Badge key={type} variant="secondary" className="text-[10px]">
-              {type} ({count})
-            </Badge>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {data.nodes.map((node) => (
-          <Card key={node.id} className="glass transition-all hover:glow-purple">
-            <CardContent className="space-y-2 py-3">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold">{node.label}</span>
-                <Badge variant="outline" className="text-[10px]">
-                  {node.type}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                <span>
-                  {node.memoryCount} linked {node.memoryCount !== 1 ? 'entries' : 'entry'}
-                </span>
-                <span>degree {node.degree}</span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <GraphForceCanvas data={data} />;
 }

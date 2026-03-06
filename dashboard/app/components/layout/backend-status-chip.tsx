@@ -5,20 +5,7 @@ import { Cpu } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getBackendStatus } from '@/lib/api';
-
-const backendColors: Record<string, string> = {
-  claude: 'text-status-purple',
-  codex: 'text-status-green',
-  gemini: 'text-primary',
-  pi: 'text-status-amber',
-};
-
-const backendLabels: Record<string, string> = {
-  claude: 'Claude',
-  codex: 'Codex',
-  gemini: 'Gemini',
-  pi: 'Pi',
-};
+import { getBackendConfig } from '@/lib/backend-config';
 
 type ChipStatus = 'connected' | 'no_key' | 'unavailable' | 'loading' | 'error';
 
@@ -97,8 +84,7 @@ export function BackendStatusChip() {
 
   const status = deriveStatus(data, hasError);
   const backendName = data?.defaultBackend ?? 'claude';
-  const label = backendLabels[backendName] ?? backendName;
-  const color = backendColors[backendName] ?? 'text-muted-foreground';
+  const { label, color } = getBackendConfig(backendName);
 
   return (
     <Link
