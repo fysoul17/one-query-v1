@@ -35,7 +35,7 @@ import {
   QueueFullError,
 } from './errors.ts';
 import { SessionProcessPool } from './session-process-pool.ts';
-import { type SoulConfig, DEFAULT_SOUL } from './soul.ts';
+import { DEFAULT_SOUL, type SoulConfig } from './soul.ts';
 import {
   type CronManagerLike,
   executeSystemActions,
@@ -141,7 +141,6 @@ export class Conductor {
     return 'Conductor';
   }
 
-  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: initialization requires sequential backend/pool setup with fallback logic
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
