@@ -2,7 +2,7 @@
 
 > Single source of truth. Everything needed to understand and extend this template.
 >
-> Last synced with codebase: 2026-03-05 (entity extraction + doc sync)
+> Last synced with codebase: 2026-03-06 (graph relationships, scripts, structure sync)
 
 ---
 
@@ -216,6 +216,12 @@ agent-forge/
 │           ├── terminal-ws.ts       # /ws/terminal PTY bridge handler
 │           ├── stream-buffer.ts     # Per-session stream buffer for reconnect replay
 │           ├── step-metadata.ts     # Agent step metadata accumulation
+│           ├── config-manager.ts    # Runtime config management
+│           ├── debug-bus.ts         # Debug event bus (ring buffer + pub/sub)
+│           ├── secret-store.ts      # Encrypted backend API key storage
+│           ├── session-store.ts     # Session persistence (SQLite)
+│           ├── agent-store.ts       # Agent definition persistence (SQLite)
+│           ├── validation.ts        # Route input validation helpers
 │           └── routes/              # REST route handlers (agents, memory, crons, etc.)
 │
 ├── dashboard/                   # Next.js 16.1 (built-in cyberpunk UI)
@@ -534,6 +540,7 @@ Runtime config overrides. Empty `{}` uses defaults from `DEFAULTS` constant.
 | -------- | --------------------------------- | ------------------------------- |
 | `GET`    | `/api/memory/graph/nodes`         | List graph nodes (filter by name, type, limit) |
 | `GET`    | `/api/memory/graph/edges`         | Graph stats (node/edge counts)  |
+| `GET`    | `/api/memory/graph/relationships` | List graph relationships (filter by limit) |
 | `POST`   | `/api/memory/graph/query`         | Query the graph (traverse by nodeId + depth) |
 
 ### Cron Routes
@@ -764,7 +771,33 @@ Custom code is only needed for advanced integrations (e.g., ERP).
 
 ---
 
-## 15. Planned / Future
+## 15. Scripts
+
+Convenience shell scripts for Docker-based setup and teardown.
+
+| Script | Purpose |
+| ------ | ------- |
+| `scripts/setup.sh` | Authenticates Docker with GHCR to pull the private `pyx-memory` image. Reads `GHCR_TOKEN` from `.env`. Required before `--profile full`. |
+| `scripts/cleanup.sh` | Stops containers, removes built images. Options: `--volumes` (remove data volumes), `--prune` (docker system prune), `--all` (both). |
+| `run.sh` | One-liner: rebuilds dashboard image (no cache) and starts the full-profile stack. |
+
+### Typical workflow
+
+```bash
+# First-time setup (GHCR auth for pyx-memory image)
+./scripts/setup.sh
+
+# Run the full stack
+docker compose -f docker/docker-compose.yaml --profile full up --build
+
+# Tear down and clean up
+./scripts/cleanup.sh            # keep data volumes
+./scripts/cleanup.sh --all      # remove everything
+```
+
+---
+
+## 16. Planned / Future
 
 Items not yet implemented but part of the vision:
 

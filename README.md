@@ -168,6 +168,22 @@ docker compose -f docker/docker-compose.yaml up -d
 docker compose -f docker/docker-compose.yaml down
 ```
 
+### Scripts
+
+| Script | Description |
+|--------|-------------|
+| `scripts/setup.sh` | GHCR authentication for the private `pyx-memory` Docker image (required before `--profile full`) |
+| `scripts/cleanup.sh` | Stop containers, remove images. Use `--volumes` to delete data, `--all` for full cleanup |
+| `run.sh` | One-liner to rebuild and start the full stack |
+
+```bash
+# First-time setup (authenticates with GHCR)
+./scripts/setup.sh
+
+# Full cleanup (containers + volumes + prune)
+./scripts/cleanup.sh --all
+```
+
 **Environment variables** (optional, set in `.env` or pass inline):
 
 | Variable | Default | Description |
