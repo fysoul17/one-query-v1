@@ -118,7 +118,9 @@ export async function extractEntitiesViaBackend(
   sendFn: (msg: string) => Promise<string>,
 ): Promise<ExtractionResult> {
   if (content.trim().length < 20) {
-    logger.info('Backend extraction skipped — content too short', { length: content.trim().length });
+    logger.info('Backend extraction skipped — content too short', {
+      length: content.trim().length,
+    });
     return EMPTY_EXTRACTION;
   }
 
@@ -148,9 +150,15 @@ export async function extractEntitiesViaBackend(
  * This is the **fast-path** when an API key is available.
  * Returns empty arrays on failure (non-fatal).
  */
-export async function extractEntitiesViaApi(content: string, apiKey: string): Promise<ExtractionResult> {
+export async function extractEntitiesViaApi(
+  content: string,
+  apiKey: string,
+): Promise<ExtractionResult> {
   if (!apiKey || content.trim().length < 20) {
-    logger.info('API extraction skipped', { hasApiKey: !!apiKey, contentLength: content.trim().length });
+    logger.info('API extraction skipped', {
+      hasApiKey: !!apiKey,
+      contentLength: content.trim().length,
+    });
     return EMPTY_EXTRACTION;
   }
 

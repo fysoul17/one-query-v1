@@ -119,7 +119,9 @@ export function CreateCronDialog() {
       </DialogTrigger>
       <DialogContent className="border-primary/20 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-primary font-display tracking-wider">New Cron Job</DialogTitle>
+          <DialogTitle className="text-primary font-display tracking-wider">
+            New Cron Job
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">

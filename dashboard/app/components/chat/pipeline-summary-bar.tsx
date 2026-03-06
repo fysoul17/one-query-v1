@@ -53,11 +53,7 @@ export function PipelineSummaryBar({ phases }: { phases: PipelinePhase[] }) {
 
       {/* Expanded timeline */}
       {expanded && (
-        <section
-          id={panelId}
-          aria-label="Processing steps"
-          className="rounded-md mt-1 px-2 py-1"
-        >
+        <section id={panelId} aria-label="Processing steps" className="rounded-md mt-1 px-2 py-1">
           <PipelineTimeline phases={phases} />
         </section>
       )}

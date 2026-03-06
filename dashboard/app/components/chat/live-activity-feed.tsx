@@ -55,12 +55,14 @@ const PhaseRow = memo(function PhaseRow({
             {debug.memoryQuery && (
               <div className="text-[9px] font-mono text-muted-foreground/50 truncate">
                 {/* A11y-3: /70 opacity clears 4.5:1 contrast on dark bg */}
-                <span className="text-status-purple/70">query:</span> &quot;{debug.memoryQuery}&quot;
+                <span className="text-status-purple/70">query:</span> &quot;{debug.memoryQuery}
+                &quot;
               </div>
             )}
             {debug.memoryResults !== undefined && (
               <div className="text-[9px] font-mono text-muted-foreground/50">
-                <span className="text-status-purple/70">results:</span> {debug.memoryResults} entries
+                <span className="text-status-purple/70">results:</span> {debug.memoryResults}{' '}
+                entries
               </div>
             )}
             {debug.memoryEntryPreviews && debug.memoryEntryPreviews.length > 0 && (
@@ -132,7 +134,9 @@ const ToolCallRow = memo(function ToolCallRow({
       <div className="flex flex-col items-center">
         <div
           className={`h-1.5 w-1.5 rounded-full shrink-0 mt-1.5 ${
-            isStreaming ? 'bg-status-amber animate-pulse motion-reduce:animate-none' : 'bg-status-green'
+            isStreaming
+              ? 'bg-status-amber animate-pulse motion-reduce:animate-none'
+              : 'bg-status-green'
           }`}
         />
         {!isLast && <div className="w-px flex-1 min-h-2 bg-border/20 mt-0.5" />}
@@ -212,10 +216,7 @@ const ThinkingRow = memo(function ThinkingRow({
           thinking
         </button>
         {expanded && (
-          <div
-            id={thinkingPanelId}
-            className="mt-0.5 rounded px-1.5 py-1 max-h-32 overflow-y-auto"
-          >
+          <div id={thinkingPanelId} className="mt-0.5 rounded px-1.5 py-1 max-h-32 overflow-y-auto">
             <p className="text-[9px] font-mono text-muted-foreground/50 whitespace-pre-wrap leading-tight">
               {thinking.content}
               {isStreaming && (

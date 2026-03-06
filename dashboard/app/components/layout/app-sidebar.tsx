@@ -52,9 +52,7 @@ export function AppSidebar() {
             <Cpu className="h-4 w-4 text-background" />
           </div>
           <div>
-            <h2 className="font-display text-lg tracking-[0.1em] text-foreground">
-              AUTONOMY
-            </h2>
+            <h2 className="font-display text-lg tracking-[0.1em] text-foreground">AUTONOMY</h2>
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
               Runtime v0.0.0
             </p>

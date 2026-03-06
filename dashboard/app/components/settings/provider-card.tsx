@@ -18,13 +18,19 @@ function StatusBadge({ backend }: { backend: BackendStatus }) {
   }
   if (!backend.configured) {
     return (
-      <Badge variant="outline" className="bg-status-amber/10 text-status-amber border-status-amber/20">
+      <Badge
+        variant="outline"
+        className="bg-status-amber/10 text-status-amber border-status-amber/20"
+      >
         Not Configured
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="bg-status-green/10 text-status-green border-status-green/20">
+    <Badge
+      variant="outline"
+      className="bg-status-green/10 text-status-green border-status-green/20"
+    >
       Ready
     </Badge>
   );

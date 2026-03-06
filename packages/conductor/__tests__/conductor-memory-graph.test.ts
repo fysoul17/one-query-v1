@@ -14,9 +14,7 @@ import { makeMessage } from './helpers/mock-registry.ts';
 
 // Mock the unified extractEntities to avoid real API/backend calls in tests.
 // conductor-memory.ts calls only extractEntities(content, options).
-const mockExtractEntities = mock(() =>
-  Promise.resolve({ entities: [], relationships: [] }),
-);
+const mockExtractEntities = mock(() => Promise.resolve({ entities: [], relationships: [] }));
 mock.module('../src/entity-extractor.ts', () => ({
   extractEntities: mockExtractEntities,
 }));

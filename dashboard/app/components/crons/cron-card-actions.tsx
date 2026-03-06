@@ -157,7 +157,10 @@ export function CronCardActions({ cron }: { cron: CronEntryWithStatus }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-status-red hover:bg-status-red/80">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-status-red hover:bg-status-red/80"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

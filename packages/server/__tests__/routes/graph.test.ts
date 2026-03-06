@@ -224,7 +224,9 @@ describe('Graph routes — memory without graph methods (DisabledMemory)', () =>
   test('all routes throw NotImplementedError', () => {
     expect(() => routes.getNodes(new Request('http://localhost'))).toThrow(NotImplementedError);
     expect(() => routes.getEdges()).toThrow(NotImplementedError);
-    expect(() => routes.getRelationships(new Request('http://localhost'))).toThrow(NotImplementedError);
+    expect(() => routes.getRelationships(new Request('http://localhost'))).toThrow(
+      NotImplementedError,
+    );
     expect(() => routes.query(new Request('http://localhost'))).toThrow(NotImplementedError);
   });
 });

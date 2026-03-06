@@ -60,11 +60,17 @@ const components: Components = {
   },
   // Lists
   ul({ children }) {
-    return <ul className="mb-2 ml-4 list-disc space-y-0.5 marker:text-muted-foreground/50">{children}</ul>;
+    return (
+      <ul className="mb-2 ml-4 list-disc space-y-0.5 marker:text-muted-foreground/50">
+        {children}
+      </ul>
+    );
   },
   ol({ children }) {
     return (
-      <ol className="mb-2 ml-4 list-decimal space-y-0.5 marker:text-muted-foreground/50">{children}</ol>
+      <ol className="mb-2 ml-4 list-decimal space-y-0.5 marker:text-muted-foreground/50">
+        {children}
+      </ol>
     );
   },
   li({ children }) {

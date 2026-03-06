@@ -206,6 +206,7 @@ function drawEdge(
   ctx.globalAlpha = 1;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: canvas render function with many visual state branches
 function drawNode(
   ctx: CanvasRenderingContext2D,
   node: SimNode,
@@ -409,6 +410,7 @@ export function GraphForceCanvas({ data }: GraphForceCanvasProps) {
   }, []);
 
   /* ---------- Draw ---------- */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: main render loop composing particles, camera, edges, and nodes
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -785,6 +787,7 @@ export function GraphForceCanvas({ data }: GraphForceCanvasProps) {
   }, [requestDraw]);
 
   const handleKeyDown = useCallback(
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keyboard navigation with multiple key bindings and selection states
     (e: React.KeyboardEvent) => {
       // Select first node when nothing is selected and user presses Enter or arrow key
       if (!selectedRef.current) {

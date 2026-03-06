@@ -119,9 +119,7 @@ export function AgentCardActions({ agent }: { agent: AgentRuntimeInfo }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRestart}>
-              Restart
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleRestart}>Restart</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -137,7 +135,10 @@ export function AgentCardActions({ agent }: { agent: AgentRuntimeInfo }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-status-red hover:bg-status-red/80">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-status-red hover:bg-status-red/80"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
