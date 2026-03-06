@@ -1,7 +1,6 @@
 // @autonomy/conductor — AI-powered orchestrator
 
 export { Conductor } from './conductor.ts';
-export { type SoulConfig, DEFAULT_SOUL, loadSoulAsync } from './soul.ts';
 export {
   ConductorError,
   ConductorNotInitializedError,
@@ -10,6 +9,7 @@ export {
   DelegationError,
   QueueFullError,
 } from './errors.ts';
+export { DEFAULT_SOUL, loadSoulAsync, type SoulConfig } from './soul.ts';
 export {
   executeSystemActions,
   formatActionResults,

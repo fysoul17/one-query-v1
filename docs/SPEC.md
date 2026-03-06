@@ -85,7 +85,7 @@ A template runtime that turns CLI AI tools (`claude -p`, Codex CLI, Gemini CLI, 
 │ └──────┘ └──────┘ └──────┘ └──────────────┘                     │
 │                                                                   │
 │  ┌──────────────────────────────────────────────────────────┐    │
-│  │  MEMORY SYSTEM (pyx-memory)                               │    │
+│  │  MEMORY SYSTEM (memory sidecar)                             │    │
 │  │                                                           │    │
 │  │  bun:sqlite     → structured data (sessions, config,      │    │
 │  │                    agent registry, graph nodes/edges)      │    │
@@ -183,7 +183,7 @@ FULL (docker-compose --profile full up)
 | AI Backends   | claude -p (default), codex, gemini, pi, ollama                 | Pluggable via CLIBackend interface       |
 | Vector DB     | LanceDB (embedded)                                             | 4MB idle, fast ANN, native TS SDK        |
 | Structured DB | bun:sqlite (WAL mode)                                          | Embedded, zero config                    |
-| Memory        | pyx-memory (@pyxmate/memory SDK + Docker)                      | Hybrid RAG, graph store, lifecycle       |
+| Memory        | Memory sidecar (Docker) via `MemoryClient`                     | Hybrid RAG, graph store, lifecycle       |
 | Dashboard     | Next.js 16.1 (App Router) + Tailwind CSS 4 + shadcn/ui        | RSC, standalone output                   |
 | Container     | Docker + docker-compose                                        | One-click deploy                         |
 | Linter        | Biome 2.4+                                                     | Fast, unified linter + formatter         |
@@ -194,7 +194,7 @@ FULL (docker-compose --profile full up)
 ## 4. Project Structure
 
 ```
-agent-forge/
+<project-root>/
 │
 ├── packages/
 │   ├── shared/                  # Types, interfaces, constants, logger
@@ -239,6 +239,7 @@ agent-forge/
 ├── data/                        # Default /data volume contents
 │   ├── agents/
 │   │   └── registry.json       # Seed agent definitions (restored on startup)
+│   ├── soul.md                  # Conductor's constitutional identity (loaded at boot, read-only at runtime)
 │   ├── runtime.sqlite           # Sessions + agents (bun:sqlite, WAL mode, created at runtime)
 │   ├── crons.json               # Scheduled task definitions
 │   └── config.json              # Runtime config overrides
@@ -304,6 +305,24 @@ The Conductor's logic is split across focused modules:
 - `system-action-executor.ts` — executes structured system actions (agent create/delete, cron ops)
 - `system-action-parser.ts` — parses system action blocks from AI responses
 - `activity-log.ts` — in-memory activity ring buffer
+- `soul.ts` — constitutional soul loader (`SoulConfig`, `loadSoulAsync`, `DEFAULT_SOUL`)
+
+### Constitutional Soul
+
+The Conductor's identity is defined by a **soul** — an immutable configuration loaded from `data/soul.md` at boot. The soul defines the conductor's personality, rules, and behavioral constraints.
+
+**Three-layer cognitive architecture:**
+
+| Layer | Source | Mutability | Purpose |
+| ----- | ------ | ---------- | ------- |
+| **Soul** | `data/soul.md` | Immutable at runtime (filesystem only) | Core identity, rules, personality |
+| **Core Memory** | Admin API (`/api/memory`) | Admin-only | Persistent knowledge, config |
+| **Experience** | Automatic (conversation flow) | Automatic | Session context, entity graph |
+
+- `loadSoulAsync(dataDir)` reads `{dataDir}/soul.md` and returns a `SoulConfig`
+- Falls back to `DEFAULT_SOUL` if the file is missing, empty, or unreadable
+- The soul is injected into `ConductorOptions` and used to build the system prompt
+- No API endpoint or system action can modify the soul — only filesystem access can change it
 
 ### Agent Management
 
@@ -353,11 +372,11 @@ Each agent can use a different CLI backend. The `BackendRegistry` manages multip
 
 ---
 
-## 7. Memory System (pyx-memory)
+## 7. Memory System
 
-Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via the [`@pyxmate/memory`](https://www.npmjs.com/package/@pyxmate/memory) npm SDK. The runtime connects to pyx-memory as a **sidecar** (Docker container: `ghcr.io/fysoul17/pyx-memory`) via `MemoryClient` when `MEMORY_URL` is set. When no memory server is configured, the runtime uses `DisabledMemory` (no-op) and all memory features are unavailable.
+Memory is powered by a pluggable memory sidecar, consumed via the `MemoryClient` interface. The runtime connects to the memory server as a **sidecar** (Docker container) via `MemoryClient` when `MEMORY_URL` is set. When no memory server is configured, the runtime uses `DisabledMemory` (no-op) and all memory features are unavailable.
 
-### Storage Layer (managed by pyx-memory sidecar)
+### Storage Layer (managed by memory sidecar)
 
 | Store             | Technology                          | Purpose                               |
 | ----------------- | ----------------------------------- | ------------------------------------- |
@@ -365,7 +384,7 @@ Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), co
 | Vector embeddings | LanceDB (embedded, 384-dim local)   | Semantic search, RAG                  |
 | Graph store       | SQLiteGraphStore (default) or Neo4j | Entity/relation graph for Graph RAG   |
 
-> **Note:** These stores are owned and managed by the pyx-memory sidecar, not the runtime. The runtime accesses them indirectly via `MemoryClient` HTTP calls. The runtime has its own `runtime.sqlite` (in `/data`) for sessions and agent definitions.
+> **Note:** These stores are owned and managed by the memory sidecar, not the runtime. The runtime accesses them indirectly via `MemoryClient` HTTP calls. The runtime has its own `runtime.sqlite` (in `/data`) for sessions and agent definitions.
 
 ### Memory Types
 
@@ -654,7 +673,7 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `AI_BACKEND`           | No        | `claude`                 | CLI backend to use (`claude`, `codex`, `gemini`, `pi`, `ollama`) |
 | `IDLE_TIMEOUT_MS`      | No        | `300000`                 | Agent idle timeout (5 min) |
 | `MAX_AGENTS`           | No        | `10`                     | Max concurrent agents      |
-| `EMBEDDING_PROVIDER`   | No        | `stub`                   | Embedding provider — **pyx-memory sidecar** env var (`stub`, `local`, `anthropic`, `openai`) |
+| `EMBEDDING_PROVIDER`   | No        | `stub`                   | Embedding provider — **memory sidecar** env var (`stub`, `local`, `anthropic`, `openai`) |
 | `LOG_LEVEL`            | No        | `info`                   | Log level (`debug`, `info`, `warn`, `error`) |
 | `MODE`                 | No        | `standalone`             | Deployment mode (`standalone`, `managed`) |
 | `MEMORY_SERVER_PORT`   | No        | `7822`                   | Memory sidecar port        |
@@ -786,14 +805,14 @@ Convenience shell scripts for Docker-based setup and teardown.
 
 | Script | Purpose |
 | ------ | ------- |
-| `scripts/setup.sh` | Authenticates Docker with GHCR to pull the private `pyx-memory` image. Reads `GHCR_TOKEN` from `.env`. Required before `--profile full`. |
+| `scripts/setup.sh` | Authenticates Docker with GHCR to pull private images. Reads `GHCR_TOKEN` from `.env`. Required before `--profile full`. |
 | `scripts/cleanup.sh` | Stops containers, removes built images. Options: `--volumes` (remove data volumes), `--prune` (docker system prune), `--all` (both). |
 | `run.sh` | One-liner: rebuilds dashboard image (no cache) and starts the full-profile stack. |
 
 ### Typical workflow
 
 ```bash
-# First-time setup (GHCR auth for pyx-memory image)
+# First-time setup (GHCR auth for private images)
 ./scripts/setup.sh
 
 # Run the full stack

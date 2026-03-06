@@ -19,7 +19,7 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 
 - A **Conductor** — AI agent that responds to messages, searches memory for context, and delegates to specialist agents
 - An **Agent Pool** of AI agents with pluggable backends (per-agent backend selection)
-- **Persistent Memory** via [pyx-memory](https://github.com/fysoul17/pyx-memory-v1) — vector search (LanceDB), structured storage (SQLite), Graph RAG (Neo4j), and file ingestion. Connects as a sidecar via `MemoryClient`.
+- **Persistent Memory** — vector search (LanceDB), structured storage (SQLite), Graph RAG (Neo4j), and file ingestion. Connects as a sidecar via `MemoryClient`.
 - A real-time **Cyberpunk Dashboard** with streaming chat, agent management, and debug console
 - **Scheduled tasks** via Cron Manager
 
@@ -57,8 +57,8 @@ An open-source **runtime template** that wraps CLI AI tools (`claude -p`, Codex 
 │                        │  ┌─────────────┐     ┌──────────────┐    │  │
 │                        │  │ Agent Pool  │     │    Memory     │    │  │
 │                        │  │             │     │              │    │  │
-│                        │  │ Agent #1    │     │ pyx-memory   │    │  │
-│                        │  │ Agent #2    │     │ (sidecar via │    │  │
+│                        │  │ Agent #1    │     │   Memory     │    │  │
+│                        │  │ Agent #2    │     │  (sidecar    │    │  │
 │                        │  │ Agent #N    │     │ MemoryClient)│    │  │
 │                        │  └─────────────┘     └──────────────┘    │  │
 │                        └──────────────────────────────────────────┘  │
@@ -95,8 +95,8 @@ The Conductor is a simple AI agent: it searches memory for context, then either 
 ### Pluggable AI Backends
 Swap AI providers without changing code. `claude -p` is the default. Codex CLI, Gemini CLI, Pi, and Ollama slot in via the `CLIBackend` interface. Each agent can use a different backend via the BackendRegistry. Custom tool support is wired up for Claude (`--allowed-tools`), Codex (`--enable`), Gemini (`--allowed-tools`), and Ollama (API `tools` parameter).
 
-### Persistent Memory (pyx-memory)
-Memory is powered by [pyx-memory](https://github.com/fysoul17/pyx-memory-v1), consumed via the [`@pyxmate/memory`](https://www.npmjs.com/package/@pyxmate/memory) npm SDK. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). The runtime connects to pyx-memory as a **sidecar** (standalone HTTP service via Docker) using `MemoryClient` when `MEMORY_URL` is configured. Memory persists across sessions and agent restarts. Conversations are automatically enriched with **LLM-powered entity extraction** — named entities and relationships are extracted at store time and fed into the knowledge graph for Graph RAG.
+### Persistent Memory
+Memory is powered by a pluggable memory sidecar, consumed via the `MemoryClient` interface. Provides structured data in bun:sqlite (WAL mode) + vector embeddings in LanceDB + four RAG strategies (Hybrid, Graph, Agentic, Naive). The runtime connects to the memory server as a **sidecar** (standalone HTTP service via Docker) using `MemoryClient` when `MEMORY_URL` is configured. Memory persists across sessions and agent restarts. Conversations are automatically enriched with **LLM-powered entity extraction** — named entities and relationships are extracted at store time and fed into the knowledge graph for Graph RAG.
 
 ### Agent Lifecycle Management
 Full CRUD for AI agents with serial message queues, idle timeout auto-shutdown, configurable pool limits, session persistence (`--resume` flags), and ownership-based permissions (user-created vs conductor-created agents).
@@ -172,7 +172,7 @@ docker compose -f docker/docker-compose.yaml down
 
 | Script | Description |
 |--------|-------------|
-| `scripts/setup.sh` | GHCR authentication for the private `pyx-memory` Docker image (required before `--profile full`) |
+| `scripts/setup.sh` | GHCR authentication for private Docker images (required before `--profile full`) |
 | `scripts/cleanup.sh` | Stop containers, remove images. Use `--volumes` to delete data, `--all` for full cleanup |
 | `run.sh` | One-liner to rebuild and start the full stack |
 
@@ -233,7 +233,7 @@ agent-forge/
 ├── packages/
 │   ├── shared/          # Types, interfaces, constants
 │   ├── agent-manager/   # CLIBackend, AgentProcess, AgentPool, BackendRegistry
-│   ├── conductor/       # Simple AI agent with memory + delegation
+│   ├── conductor/       # AI orchestrator with constitutional soul, memory + delegation
 │   ├── cron-manager/    # Scheduled tasks
 │   ├── plugin-system/   # Event hooks, middleware pipeline, plugin manager
 │   └── server/          # Bun.serve HTTP + WebSocket + routes + agent store
@@ -327,12 +327,13 @@ Community extension points — not part of the core template:
 
 This template is designed to be forked and extended. Products add:
 
-1. **Custom Conductor logic** — routing, permissions, personality, question tracking
-2. **Agent definitions** — roles, prompts, tools
-3. **Domain data** — ingest into memory via API or dashboard
-4. **Channel adapters** — webhook handlers for messaging platforms
-5. **Additional dashboard pages** — product-specific UI
-6. **Organization templates** — YAML-based agent team definitions
+1. **Custom Conductor soul** — edit `data/soul.md` to define identity, personality, and rules
+2. **Custom Conductor logic** — routing, permissions, question tracking
+3. **Agent definitions** — roles, prompts, tools
+4. **Domain data** — ingest into memory via API or dashboard
+5. **Channel adapters** — webhook handlers for messaging platforms
+6. **Additional dashboard pages** — product-specific UI
+7. **Organization templates** — YAML-based agent team definitions
 
 ---
 
