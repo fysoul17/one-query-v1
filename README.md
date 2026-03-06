@@ -7,7 +7,7 @@
 Turn any CLI AI tool into an autonomous agent system.<br>
 Persistent memory. Pluggable backends. Cyberpunk dashboard.
 
-[Quick Start](#quick-start) &bull; [Architecture](#architecture) &bull; [Features](#features) &bull; [Development](#development)
+[Quick Start](#quick-start) &bull; [Architecture](#architecture) &bull; [Features](#features) &bull; [Skills](#skills) &bull; [Development](#development)
 
 </div>
 
@@ -121,6 +121,51 @@ IP-based rate limiting (configurable window + max), structured JSON logging with
 
 ### CI/CD Pipeline
 3-job GitHub Actions workflow: quality gate (lint + typecheck + unit tests), E2E integration tests (27 end-to-end scenarios), and Docker build verification. Runs on push to main and PRs.
+
+---
+
+## Skills
+
+This template ships with **optional skills** — guided workflows you can invoke with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) to configure specific features. Skills don't run automatically; you choose when to apply them.
+
+> **How it works:** Type the skill command in Claude Code, follow the guided prompts, and the skill applies the changes to your project. Each skill is self-contained — use only the ones you need.
+
+### Available Skills
+
+| Skill | Command | What it does |
+|-------|---------|--------------|
+| [Conductor Soul](#conductor-soul) | `/conductor-soul` | Configure the conductor's identity, personality, and constitutional rules |
+
+*More skills coming soon — check back as the catalog grows.*
+
+---
+
+### Conductor Soul
+
+Define who your conductor **is** — its personality, rules, and communication style. The conductor uses a three-layer cognitive architecture: an immutable **Soul** (`data/soul.md`), admin-set **Core Memory** (name, company), and automatic **Experience** (conversations, learned facts).
+
+**When to use:**
+- Setting up a new deployment and want to define the conductor's identity
+- White-labeling or rebranding the conductor for your product
+- Adding domain-specific constitutional rules (e.g., "always prioritize safety queries")
+
+**Example prompts:**
+
+```
+/conductor-soul
+
+# Then follow the guided prompts, or ask directly:
+"Set up a conductor soul for a SaaS customer support product"
+"Add a constitutional rule that the conductor should never discuss pricing"
+"Customize the conductor personality to be warm and empathetic"
+```
+
+**What it produces:**
+- A customized `data/soul.md` with your identity, rules, and communication style
+- Guidance on setting core memory (name, company) via admin API after deployment
+- Security model documentation for the identity system
+
+**Learn more:** See the full [customization guide](.claude/skills/conductor-soul/references/customization-guide.md) and [security model](.claude/skills/conductor-soul/references/security-model.md).
 
 ---
 
@@ -327,7 +372,7 @@ Community extension points — not part of the core template:
 
 This template is designed to be forked and extended. Products add:
 
-1. **Custom Conductor soul** — edit `data/soul.md` to define identity, personality, and rules
+1. **Custom Conductor soul** — run `/conductor-soul` or edit `data/soul.md` directly (see [Skills](#skills))
 2. **Custom Conductor logic** — routing, permissions, question tracking
 3. **Agent definitions** — roles, prompts, tools
 4. **Domain data** — ingest into memory via API or dashboard
