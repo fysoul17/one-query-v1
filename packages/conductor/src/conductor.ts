@@ -35,6 +35,7 @@ import {
   QueueFullError,
 } from './errors.ts';
 import { SessionProcessPool } from './session-process-pool.ts';
+import { type SoulConfig, DEFAULT_SOUL } from './soul.ts';
 import {
   type CronManagerLike,
   executeSystemActions,
@@ -60,7 +61,13 @@ const DEFAULT_MAX_QUEUE_DEPTH = 50;
 const conductorLogger = new Logger({ context: { source: 'conductor' } });
 
 const DEFAULT_SYSTEM_PROMPT =
-  'You are an AI assistant running inside agent-forge, an AI orchestration platform. Answer the user clearly and helpfully. If memory context is provided, use it to inform your response.';
+  'You are an AI assistant running inside an AI orchestration platform. Answer the user clearly and helpfully. If memory context is provided, use it to inform your response.';
+
+/** Build a system prompt from the soul config. Falls back to DEFAULT_SYSTEM_PROMPT. */
+function buildSystemPromptFromSoul(soul?: SoulConfig): string {
+  if (!soul || !soul.content.trim()) return DEFAULT_SYSTEM_PROMPT;
+  return soul.content;
+}
 
 const FALLBACK_NO_BACKEND =
   "I'm the Conductor but have no AI backend configured. Please set up a backend or target a specific agent.";
@@ -115,6 +122,7 @@ export class Conductor {
   private memoryConnected = true;
   private extractionProcess?: BackendProcess;
   private extractionSpawnPromise?: Promise<BackendProcess>;
+  private soul: SoulConfig;
 
   constructor(
     pool: AgentPool,
@@ -129,6 +137,7 @@ export class Conductor {
     this.options = options ?? {};
     this.hookRegistry = options?.hookRegistry;
     this.activityLog = new ActivityLog(options?.maxActivityLogSize);
+    this.soul = options?.soul ?? DEFAULT_SOUL;
   }
 
   get conductorName(): string {
@@ -141,7 +150,7 @@ export class Conductor {
 
     if (this.backend) {
       try {
-        const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+        const systemPrompt = this.options.systemPrompt ?? buildSystemPromptFromSoul(this.soul);
         this.backendProcess = await this.backend.spawn({
           agentId: 'conductor',
           systemPrompt,
@@ -158,7 +167,7 @@ export class Conductor {
             conductorLogger.info('Trying fallback backend', {
               fallback: this.fallbackBackend.name,
             });
-            const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+            const systemPrompt = this.options.systemPrompt ?? buildSystemPromptFromSoul(this.soul);
             this.backendProcess = await this.fallbackBackend.spawn({
               agentId: 'conductor',
               systemPrompt,
@@ -177,7 +186,7 @@ export class Conductor {
       }
     }
 
-    const systemPrompt = this.options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
+    const systemPrompt = this.options.systemPrompt ?? buildSystemPromptFromSoul(this.soul);
     this.sessionPool = new SessionProcessPool(this.backend, this.fallbackBackend, systemPrompt);
 
     // Detect memory connectivity via stats().connected flag

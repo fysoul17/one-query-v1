@@ -8,6 +8,7 @@ dist/
 data/*
 !data/config.json
 !data/crons.json
+!data/soul.md
 !data/agents
 data/agents/*
 !data/agents/registry.json

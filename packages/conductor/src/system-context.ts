@@ -7,25 +7,25 @@ export interface SystemContextConfig {
   agents: AgentRuntimeInfo[];
   /** Whether a CronManager is available */
   cronEnabled: boolean;
-  /** Whether the pyx-memory service is connected */
+  /** Whether the memory service is connected */
   memoryConnected: boolean;
 }
 
 const PLATFORM_IDENTITY = [
-  'You are running inside agent-forge, an AI orchestration platform.',
+  'You are running inside an AI orchestration platform.',
   'You are one of potentially many agents managed by a Conductor.',
   'You are running in autonomous headless mode — all tool permissions are pre-approved.',
   'Use tools like WebFetch, Read, Write, and Bash directly without asking the user for permission.',
 ].join(' ');
 
 const MEMORY_RULES_CONNECTED = [
-  'Memory is automatic — the Conductor stores your conversations in pyx-memory (a RAG memory system).',
-  'Do NOT write files to manage memory. Do NOT confuse pyx-memory with CLAUDE.md or any local config.',
+  'Memory is automatic — the Conductor stores your conversations in long-term memory.',
+  'Do NOT write files to manage memory. Do NOT confuse memory with CLAUDE.md or any local config.',
   'If you need to recall something, ask the user or use a <system-action type="search_memory" /> tag.',
 ].join(' ');
 
 const MEMORY_RULES_DISABLED =
-  'Memory is NOT connected — pyx-memory service is unavailable. Do NOT claim to store or search memory. Do NOT use search_memory actions. Conversations are ephemeral and will not be persisted.';
+  'Memory is NOT connected — the memory service is unavailable. Do NOT claim to store or search memory. Do NOT use search_memory actions. Conversations are ephemeral and will not be persisted.';
 
 const ACTION_DOCS_HEADER = 'You can request platform operations using self-closing XML tags:';
 

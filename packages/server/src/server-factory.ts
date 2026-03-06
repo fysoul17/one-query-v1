@@ -15,7 +15,7 @@ import {
   OllamaBackend,
   PiBackend,
 } from '@autonomy/agent-manager';
-import { Conductor } from '@autonomy/conductor';
+import { Conductor, loadSoulAsync } from '@autonomy/conductor';
 import { CronManager } from '@autonomy/cron-manager';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
 import { type AIBackend, DebugEventCategory, DebugEventLevel, type Logger } from '@autonomy/shared';
@@ -168,12 +168,15 @@ export async function initConductor(deps: ConductorInitDeps): Promise<ConductorD
     logger.info('Fallback backend configured', { fallback: config.FALLBACK_BACKEND });
   }
 
+  const soul = await loadSoulAsync(config.DATA_DIR);
+
   const conductor = new Conductor(pool, memory, registry.getDefault(), {
     maxAgents: config.MAX_AGENTS,
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
     hookRegistry,
     fallbackBackend,
     llmApiKey: config.ANTHROPIC_API_KEY,
+    soul,
   });
   await conductor.initialize();
   logger.info('Conductor initialized');

@@ -13,14 +13,13 @@ describe('buildSystemContextPreamble', () => {
   test('includes platform identity', () => {
     const config: SystemContextConfig = { agents: [], cronEnabled: false, memoryConnected: true };
     const result = buildSystemContextPreamble(config);
-    expect(result).toContain('agent-forge');
-    expect(result).toContain('orchestration platform');
+    expect(result).toContain('AI orchestration platform');
   });
 
   test('includes memory rules when connected', () => {
     const config: SystemContextConfig = { agents: [], cronEnabled: false, memoryConnected: true };
     const result = buildSystemContextPreamble(config);
-    expect(result).toContain('pyx-memory');
+    expect(result).toContain('Memory is automatic');
     expect(result).toContain('Do NOT write files');
   });
 

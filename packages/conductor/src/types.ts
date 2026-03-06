@@ -4,6 +4,7 @@ import type {
   HookRegistryInterface,
   SessionMessage,
 } from '@autonomy/shared';
+import type { SoulConfig } from './soul.ts';
 
 export interface IncomingMessage {
   content: string;
@@ -36,6 +37,8 @@ export interface ConductorOptions {
   fallbackBackend?: import('@autonomy/agent-manager').CLIBackend;
   /** API key for LLM-powered entity extraction (populates knowledge graph). */
   llmApiKey?: string;
+  /** Conductor's constitutional soul — loaded from data/soul.md at boot. */
+  soul?: SoulConfig;
 }
 
 export const ConductorEventType = {

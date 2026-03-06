@@ -8,14 +8,14 @@ import { getErrorDetail, Logger } from '@autonomy/shared';
 const logger = new Logger({ context: { source: 'seeds' } });
 
 /** Platform awareness prefix injected into all seed agent system prompts. */
-const AGENT_FORGE_AWARENESS = [
-  'You are running inside agent-forge, an AI orchestration platform.',
-  'Memory is automatic via pyx-memory — do NOT write files to manage memory.',
+const PLATFORM_AWARENESS = [
+  'You are running inside an AI orchestration platform.',
+  'Memory is automatic — do NOT write files to manage memory.',
   'Use <system-action /> tags for platform operations (see system-context for docs).',
 ].join(' ');
 
 function withAwareness(prompt: string): string {
-  return `${AGENT_FORGE_AWARENESS}\n\n${prompt}`;
+  return `${PLATFORM_AWARENESS}\n\n${prompt}`;
 }
 
 /** Starter agent definitions bundled with the template. */

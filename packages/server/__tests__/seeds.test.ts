@@ -71,7 +71,7 @@ describe('runSeeds', () => {
       expect(agent.name).toBeDefined();
       expect(agent.role).toBeDefined();
       expect(agent.systemPrompt).toBeDefined();
-      expect(agent.systemPrompt).toContain('agent-forge');
+      expect(agent.systemPrompt).toContain('AI orchestration platform');
       expect(agent.createdBy).toBe('seed');
       expect(agent.persistent).toBe(true);
     }

@@ -315,7 +315,7 @@ describe('Conductor', () => {
       // The augmented message sent to pool.sendMessage should contain system-context
       const sentMessage = pool.sendMessage.mock.calls[0]?.[1] as string;
       expect(sentMessage).toContain('<system-context>');
-      expect(sentMessage).toContain('agent-forge');
+      expect(sentMessage).toContain('AI orchestration platform');
     });
   });
 });
