@@ -1,13 +1,13 @@
 'use client';
 
 import '@xterm/xterm/css/xterm.css';
-import { Copy, ExternalLink, LogIn, RefreshCw, RotateCcw, Square } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Copy, ExternalLink, LogIn, RefreshCw, RotateCcw, Send, Square } from 'lucide-react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { logoutBackend } from '@/lib/api';
+import { getBackendStatus, logoutBackend } from '@/lib/api';
 import { RUNTIME_URL } from '@/lib/constants';
 
-type LoginState = 'idle' | 'running' | 'success' | 'error' | 'cancelled';
+type LoginState = 'idle' | 'running' | 'verifying' | 'success' | 'error' | 'cancelled';
 
 interface CliLoginTerminalProps {
   /** Which backend this terminal logs into. */
@@ -20,12 +20,20 @@ interface CliLoginTerminalProps {
 /** Per-backend configuration for the login terminal. */
 const BACKEND_LOGIN_CONFIG: Record<
   string,
-  { command: string; label: string; hint: string; trustedDomains: string[] }
+  {
+    command: string;
+    label: string;
+    hint: string;
+    trustedDomains: string[];
+    /** Whether the user must paste an auth code INTO the terminal (vs. entering it on a website). */
+    requiresPasteInput: boolean;
+  }
 > = {
   claude: {
     command: 'claude /login',
     label: 'Claude',
-    hint: 'Click the link above to log in, then paste the code into the terminal. The terminal closes automatically when login is detected.',
+    hint: 'Click the link above to log in, then paste the code below or into the terminal. The terminal closes automatically when login is detected.',
+    requiresPasteInput: true,
     trustedDomains: [
       'console.anthropic.com',
       'anthropic.com',
@@ -40,6 +48,7 @@ const BACKEND_LOGIN_CONFIG: Record<
     command: 'codex login --device-auth',
     label: 'Codex',
     hint: 'Click the link above and enter the code shown in the terminal. Login completes automatically.',
+    requiresPasteInput: false,
     trustedDomains: [
       'auth0.openai.com',
       'auth.openai.com',
@@ -55,7 +64,8 @@ const BACKEND_LOGIN_CONFIG: Record<
   gemini: {
     command: 'gemini auth login',
     label: 'Gemini',
-    hint: 'Click the link above to log in, then paste the verification code into the terminal.',
+    hint: 'Click the link above to log in, then paste the verification code below or into the terminal.',
+    requiresPasteInput: true,
     trustedDomains: [
       'accounts.google.com',
       'myaccount.google.com',
@@ -74,6 +84,7 @@ function getBackendConfig(backendName: string) {
       label: backendName,
       hint: 'Follow the instructions in the terminal to complete login.',
       trustedDomains: [],
+      requiresPasteInput: false,
     }
   );
 }
@@ -102,22 +113,41 @@ function extractAuthUrl(text: string, trustedDomains: Set<string>): string | nul
   return null;
 }
 
+/** Imperative handle exposed by XtermTerminal via forwardRef. */
+interface XtermTerminalHandle {
+  /** Send text to the PTY as if typed/pasted into the terminal. */
+  sendData: (text: string) => void;
+  /** Focus the terminal. */
+  focus: () => void;
+}
+
 /**
  * Xterm.js-based terminal that connects to the server's PTY via WebSocket.
  * The CLI gets a real TTY so interactive prompts (including auth code input) work.
  */
-function XtermTerminal({
-  backendName,
-  onExit,
-  onUrlDetected,
-}: {
-  backendName: string;
-  onExit: (exitCode: number | null) => void;
-  onUrlDetected: (url: string) => void;
-}) {
+const XtermTerminal = forwardRef<
+  XtermTerminalHandle,
+  {
+    backendName: string;
+    onExit: (exitCode: number | null) => void;
+    onUrlDetected: (url: string) => void;
+  }
+>(function XtermTerminal({ backendName, onExit, onUrlDetected }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import('@xterm/xterm').Terminal | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    sendData(text: string) {
+      const ws = wsRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(text);
+      }
+    },
+    focus() {
+      termRef.current?.focus();
+    },
+  }));
 
   useEffect(() => {
     let disposed = false;
@@ -156,6 +186,28 @@ function XtermTerminal({
       term.focus();
       termRef.current = term;
 
+      // On Windows/Linux, Ctrl+C and Ctrl+V are intercepted by xterm.js and
+      // sent as control characters (ETX=0x03, SYN=0x16) instead of triggering
+      // browser clipboard events. On macOS, Cmd+C/V use metaKey which xterm.js
+      // already passes through, so this handler is only needed for non-Mac.
+      const isMac = /mac/i.test(navigator.userAgent);
+      if (!isMac) {
+        term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+          if (event.type !== 'keydown') return true;
+          // Ctrl+Shift+C / Ctrl+Shift+V — common terminal clipboard convention
+          if (event.ctrlKey && event.shiftKey && (event.key === 'C' || event.key === 'V')) {
+            return false;
+          }
+          if (event.ctrlKey && !event.shiftKey && !event.altKey && !event.metaKey) {
+            // Ctrl+V → let browser fire paste event
+            if (event.key === 'v' || event.key === 'V') return false;
+            // Ctrl+C → copy if text is selected, otherwise send SIGINT normally
+            if ((event.key === 'c' || event.key === 'C') && term.hasSelection()) return false;
+          }
+          return true;
+        });
+      }
+
       // Connect WebSocket to server PTY
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -185,8 +237,8 @@ function XtermTerminal({
 
       ws.onclose = () => {
         if (!disposed) {
-          // Only treat as success if we detected an auth URL (login flow started).
-          // Otherwise the WS may have closed due to a server crash or spawn failure.
+          // Pass exit code to handleExit which will verify actual auth status.
+          // Non-zero exit indicates a clear failure (spawn error, no data received).
           onExit(hasReceivedData ? 0 : 1);
         }
       };
@@ -197,8 +249,8 @@ function XtermTerminal({
       };
 
       // Forward user keystrokes (including paste) to server PTY.
-      // xterm.js natively handles paste via browser paste events and fires
-      // onData with the pasted text — no custom handler needed.
+      // Paste is handled via the browser's native paste event — the
+      // customKeyEventHandler above ensures Ctrl+V passes through on Windows.
       term.onData((data) => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(data);
@@ -232,7 +284,7 @@ function XtermTerminal({
       onClick={() => termRef.current?.focus()}
     />
   );
-}
+});
 
 /** Clickable auth URL link with copy button. */
 function AuthUrlLink({ url }: { url: string }) {
@@ -283,6 +335,52 @@ function AuthUrlLink({ url }: { url: string }) {
   );
 }
 
+/** Input field for pasting auth codes without needing to interact with the terminal directly. */
+function AuthCodeInput({ onSubmit }: { onSubmit: (code: string) => void }) {
+  const [value, setValue] = useState('');
+  const [sent, setSent] = useState(false);
+
+  const handleSubmit = useCallback(() => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+    setValue('');
+    setSent(true);
+    setTimeout(() => setSent(false), 2000);
+  }, [value, onSubmit]);
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSubmit();
+        }}
+        placeholder="Paste auth code here"
+        className="flex-1 min-w-0 rounded-md border border-border/50 bg-background px-2 py-1 text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0 text-xs px-2 h-7"
+        onClick={handleSubmit}
+        disabled={!value.trim()}
+      >
+        {sent ? (
+          <span className="text-green-400">Sent!</span>
+        ) : (
+          <>
+            <Send className="mr-1 h-3 w-3" />
+            Send
+          </>
+        )}
+      </Button>
+    </div>
+  );
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: terminal UI requires complex state management
 export function CliLoginTerminal({
   backendName,
@@ -292,17 +390,38 @@ export function CliLoginTerminal({
   const [state, setState] = useState<LoginState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
+  const terminalRef = useRef<XtermTerminalHandle>(null);
   const config = getBackendConfig(backendName);
+
+  const verifyAuth = useCallback(async () => {
+    setState('verifying');
+    try {
+      const status = await getBackendStatus();
+      const backend = status.backends.find((b) => b.name === backendName);
+      if (backend?.configured && backend.authMode !== 'none') {
+        setState('success');
+      } else {
+        setState('error');
+        setErrorMessage('Login was not completed. Please try again.');
+      }
+    } catch {
+      setState('error');
+      setErrorMessage('Could not verify login status. Please try again.');
+    }
+    onComplete?.();
+  }, [backendName, onComplete]);
 
   const handleExit = useCallback(
     (exitCode: number | null) => {
-      setState(exitCode === 0 ? 'success' : 'error');
       if (exitCode !== 0 && exitCode !== null) {
+        setState('error');
         setErrorMessage(`Process exited with code ${exitCode}`);
+        onComplete?.();
+        return;
       }
-      onComplete?.();
+      verifyAuth();
     },
-    [onComplete],
+    [onComplete, verifyAuth],
   );
 
   const handleUrlDetected = useCallback((url: string) => {
@@ -324,10 +443,22 @@ export function CliLoginTerminal({
     setState('running');
   }, [doLogoutFirst, isAuthenticated]);
 
+  const handlePasteCode = useCallback(
+    (code: string) => {
+      terminalRef.current?.sendData(`${code}\r`);
+      terminalRef.current?.focus();
+    },
+    [],
+  );
+
   const handleClose = useCallback(() => {
-    setState(authUrl ? 'success' : 'cancelled');
-    onComplete?.();
-  }, [authUrl, onComplete]);
+    if (authUrl) {
+      verifyAuth();
+    } else {
+      setState('cancelled');
+      onComplete?.();
+    }
+  }, [authUrl, onComplete, verifyAuth]);
 
   if (state === 'idle') {
     return (
@@ -355,10 +486,16 @@ export function CliLoginTerminal({
       {/* Real PTY terminal via xterm.js */}
       {state === 'running' && (
         <XtermTerminal
+          ref={terminalRef}
           backendName={backendName}
           onExit={handleExit}
           onUrlDetected={handleUrlDetected}
         />
+      )}
+
+      {/* Paste auth code input (for backends where user must paste code into terminal) */}
+      {state === 'running' && authUrl && config.requiresPasteInput && (
+        <AuthCodeInput onSubmit={handlePasteCode} />
       )}
 
       {/* Hint */}
@@ -367,6 +504,11 @@ export function CliLoginTerminal({
       )}
 
       {/* Status messages */}
+      {state === 'verifying' && (
+        <output className="block text-xs text-muted-foreground animate-pulse">
+          Verifying login status...
+        </output>
+      )}
       {state === 'success' && (
         <div className="text-xs text-green-400" role="alert">
           Login completed successfully.
@@ -394,6 +536,11 @@ export function CliLoginTerminal({
           >
             <Square className="mr-1 h-3 w-3" />
             {authUrl ? 'Done' : 'Cancel'}
+          </Button>
+        ) : state === 'verifying' ? (
+          <Button variant="outline" size="sm" className="flex-1 text-xs" disabled>
+            <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+            Verifying...
           </Button>
         ) : (
           <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={handleStart}>
