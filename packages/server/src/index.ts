@@ -92,6 +92,7 @@ function registerRoutes(router: Router, deps: RouteDeps): void {
   router.delete('/api/memory/source/:source', lifecycleRoutes.deleteBySource);
   router.get('/api/memory/graph/nodes', graphRoutes.getNodes);
   router.get('/api/memory/graph/edges', graphRoutes.getEdges);
+  router.get('/api/memory/graph/relationships', graphRoutes.getRelationships);
   router.post('/api/memory/graph/query', graphRoutes.query);
 
   router.get('/api/crons', cronRoutes.list);
@@ -183,8 +184,8 @@ function startMemoryLifecycle(
 async function initMemory(
   memoryUrl: string | undefined,
   logger: Logger,
-  retries = 5,
-  retryDelayMs = 2000,
+  retries = 30,
+  retryDelayMs = 3000,
 ): Promise<MemoryClient | DisabledMemory> {
   if (memoryUrl) {
     for (let attempt = 1; attempt <= retries; attempt++) {

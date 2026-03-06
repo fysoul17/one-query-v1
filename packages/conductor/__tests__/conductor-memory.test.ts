@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
-import type { ConductorDecision } from '@autonomy/shared';
+import type { ConductorDecision, MemoryInterface } from '@autonomy/shared';
 import { HookName, MemoryType, RAGStrategy } from '@autonomy/shared';
+import type { StoreConversationContext } from '../src/conductor-memory.ts';
 import { searchMemoryContext, storeConversation } from '../src/conductor-memory.ts';
 import { MockMemory } from './helpers/mock-memory.ts';
 import { createMockRegistry, makeMessage } from './helpers/mock-registry.ts';
@@ -51,16 +52,19 @@ describe('searchMemoryContext', () => {
 
 describe('storeConversation', () => {
   let memory: MockMemory;
+  let ctx: StoreConversationContext;
   let decisions: ConductorDecision[];
 
   beforeEach(() => {
     memory = new MockMemory();
+    ctx = { memory: memory as unknown as MemoryInterface, memoryConnected: true };
     decisions = [];
   });
 
   test('skips storage when memory is not connected', async () => {
+    ctx.memoryConnected = false;
     const msg = makeMessage();
-    await storeConversation(memory, undefined, false, msg, decisions);
+    await storeConversation(ctx, msg, decisions);
     expect(memory.storeCalls).toHaveLength(0);
     expect(decisions).toHaveLength(1);
     expect(decisions[0].action).toBe('skip_memory');
@@ -69,7 +73,7 @@ describe('storeConversation', () => {
 
   test('skips storage when message content is empty', async () => {
     const msg = makeMessage({ content: '   ' });
-    await storeConversation(memory, undefined, true, msg, decisions);
+    await storeConversation(ctx, msg, decisions);
     expect(memory.storeCalls).toHaveLength(0);
     expect(decisions).toHaveLength(1);
     expect(decisions[0].action).toBe('skip_memory');
@@ -78,7 +82,7 @@ describe('storeConversation', () => {
 
   test('stores user message in SHORT_TERM memory', async () => {
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions);
+    await storeConversation(ctx, msg, decisions);
     expect(memory.storeCalls).toHaveLength(1);
     expect(memory.storeCalls[0].content).toBe('Hello world');
     expect(memory.storeCalls[0].type).toBe(MemoryType.SHORT_TERM);
@@ -86,7 +90,7 @@ describe('storeConversation', () => {
 
   test('stores assistant response in EPISODIC memory', async () => {
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions, 'Assistant reply');
+    await storeConversation(ctx, msg, decisions, 'Assistant reply');
     expect(memory.storeCalls).toHaveLength(2);
     expect(memory.storeCalls[1].content).toBe('Assistant reply');
     expect(memory.storeCalls[1].type).toBe(MemoryType.EPISODIC);
@@ -94,19 +98,19 @@ describe('storeConversation', () => {
 
   test('does not store empty assistant response', async () => {
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions, '   ');
+    await storeConversation(ctx, msg, decisions, '   ');
     expect(memory.storeCalls).toHaveLength(1);
   });
 
   test('does not store undefined assistant response', async () => {
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions, undefined);
+    await storeConversation(ctx, msg, decisions, undefined);
     expect(memory.storeCalls).toHaveLength(1);
   });
 
   test('pushes store_memory decision on success', async () => {
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions);
+    await storeConversation(ctx, msg, decisions);
     expect(decisions).toHaveLength(1);
     expect(decisions[0].action).toBe('store_memory');
   });
@@ -114,7 +118,7 @@ describe('storeConversation', () => {
   test('handles memory store error gracefully', async () => {
     memory.setShouldThrow(true);
     const msg = makeMessage();
-    await storeConversation(memory, undefined, true, msg, decisions);
+    await storeConversation(ctx, msg, decisions);
     // No decision pushed for failed store, no exception thrown
     expect(decisions).toHaveLength(0);
   });
@@ -126,7 +130,8 @@ describe('storeConversation', () => {
         content: 'Hello world',
         metadata: { senderName: 'TestAgent' },
       });
-      await storeConversation(memory, registry, true, msg, decisions);
+      ctx.hookRegistry = registry;
+      await storeConversation(ctx, msg, decisions);
       expect(registry.calls).toHaveLength(1);
       expect(registry.calls[0].hookType).toBe(HookName.BEFORE_MEMORY_STORE);
       const data = registry.calls[0].data as {
@@ -141,8 +146,8 @@ describe('storeConversation', () => {
 
     test('skips storage when hook returns null', async () => {
       const msg = makeMessage();
-      const registry = createMockRegistry(null);
-      await storeConversation(memory, registry, true, msg, decisions);
+      ctx.hookRegistry = createMockRegistry(null);
+      await storeConversation(ctx, msg, decisions);
       expect(memory.storeCalls).toHaveLength(0);
       expect(decisions).toHaveLength(1);
       expect(decisions[0].action).toBe('skip_memory');
@@ -151,8 +156,8 @@ describe('storeConversation', () => {
 
     test('skips storage when hook returns undefined', async () => {
       const msg = makeMessage();
-      const registry = createMockRegistry(undefined);
-      await storeConversation(memory, registry, true, msg, decisions);
+      ctx.hookRegistry = createMockRegistry(undefined);
+      await storeConversation(ctx, msg, decisions);
       expect(memory.storeCalls).toHaveLength(0);
       expect(decisions).toHaveLength(1);
       expect(decisions[0].reason).toBe('Memory store skipped by plugin');
@@ -160,11 +165,11 @@ describe('storeConversation', () => {
 
     test('uses modified content from hook', async () => {
       const msg = makeMessage();
-      const registry = createMockRegistry({
+      ctx.hookRegistry = createMockRegistry({
         content: 'modified by plugin',
         metadata: { custom: true },
       });
-      await storeConversation(memory, registry, true, msg, decisions);
+      await storeConversation(ctx, msg, decisions);
       expect(memory.storeCalls).toHaveLength(1);
       expect(memory.storeCalls[0].content).toBe('modified by plugin');
     });

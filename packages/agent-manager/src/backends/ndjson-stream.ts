@@ -16,8 +16,14 @@ export type NDJSONLine =
  * Releases the reader lock automatically when iteration completes or the consumer breaks.
  */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: streaming parser requires sequential state handling
+/** Minimal reader contract compatible with both Bun and Node ReadableStreamDefaultReader. */
+interface StreamReader {
+  read(): Promise<{ done: boolean; value?: Uint8Array }>;
+  releaseLock(): void;
+}
+
 export async function* readNDJSONStream(
-  reader: ReadableStreamDefaultReader<Uint8Array>,
+  reader: StreamReader,
 ): AsyncGenerator<NDJSONLine> {
   const decoder = new TextDecoder();
   let lineBuffer = '';

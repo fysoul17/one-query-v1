@@ -8,6 +8,7 @@ function hasGraphMethods(m: MemoryInterface): m is MemoryInterface & {
   graphNodes(): Promise<GraphNode[]>;
   graphEdges(): Promise<{ stats: { nodeCount: number; edgeCount: number } }>;
   graphQuery(query: { nodeId: string; depth?: number }): Promise<GraphTraversalResult>;
+  fetchApi?(path: string): Promise<unknown>;
 } {
   return 'graphNodes' in m && 'graphEdges' in m && 'graphQuery' in m;
 }
@@ -24,6 +25,7 @@ export function createGraphRoutes(memory: MemoryInterface) {
     return {
       getNodes: unavailable,
       getEdges: unavailable,
+      getRelationships: unavailable,
       query: unavailable,
     };
   }
@@ -52,6 +54,16 @@ export function createGraphRoutes(memory: MemoryInterface) {
 
     getEdges: async (): Promise<Response> => {
       const result = await memory.graphEdges();
+      return jsonResponse(result);
+    },
+
+    getRelationships: async (req: Request): Promise<Response> => {
+      if (!memory.fetchApi) {
+        throw new NotImplementedError('Graph relationships not available');
+      }
+      const url = new URL(req.url);
+      const limit = validatePositiveInt(url.searchParams.get('limit'), 'limit', 200);
+      const result = await memory.fetchApi(`/api/memory/graph/relationships?limit=${limit}`);
       return jsonResponse(result);
     },
 

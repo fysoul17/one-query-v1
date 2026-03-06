@@ -34,6 +34,8 @@ export interface ConductorOptions {
   hookRegistry?: HookRegistryInterface;
   /** Optional fallback backend when the primary backend fails to spawn. */
   fallbackBackend?: import('@autonomy/agent-manager').CLIBackend;
+  /** API key for LLM-powered entity extraction (populates knowledge graph). */
+  llmApiKey?: string;
 }
 
 export const ConductorEventType = {

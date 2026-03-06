@@ -120,9 +120,9 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
     // Simulate: WS handler passes ws.data.id as sessionId for new chats
     await conductor.handleMessage(makeMessage({ content: 'Hello', sessionId: 'ws-conn-uuid-abc' }));
 
-    // 2 spawns: default (at init) + session-specific for the WS UUID
+    // 3 spawns: default (at init) + session-specific + extraction process
     const configs = tracking.getSpawnConfigs();
-    expect(configs.length).toBe(2);
+    expect(configs.length).toBe(3);
     expect(configs[0].sessionId).toBeUndefined(); // default process
     // Conductor spawns stateless processes — sessionId is tracked internally,
     // not passed in the spawn config (CLI session flags are a V2 feature)
@@ -145,13 +145,14 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
       makeMessage({ content: 'What is my name?', sessionId: 'ws-conn-1' }),
     );
 
-    // Only 2 spawns: default + 1 session process (reused)
-    expect(tracking.getSpawnConfigs().length).toBe(2);
+    // 3 spawns: default + 1 session process (reused) + extraction process
+    expect(tracking.getSpawnConfigs().length).toBe(3);
 
-    // Both messages go to the session process (index 1)
+    // Both user messages go to the session process (index 1); extraction sends interleaved
     const history = tracking.getSendHistory();
-    expect(history[0].processIndex).toBe(1);
-    expect(history[1].processIndex).toBe(1);
+    const sessionSends = history.filter((h) => !h.message.startsWith('Extract named entities'));
+    expect(sessionSends[0].processIndex).toBe(1);
+    expect(sessionSends[1].processIndex).toBe(1);
   });
 
   test('WS reconnect creates new session process, losing context', async () => {
@@ -172,17 +173,18 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
       makeMessage({ content: 'What is my name?', sessionId: 'ws-conn-2' }),
     );
 
-    // 3 spawns: default + ws-conn-1 + ws-conn-2 (TWO separate session processes)
+    // 4 spawns: default + ws-conn-1 + ws-conn-2 + extraction process
     const configs = tracking.getSpawnConfigs();
-    expect(configs.length).toBe(3);
+    expect(configs.length).toBe(4);
     // Conductor spawns stateless processes — sessionId tracked internally, not in config
     expect(configs[1].sessionId).toBeUndefined();
     expect(configs[2].sessionId).toBeUndefined();
 
     // Messages go to different processes — context is LOST
     const history = tracking.getSendHistory();
-    expect(history[0].processIndex).toBe(1); // ws-conn-1 process
-    expect(history[1].processIndex).toBe(2); // ws-conn-2 process (no context from conn-1)
+    const sessionSends = history.filter((h) => !h.message.startsWith('Extract named entities'));
+    expect(sessionSends[0].processIndex).toBe(1); // ws-conn-1 process
+    expect(sessionSends[1].processIndex).toBe(3); // ws-conn-2 process (no context from conn-1)
 
     // Known limitation: The second message is sent to a brand new Claude CLI session
     // that has no knowledge of the first message. Memory-based context retrieval
@@ -206,9 +208,9 @@ describe('New chat with ephemeral WS UUID as sessionId', () => {
 
     expect(events.some((e) => e.type === 'chunk')).toBe(true);
 
-    // Session-specific process was created
+    // Session-specific + extraction process were created
     const configs = tracking.getSpawnConfigs();
-    expect(configs.length).toBe(2);
+    expect(configs.length).toBe(3);
     // Conductor spawns stateless processes — sessionId tracked internally, not in config
     expect(configs[1].sessionId).toBeUndefined();
   });
@@ -241,13 +243,14 @@ describe('Contrast: proper session vs ephemeral session behavior', () => {
       makeMessage({ content: 'After reconnect', sessionId: 'real-session-abc' }),
     );
 
-    // Only 2 spawns: default + 1 session process (reused across "reconnects")
-    expect(tracking.getSpawnConfigs().length).toBe(2);
+    // 3 spawns: default + 1 session process (reused) + extraction process
+    expect(tracking.getSpawnConfigs().length).toBe(3);
 
-    // Both messages go to the same process — context is preserved
+    // Both user messages go to the same session process — context is preserved
     const history = tracking.getSendHistory();
-    expect(history[0].processIndex).toBe(1);
-    expect(history[1].processIndex).toBe(1);
+    const sessionSends = history.filter((h) => !h.message.startsWith('Extract named entities'));
+    expect(sessionSends[0].processIndex).toBe(1);
+    expect(sessionSends[1].processIndex).toBe(1);
   });
 
   test('messages without sessionId at all use default process', async () => {
@@ -261,8 +264,8 @@ describe('Contrast: proper session vs ephemeral session behavior', () => {
     // No sessionId at all (not even ephemeral UUID)
     await conductor.handleMessage(makeMessage({ content: 'No session' }));
 
-    // Only 1 spawn (default at init)
-    expect(tracking.getSpawnConfigs().length).toBe(1);
+    // 2 spawns: default + extraction process
+    expect(tracking.getSpawnConfigs().length).toBe(2);
     expect(tracking.getSpawnConfigs()[0].sessionId).toBeUndefined();
   });
 });
@@ -289,8 +292,8 @@ describe('Edge cases: session process lifecycle', () => {
     // Edge case: empty string sessionId
     await conductor.handleMessage(makeMessage({ content: 'Hello', sessionId: '' }));
 
-    // Empty string is falsy, getBackendProcess('') returns default
-    expect(tracking.getSpawnConfigs().length).toBe(1);
+    // Empty string is falsy, getBackendProcess('') returns default; +1 for extraction
+    expect(tracking.getSpawnConfigs().length).toBe(2);
     expect(tracking.getSpawnConfigs()[0].sessionId).toBeUndefined();
   });
 
@@ -314,15 +317,16 @@ describe('Edge cases: session process lifecycle', () => {
     await conductor.handleMessage(makeMessage({ content: 'Third', sessionId: 'ws-ephemeral-2' }));
 
     const history = tracking.getSendHistory();
-    expect(history.length).toBe(3);
+    const sessionSends = history.filter((h) => !h.message.startsWith('Extract named entities'));
+    expect(sessionSends.length).toBe(3);
 
-    // Each gets its own session process
-    expect(history[0].processIndex).toBe(1); // ws-ephemeral-1
-    expect(history[1].processIndex).toBe(2); // real-session-xyz
-    expect(history[2].processIndex).toBe(3); // ws-ephemeral-2
+    // Each gets its own session process; extraction process (index 2) is interleaved
+    expect(sessionSends[0].processIndex).toBe(1); // ws-ephemeral-1
+    expect(sessionSends[1].processIndex).toBe(3); // real-session-xyz
+    expect(sessionSends[2].processIndex).toBe(4); // ws-ephemeral-2
 
-    // Total: 4 spawns (default + 3 session processes)
-    expect(tracking.getSpawnConfigs().length).toBe(4);
+    // Total: 5 spawns (default + 3 session processes + 1 extraction process)
+    expect(tracking.getSpawnConfigs().length).toBe(5);
   });
 
   test('shutdown stops ephemeral session processes too', async () => {

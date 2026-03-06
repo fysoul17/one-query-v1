@@ -29,6 +29,11 @@ export interface CronExecutionLog {
   error?: string;
 }
 
+export interface CronConfig {
+  version: number;
+  crons: CronEntry[];
+}
+
 export interface CronEntryWithStatus extends CronEntry {
   nextRunAt: string | null;
   lastExecution: CronExecutionLog | null;

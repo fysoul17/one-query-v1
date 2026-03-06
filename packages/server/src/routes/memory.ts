@@ -46,6 +46,17 @@ export function createMemoryRoutes(memory: MemoryInterface) {
         content: body.content,
         type: validateMemoryType(body.type) ?? MemoryType.LONG_TERM,
         metadata: body.metadata ?? {},
+        ...(body.agentId != null && { agentId: body.agentId }),
+        ...(body.sessionId != null && { sessionId: body.sessionId }),
+        ...(body.targets != null && { targets: body.targets }),
+        ...(body.entities != null && { entities: body.entities }),
+        ...(body.relationships != null && { relationships: body.relationships }),
+        ...(body.importance != null && { importance: body.importance }),
+        ...(body.source != null && { source: body.source }),
+        ...(body.eventTime != null && { eventTime: body.eventTime }),
+        ...(body.id != null && { id: body.id }),
+        ...(body.parentId != null && { parentId: body.parentId }),
+        ...(body.ingestTime != null && { ingestTime: body.ingestTime }),
       });
 
       return jsonResponse(entry, 201);

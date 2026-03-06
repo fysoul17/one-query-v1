@@ -66,6 +66,11 @@ class GeminiProcess implements BackendProcess {
     return this._nativeSessionId;
   }
 
+  private systemPromptPath(): string {
+    const tmpDir = process.env.TMPDIR || '/tmp';
+    return `${tmpDir}/gemini-prompt-${this.config.agentId}.md`;
+  }
+
   async send(message: string): Promise<string> {
     if (!this._alive) {
       throw new BackendError('gemini', 'Process is not alive');
@@ -99,8 +104,7 @@ class GeminiProcess implements BackendProcess {
 
     // Gemini uses GEMINI_SYSTEM_MD env var for system prompt
     if (this.config.systemPrompt && !this._nativeSessionId) {
-      const tmpDir = process.env.TMPDIR || '/tmp';
-      const promptFile = `${tmpDir}/gemini-prompt-${this.config.agentId}.md`;
+      const promptFile = this.systemPromptPath();
       await Bun.write(promptFile, this.config.systemPrompt);
       env.GEMINI_SYSTEM_MD = promptFile;
     }
@@ -172,8 +176,7 @@ class GeminiProcess implements BackendProcess {
     this._alive = false;
 
     // Clean up temp system prompt file
-    const tmpDir = process.env.TMPDIR || '/tmp';
-    const promptFile = `${tmpDir}/gemini-prompt-${this.config.agentId}.md`;
+    const promptFile = this.systemPromptPath();
     try {
       const { unlink } = await import('node:fs/promises');
       await unlink(promptFile);

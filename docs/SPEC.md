@@ -2,7 +2,7 @@
 
 > Single source of truth. Everything needed to understand and extend this template.
 >
-> Last synced with codebase: 2026-03-03 (P2 refactoring update)
+> Last synced with codebase: 2026-03-05 (entity extraction + doc sync)
 
 ---
 
@@ -269,7 +269,8 @@ Message In
 │  5. BEFORE_RESPONSE hook                          │
 │  6. AFTER_RESPONSE hook (can transform content)   │
 │  7. Memory store:                                 │
-│     ├── User message → SHORT_TERM                 │
+│     ├── Entity extraction (LLM → graph entities)  │
+│     ├── User message → SHORT_TERM (+graph if any) │
 │     └── Assistant response → EPISODIC             │
 │     └── BEFORE_MEMORY_STORE hook                  │
 └──────────────────────────────────────────────────┘
@@ -289,6 +290,7 @@ The Conductor's logic is split across focused modules:
 
 - `conductor.ts` — core orchestrator class with pipeline, queue, and agent management
 - `conductor-memory.ts` — memory search and conversation storage (extracted free functions)
+- `entity-extractor.ts` — LLM-powered entity/relationship extraction for knowledge graph population
 - `conductor-hooks.ts` — hook execution helpers (before_message, after_memory_search, after_response)
 - `conductor-prompt.ts` — memory-augmented prompt builder with system context
 - `session-process-pool.ts` — per-session backend process lifecycle (LRU, spawn, resume)
@@ -389,6 +391,17 @@ Automated background processes manage memory health:
 | Deduplication    | On ingest | Detects and merges semantically similar entries |
 | Summarization    | On demand | Rolls up session conversations                  |
 | Fact extraction  | On ingest | Extracts structured facts from content          |
+
+### Entity Extraction (Knowledge Graph Population)
+
+At conversation store time, the Conductor extracts named entities and relationships from the message text using the Anthropic Messages API (`claude-haiku-4-5-20251001`). Extracted entities are validated against a fixed type enum (`PERSON`, `ORGANIZATION`, `LOCATION`, `TOOL`, `CONCEPT`, `EVENT`, `PRODUCT`, `OTHER`) and stored alongside the memory entry with `targets: [SQLITE, VECTOR, GRAPH]`. This populates the knowledge graph automatically from conversation content without requiring explicit ingestion.
+
+- **Input**: Full text (user message + assistant response), truncated to 4000 chars
+- **Timeout**: 10 seconds (non-blocking, fails gracefully to empty)
+- **Validation**: Entity name length ≤ 200, type must be in enum, relationships must reference valid entities
+- **Requires**: `ANTHROPIC_API_KEY` env var (skips extraction silently if absent)
+
+See `packages/conductor/src/entity-extractor.ts` for implementation.
 
 ### Ingestion
 
@@ -649,8 +662,8 @@ The `StreamBuffer` accumulates streamed content per session. When a client recon
 | `ENABLE_ADVANCED_MEMORY`| No       | `true`                   | Consolidation, decay, summarization routes (opt-out with `false`) |
 | `ENABLE_DEBUG_WS`      | No        | `true`                   | Enable debug event WebSocket |
 | `DEBUG_WS_TOKEN`       | No        | —                        | Token to protect debug WebSocket endpoint |
-| `MEMORY_RETRY_COUNT`   | No        | `5`                      | Number of retries when connecting to memory server at startup |
-| `MEMORY_RETRY_DELAY_MS`| No        | `2000`                   | Delay between memory connection retries (ms) |
+| `MEMORY_RETRY_COUNT`   | No        | `30`                     | Number of retries when connecting to memory server at startup |
+| `MEMORY_RETRY_DELAY_MS`| No        | `3000`                   | Delay between memory connection retries (ms) |
 
 > **Note:** `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `PI_API_KEY`, and `PI_MODEL` are consumed directly by their respective backend implementations (not by `parseEnvConfig()`). Similarly, `ENABLE_DEBUG_WS` and `DEBUG_WS_TOKEN` are read ad-hoc in `main()`. All are functionally correct but not part of the typed `EnvironmentConfig` object.
 

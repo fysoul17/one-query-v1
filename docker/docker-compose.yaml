@@ -64,17 +64,16 @@ services:
     restart: unless-stopped
 
   memory:
-    image: ghcr.io/fysoul17/pyx-memory:0.1.1-beta
+    image: ghcr.io/fysoul17/pyx-memory:0.1.8-beta
     ports:
       - "7822:7822"
     volumes:
       - memory-data:/data
+    mem_limit: 3g
+    memswap_limit: 3g
     environment:
       - DATA_DIR=/data
       - MEMORY_SERVER_PORT=7822
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-stub}
-      - EMBEDDING_API_KEY=${EMBEDDING_API_KEY:-}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-}
       - NEO4J_URL=bolt://neo4j:7687
       - NEO4J_USERNAME=neo4j
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-password}
@@ -93,7 +92,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
+      start_period: 90s
     profiles:
       - full
 

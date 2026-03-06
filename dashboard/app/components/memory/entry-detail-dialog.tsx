@@ -16,6 +16,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { deleteMemoryEntry, forgetMemory } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { memoryTypeBadgeVariant } from './memory-utils';
@@ -70,72 +71,76 @@ export function EntryDetailDialog({ entry, open, onOpenChange, onMutate }: Entry
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="border-primary/20 sm:max-w-2xl">
+        <DialogContent className="glass border-primary/20 sm:max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-primary font-display tracking-wider">
               <span className="font-mono text-sm">{entry.id.slice(0, 16)}...</span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={memoryTypeBadgeVariant(entry.type)}>{entry.type}</Badge>
-              {entry.agentId && (
-                <Badge variant="outline" className="font-mono">
-                  agent: {entry.agentId}
-                </Badge>
-              )}
-              {entry.sessionId && (
-                <Badge variant="outline" className="font-mono">
-                  session: {entry.sessionId.slice(0, 8)}
-                </Badge>
-              )}
-            </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <div className="space-y-4 pr-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={memoryTypeBadgeVariant(entry.type)}>{entry.type}</Badge>
+                  {entry.agentId && (
+                    <Badge variant="outline" className="font-mono">
+                      agent: {entry.agentId}
+                    </Badge>
+                  )}
+                  {entry.sessionId && (
+                    <Badge variant="outline" className="font-mono">
+                      session: {entry.sessionId.slice(0, 8)}
+                    </Badge>
+                  )}
+                </div>
 
-            <div className="rounded-md border bg-muted/50 p-4">
-              <p className="whitespace-pre-wrap text-sm">{entry.content}</p>
-            </div>
+                <div className="rounded-md border bg-muted/50 p-4">
+                  <p className="whitespace-pre-wrap text-sm">{entry.content}</p>
+                </div>
 
-            {Object.keys(entry.metadata).length > 0 && (
-              <div>
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Metadata</p>
-                <pre className="rounded-md border bg-muted/50 p-3 font-mono text-xs">
-                  {JSON.stringify(entry.metadata, null, 2)}
-                </pre>
+                {Object.keys(entry.metadata).length > 0 && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium text-muted-foreground">Metadata</p>
+                    <pre className="rounded-md border bg-muted/50 p-3 font-mono text-xs">
+                      {JSON.stringify(entry.metadata, null, 2)}
+                    </pre>
+                  </div>
+                )}
               </div>
-            )}
-
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Created: {new Date(entry.createdAt).toLocaleString()}</span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setConfirmAction('forget')}
-                  disabled={forgetting || deleting}
-                  className="gap-1"
-                >
-                  <Archive className="h-3 w-3" />
-                  {forgetting ? 'Forgetting...' : 'Forget'}
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setConfirmAction('delete')}
-                  disabled={deleting || forgetting}
-                  className="gap-1"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  {deleting ? 'Deleting...' : 'Delete'}
-                </Button>
-              </div>
-            </div>
-
-            {error && (
-              <p role="alert" className="text-xs text-status-red">
-                {error}
-              </p>
-            )}
+            </ScrollArea>
           </div>
+
+          <div className="flex items-center justify-between border-t border-border/50 pt-3 text-xs text-muted-foreground">
+            <span>Created: {new Date(entry.createdAt).toLocaleString()}</span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmAction('forget')}
+                disabled={forgetting || deleting}
+                className="gap-1"
+              >
+                <Archive className="h-3 w-3" />
+                {forgetting ? 'Forgetting...' : 'Forget'}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmAction('delete')}
+                disabled={deleting || forgetting}
+                className="gap-1"
+              >
+                <Trash2 className="h-3 w-3" />
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+
+          {error && (
+            <p role="alert" className="text-xs text-neon-red">
+              {error}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 

@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@pyxmate/memory": "^0.1.1-beta"
+    "@pyxmate/memory": "0.1.8-beta"
   },
   "scripts": {
     "build": "tsc --noEmit",

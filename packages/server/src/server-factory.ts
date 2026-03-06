@@ -18,7 +18,7 @@ import {
 import { Conductor } from '@autonomy/conductor';
 import { CronManager } from '@autonomy/cron-manager';
 import { HookRegistry, PluginManager } from '@autonomy/plugin-system';
-import { DebugEventCategory, DebugEventLevel, type Logger } from '@autonomy/shared';
+import { type AIBackend, DebugEventCategory, DebugEventLevel, type Logger } from '@autonomy/shared';
 import type { MemoryClient } from '@pyxmate/memory';
 import { AgentStore } from './agent-store.ts';
 import type { parseEnvConfig } from './config.ts';
@@ -58,7 +58,7 @@ export function initRuntimeDatabase(config: EnvConfig, logger: Logger): RuntimeD
 
 // ── Backend Registry ────────────────────────────────────────────────────────
 
-export function initBackendRegistry(defaultBackend: string): DefaultBackendRegistry {
+export function initBackendRegistry(defaultBackend: AIBackend): DefaultBackendRegistry {
   const registry = new DefaultBackendRegistry(defaultBackend);
   registry.register(new ClaudeBackend());
   registry.register(new CodexBackend());
@@ -173,6 +173,7 @@ export async function initConductor(deps: ConductorInitDeps): Promise<ConductorD
     idleTimeoutMs: config.IDLE_TIMEOUT_MS,
     hookRegistry,
     fallbackBackend,
+    llmApiKey: config.ANTHROPIC_API_KEY,
   });
   await conductor.initialize();
   logger.info('Conductor initialized');

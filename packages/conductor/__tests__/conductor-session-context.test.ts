@@ -118,8 +118,8 @@ describe('Per-session backend processes', () => {
     // Send a message with a sessionId
     await conductor.handleMessage(makeMessage({ content: 'Hello', sessionId: 'sess-123' }));
 
-    // A second process should be spawned (stateless — no sessionId in spawn config)
-    expect(mockBackend.getSpawnConfigs().length).toBe(2);
+    // 3 spawns: default (init) + session-specific + entity extraction process
+    expect(mockBackend.getSpawnConfigs().length).toBe(3);
     expect(mockBackend.getSpawnConfigs()[1].sessionId).toBeUndefined();
   });
 
@@ -135,8 +135,8 @@ describe('Per-session backend processes', () => {
     await conductor.handleMessage(makeMessage({ content: 'First', sessionId: 'sess-reuse' }));
     await conductor.handleMessage(makeMessage({ content: 'Second', sessionId: 'sess-reuse' }));
 
-    // Only 2 spawns: 1 default at init + 1 for session (reused on second message)
-    expect(mockBackend.getSpawnConfigs().length).toBe(2);
+    // 3 spawns: 1 default + 1 session (reused on second msg) + 1 extraction process
+    expect(mockBackend.getSpawnConfigs().length).toBe(3);
   });
 
   test('different sessionIds spawn different backend processes', async () => {
@@ -150,10 +150,10 @@ describe('Per-session backend processes', () => {
     await conductor.handleMessage(makeMessage({ content: 'A', sessionId: 'sess-a' }));
     await conductor.handleMessage(makeMessage({ content: 'B', sessionId: 'sess-b' }));
 
-    // 3 spawns: 1 default + 1 for sess-a + 1 for sess-b (stateless — no sessionId in spawn config)
-    expect(mockBackend.getSpawnConfigs().length).toBe(3);
-    expect(mockBackend.getSpawnConfigs()[1].sessionId).toBeUndefined();
-    expect(mockBackend.getSpawnConfigs()[2].sessionId).toBeUndefined();
+    // 4 spawns: 1 default + 1 sess-a + 1 extraction + 1 sess-b
+    expect(mockBackend.getSpawnConfigs().length).toBe(4);
+    // All spawned without sessionId in config (tracked internally)
+    expect(mockBackend.getSpawnConfigs().every((c) => c.sessionId === undefined)).toBe(true);
   });
 
   test('message without sessionId uses default backend process', async () => {
@@ -166,8 +166,8 @@ describe('Per-session backend processes', () => {
 
     await conductor.handleMessage(makeMessage({ content: 'No session' }));
 
-    // Only 1 spawn (the default at init), no extra session process
-    expect(mockBackend.getSpawnConfigs().length).toBe(1);
+    // 2 spawns: default at init + extraction process (no extra session process)
+    expect(mockBackend.getSpawnConfigs().length).toBe(2);
   });
 
   test('shutdown stops all session processes', async () => {

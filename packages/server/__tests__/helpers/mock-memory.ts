@@ -8,11 +8,13 @@ import type {
   MemorySearchParams,
   MemorySearchResult,
   MemoryStats,
+  StoreInput,
 } from '@autonomy/shared';
 import { RAGStrategy } from '@autonomy/shared';
 
 export class MockMemory implements MemoryInterface {
   clearSessionCalls: string[] = [];
+  storeCalls: StoreInput[] = [];
   initialized = false;
 
   async initialize(): Promise<void> {
@@ -22,6 +24,7 @@ export class MockMemory implements MemoryInterface {
   async store(
     entry: Omit<MemoryEntry, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
   ): Promise<MemoryEntry> {
+    this.storeCalls.push({ ...entry } as StoreInput);
     return {
       id: entry.id ?? crypto.randomUUID(),
       content: entry.content,

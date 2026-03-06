@@ -113,6 +113,8 @@ export class Conductor {
   private processing = false;
   private cronManager?: CronManagerLike;
   private memoryConnected = true;
+  private extractionProcess?: BackendProcess;
+  private extractionSpawnPromise?: Promise<BackendProcess>;
 
   constructor(
     pool: AgentPool,
@@ -577,6 +579,18 @@ export class Conductor {
       this.backendProcess = undefined;
     }
 
+    if (this.extractionProcess) {
+      try {
+        await this.extractionProcess.stop();
+      } catch (error) {
+        const detail = getErrorDetail(error);
+        conductorLogger.debug('Error stopping extraction process during shutdown', {
+          error: detail,
+        });
+      }
+      this.extractionProcess = undefined;
+    }
+
     // Stop all per-session backend processes
     await this.sessionPool.shutdown();
 
@@ -764,15 +778,62 @@ export class Conductor {
     }
   }
 
+  private makeExtractionSendFn(): (msg: string) => Promise<string> {
+    return (msg: string) => this.extractionProcess!.send(msg);
+  }
+
+  private async getExtractionSendFn(): Promise<((msg: string) => Promise<string>) | undefined> {
+    const backend = this.backend ?? this.fallbackBackend;
+    if (!backend) return undefined;
+
+    if (this.extractionProcess?.alive) {
+      return this.makeExtractionSendFn();
+    }
+
+    // Guard against concurrent spawn attempts
+    if (this.extractionSpawnPromise) {
+      try {
+        this.extractionProcess = await this.extractionSpawnPromise;
+        return this.makeExtractionSendFn();
+      } catch {
+        this.extractionSpawnPromise = undefined;
+        return undefined;
+      }
+    }
+
+    try {
+      this.extractionSpawnPromise = backend.spawn({
+        agentId: 'conductor-entity-extractor',
+        systemPrompt: 'You are an entity extraction tool. Return ONLY valid JSON.',
+        skipPermissions: true,
+      });
+      this.extractionProcess = await this.extractionSpawnPromise;
+      return this.makeExtractionSendFn();
+    } catch (error) {
+      conductorLogger.warn('Failed to spawn extraction process', {
+        error: getErrorDetail(error),
+      });
+      return undefined;
+    } finally {
+      this.extractionSpawnPromise = undefined;
+    }
+  }
+
   private async storeConversation(
     message: IncomingMessage,
     decisions: ConductorDecision[],
     responseContent?: string,
   ): Promise<void> {
+    const backendSendFn = await this.getExtractionSendFn();
+
     return storeConversationFn(
-      this.memory,
-      this.hookRegistry,
-      this.memoryConnected,
+      {
+        memory: this.memory,
+        hookRegistry: this.hookRegistry,
+        memoryConnected: this.memoryConnected,
+        llmApiKey: this.options.llmApiKey,
+        backendSendFn,
+      },
       message,
       decisions,
       responseContent,

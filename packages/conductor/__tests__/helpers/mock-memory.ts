@@ -6,7 +6,7 @@ import type {
   MemorySearchParams,
   MemorySearchResult,
   MemoryStats,
-  MemoryType,
+  StoreInput,
 } from '@autonomy/shared';
 import { RAGStrategy } from '@autonomy/shared';
 
@@ -19,7 +19,7 @@ export class MockMemory implements MemoryInterface {
   };
   private _shouldThrow = false;
   initialized = false;
-  storeCalls: Array<{ content: string; type: MemoryType }> = [];
+  storeCalls: StoreInput[] = [];
   searchCalls: MemorySearchParams[] = [];
 
   async initialize(): Promise<void> {
@@ -48,7 +48,7 @@ export class MockMemory implements MemoryInterface {
       createdAt: entry.createdAt ?? new Date().toISOString(),
     };
     this.entries.set(full.id, full);
-    this.storeCalls.push({ content: full.content, type: full.type });
+    this.storeCalls.push({ ...entry });
     return full;
   }
 
