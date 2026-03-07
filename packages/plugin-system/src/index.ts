@@ -4,8 +4,3 @@
 
 export { HookRegistry } from './hook-registry.ts';
 export { PluginManager } from './plugin-manager.ts';
-
-export type {
-  HookHandler,
-  HookRegistryInterface,
-} from './types.ts';

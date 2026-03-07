@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Disable Compose bake integration — buildx bake hangs on metadata-file write
+# on Docker Desktop (macOS). The legacy compose builder works reliably.
+export COMPOSE_BAKE=false
+
 REGISTRY="ghcr.io"
 IMAGE="ghcr.io/fysoul17/pyx-memory"
 ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"

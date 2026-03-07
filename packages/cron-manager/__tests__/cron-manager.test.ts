@@ -3,12 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Conductor } from '@autonomy/conductor';
-import {
-  CronManager,
-  CronNotFoundError,
-  CronNotInitializedError,
-  CronScheduleError,
-} from '../src/index.ts';
+import { CronManager } from '../src/cron-manager.ts';
+import { CronNotFoundError, CronNotInitializedError, CronScheduleError } from '../src/errors.ts';
 
 // Minimal mock conductor — only needs sendToAgent
 class MockConductor {

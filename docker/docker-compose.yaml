@@ -2,13 +2,15 @@
 # Usage:
 #   Minimal:  docker compose -f docker/docker-compose.yaml up
 #   Full:     docker compose -f docker/docker-compose.yaml --profile full up
+#
+# NOTE: If builds hang, set COMPOSE_BAKE=false before running docker compose.
+# The setup/cleanup scripts do this automatically.
 
 services:
   runtime:
     build:
       context: ..
       dockerfile: docker/Dockerfile.runtime
-      provenance: false
     ports:
       - "7820:7820"
     volumes:
@@ -53,7 +55,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.dashboard
-      provenance: false
     ports:
       - "7821:7821"
     environment:

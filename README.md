@@ -120,7 +120,7 @@ Full conversation history with browse, resume, and delete. Sessions track messag
 IP-based rate limiting (configurable window + max), structured JSON logging with log levels, and a standardized streaming contract across all AI backends. Ready for deployment behind a reverse proxy.
 
 ### CI/CD Pipeline
-3-job GitHub Actions workflow: quality gate (lint + typecheck + unit tests), E2E integration tests (27 end-to-end scenarios), and Docker build verification. Runs on push to main and PRs.
+3-job GitHub Actions workflow: quality gate (lint + typecheck + unit tests), E2E integration tests (40 end-to-end scenarios), and Docker build verification. Runs on push to main and PRs.
 
 ---
 
