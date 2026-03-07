@@ -11,9 +11,18 @@ export default async function HomePage() {
   try {
     const [health, activity, memoryStats, backendStatus] = await Promise.all([
       getHealth(),
-      getActivity(5).catch(() => []),
-      getMemoryStats().catch(() => null),
-      getBackendStatus().catch(() => null),
+      getActivity(5).catch((err) => {
+        console.error('[Home] Failed to load activity:', err);
+        return [];
+      }),
+      getMemoryStats().catch((err) => {
+        console.error('[Home] Failed to load memory stats:', err);
+        return null;
+      }),
+      getBackendStatus().catch((err) => {
+        console.error('[Home] Failed to load backend status:', err);
+        return null;
+      }),
     ]);
 
     return (

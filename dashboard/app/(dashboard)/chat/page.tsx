@@ -39,7 +39,10 @@ export default async function ChatPage({
     // Fall back to the most recent session
     const latestSessionId = await getSessions()
       .then(({ sessions }) => (sessions.length > 0 ? sessions[0]?.id : undefined))
-      .catch(() => undefined);
+      .catch((err) => {
+        console.error('[Chat] Failed to load sessions:', err);
+        return undefined;
+      });
     if (latestSessionId) {
       redirect(`/chat?sessionId=${latestSessionId}`);
     }
@@ -48,7 +51,8 @@ export default async function ChatPage({
   let agents: Awaited<ReturnType<typeof getAgents>> = [];
   try {
     agents = await getAgents();
-  } catch {
+  } catch (err) {
+    console.error('[Chat] Failed to load agents:', err);
     agents = [];
   }
 
@@ -56,7 +60,8 @@ export default async function ChatPage({
   try {
     const result = await getBackendOptions();
     backendOptions = result.options;
-  } catch {
+  } catch (err) {
+    console.error('[Chat] Failed to load backend options:', err);
     backendOptions = [];
   }
 
@@ -82,8 +87,8 @@ export default async function ChatPage({
         createdAt: m.createdAt,
         metadata: m.metadata,
       }));
-    } catch {
-      // session not found, proceed without
+    } catch (err) {
+      console.error(`[Chat] Failed to load session ${sessionId}:`, err);
     }
   }
 

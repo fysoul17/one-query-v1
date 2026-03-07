@@ -43,7 +43,13 @@ export function LiveStatusCards({ initialHealth, initialMemoryStats }: LiveStatu
   const refresh = useCallback(async () => {
     setFetching(true);
     try {
-      const [h, m] = await Promise.all([getHealth(), getMemoryStats().catch(() => null)]);
+      const [h, m] = await Promise.all([
+        getHealth(),
+        getMemoryStats().catch((err) => {
+          console.error('[LiveStatus] Failed to load memory stats:', err);
+          return null;
+        }),
+      ]);
       setHealth(h);
       setMemoryStats(m);
       setLastUpdated(Date.now());
